@@ -1,11 +1,4 @@
-import {
-  Box,
-  Button,
-  Flex,
-  IconButton,
-  Input,
-  Text,
-} from '@chakra-ui/react';
+import { Box, Button, Flex, IconButton, Input, Text } from '@chakra-ui/react';
 import { useEffect, useRef, useState } from 'react';
 import { FiExternalLink } from 'react-icons/fi';
 import { IoSend } from 'react-icons/io5';
@@ -66,7 +59,12 @@ function InlineChatPanel() {
         borderColor="gray.700"
         flexShrink={0}
       >
-        <Text fontSize="xs" fontWeight="bold" color="gray.400" letterSpacing="widest">
+        <Text
+          fontSize="xs"
+          fontWeight="bold"
+          color="gray.400"
+          letterSpacing="widest"
+        >
           GLOBAL CHAT
         </Text>
         <IconButton
@@ -107,7 +105,12 @@ function InlineChatPanel() {
               key={`${new Date(msg.timestamp).getTime()}-${msg.senderId}`}
               mb={1.5}
             >
-              <Text as="span" fontSize="xs" color="green.400" fontWeight="medium">
+              <Text
+                as="span"
+                fontSize="xs"
+                color="green.400"
+                fontWeight="medium"
+              >
                 {msg.senderName}:{' '}
               </Text>
               <Text as="span" fontSize="xs" color="gray.300">
