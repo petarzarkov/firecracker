@@ -194,7 +194,6 @@ export class ContextLogger implements LoggerService {
     return { preparedMessage, invalidMessageInfo };
   }
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: TODO
   #extractErrorAndExtra(
     params: unknown[],
     level: LogLevel,
@@ -386,7 +385,6 @@ export class ContextLogger implements LoggerService {
     return true;
   }
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: TODO
   #findNestedError(
     obj: Record<string, unknown>,
     visited = new WeakSet(),

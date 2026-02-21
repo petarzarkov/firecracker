@@ -128,6 +128,8 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   /**
    * Auth middleware - validates JWT token and attaches user to socket data.
+   * Authentication is optional: unauthenticated connections are allowed as
+   * demo/guest users (socket.data.user = null).
    */
   #createAuthMiddleware(): MiddlewareFn {
     return async (socket: Socket, next: NextFn) => {
@@ -136,13 +138,9 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
           socket.handshake.auth.token || socket.handshake.headers.authorization;
 
         if (!authHeader) {
-          return next(
-            this.#buildExtendedError(
-              'Authentication token missing',
-              HttpStatus.UNAUTHORIZED,
-              'UNAUTHORIZED',
-            ),
-          );
+          // Allow unauthenticated connections for demo/guest mode
+          socket.data.user = null;
+          return next();
         }
 
         const token = authHeader.split(' ')[1];
@@ -199,35 +197,38 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   async handleConnection(client: ExtendedSocket) {
     const user = client.data.user;
-    const userRoom = ROOMS.user(user.id);
-    const rooms = [userRoom, ROOMS.CHAT];
-    if (user.roles.includes(UserRole.ADMIN)) {
-      rooms.push(ROOMS.ADMINS);
+    const rooms: string[] = [ROOMS.CHAT];
+
+    if (user) {
+      rooms.push(ROOMS.user(user.id));
+      if (user.roles.includes(UserRole.ADMIN)) {
+        rooms.push(ROOMS.ADMINS);
+      }
     }
 
     await client.join(rooms);
     this.logger.log(
-      `WS Connected: ${user.email} (${client.id}) joined rooms ${rooms.join(', ')}`,
-      {
-        payload: user,
-      },
+      `WS Connected: ${user?.email ?? 'guest'} (${client.id}) joined rooms ${rooms.join(', ')}`,
+      { payload: user },
     );
 
-    client.emit('connected', {
-      message: `Connected to WS with id ${client.id}`,
-      payload: user,
-    });
+    if (user) {
+      client.emit('connected', {
+        message: `Connected to WS with id ${client.id}`,
+        payload: user,
+      });
 
-    // Notify chat room that user joined
-    this.io.to(ROOMS.CHAT).emit('userJoined', {
-      username: user.displayName || user.email?.split('@')[0],
-      timestamp: new Date(),
-    });
+      // Notify chat room that authenticated user joined
+      this.io.to(ROOMS.CHAT).emit('userJoined', {
+        username: user.displayName || user.email?.split('@')[0],
+        timestamp: new Date(),
+      });
 
-    // Send user count
-    const chatRoom = this.server?.sockets.adapter.rooms.get(ROOMS.CHAT);
-    const userCount = chatRoom ? chatRoom.size : 0;
-    this.io.to(ROOMS.CHAT).emit('userCount', userCount);
+      // Send user count
+      const chatRoom = this.server?.sockets.adapter.rooms.get(ROOMS.CHAT);
+      const userCount = chatRoom ? chatRoom.size : 0;
+      this.io.to(ROOMS.CHAT).emit('userCount', userCount);
+    }
   }
 
   handleDisconnect(client: ExtendedSocket) {
@@ -258,6 +259,13 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: ExtendedSocket,
   ) {
     const user = client.data.user;
+    if (!user) {
+      client.emit('exception', {
+        message: 'Authentication required for chat',
+        payload: null,
+      });
+      return;
+    }
     const chatMessage: ChatMessage = {
       username: user.displayName || user.email?.split('@')[0],
       message: data.message,
@@ -274,8 +282,15 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     data: AIMessageRequest,
     @ConnectedSocket() client: ExtendedSocket,
   ) {
-    const requestId = uuidv4();
     const user = client.data.user;
+    if (!user) {
+      client.emit('exception', {
+        message: 'Authentication required for AI requests',
+        payload: null,
+      });
+      return;
+    }
+    const requestId = uuidv4();
     try {
       const stream = this.aiService.streamProvider(
         data.provider,

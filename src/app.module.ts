@@ -10,6 +10,7 @@ import { BillingModule } from './billing/billing.module';
 import { AppConfigModule } from './config/app.config.module';
 import { ValidatedConfig, validateConfig } from './config/env.validation';
 import { AppConfigService } from './config/services/app.config.service';
+import { GLOBAL_PREFIX } from './constants';
 import { GenericExceptionFilter } from './core/filters/generic-exception.filter';
 import { TypeOrmExceptionFilter } from './core/filters/typeorm-exception.filter';
 import { HelpersModule } from './core/helpers/helpers.module';
@@ -18,6 +19,7 @@ import { HtmlBasicAuthMiddleware } from './core/middlewares/html-basic-auth.midd
 import { RequestMiddleware } from './core/middlewares/request.middleware';
 import { PaginationModule } from './core/pagination/pagination.module';
 import { FileModule } from './file/file.module';
+import { GameModule } from './game/game.module';
 import { DatabaseModule } from './infra/db/database.module';
 import { HealthModule } from './infra/health/health.module';
 import { LoggerModule } from './infra/logger/logger.module';
@@ -44,9 +46,10 @@ import { UsersModule } from './users/users.module';
       inject: [AppConfigService],
     }),
     ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'public'),
-      serveRoot: '/',
-      exclude: ['/api*'],
+      rootPath: join(__dirname, '..', 'client', 'dist'),
+      serveRoot: '',
+      renderPath: '*path',
+      exclude: [`/${GLOBAL_PREFIX}/*path`],
     }),
     AuthModule.forRoot(),
     ScheduleModule.forRoot(),
@@ -60,6 +63,7 @@ import { UsersModule } from './users/users.module';
     UsersModule,
     AuditModule,
     BillingModule,
+    GameModule,
     AIModule.forRoot(),
     NotificationModule,
     QueueModule,

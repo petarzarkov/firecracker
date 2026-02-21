@@ -29,8 +29,6 @@ async function createAdmin() {
         message: 'Enter the admin password:',
         default: BASE_USER_TEST_PASS,
         mask: '*',
-        validate: (v: string) =>
-          v.length >= 8 ? true : 'Password must be min 8 chars long',
       },
     ]);
 
@@ -45,7 +43,9 @@ async function createAdmin() {
       return;
     }
 
-    const hashedPassword = await passwordUtil.hash(password);
+    const hashedPassword = await passwordUtil.hash(
+      password || BASE_USER_TEST_PASS,
+    );
 
     const newUser = userRepository.create({
       email,

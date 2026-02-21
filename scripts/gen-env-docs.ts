@@ -113,7 +113,6 @@ function parseEnvFile(
 /**
  * Groups the parsed variables based on the groupConfig affixes.
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: DOCS
 function groupVariables(
   vars: ParsedVariable[],
 ): Record<string, ParsedVariable[]> {

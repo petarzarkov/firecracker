@@ -32,7 +32,7 @@ import { RegisterWithInviteDto } from '@/auth/dto/register-with-invite.dto';
 import { CurrentUser } from '@/core/decorators/current-user.decorator';
 import { Public } from '@/core/decorators/public.decorator';
 import { UnionValidationPipe } from '@/core/pipes/union-validation.pipe';
-import { SanitizedUser } from '@/users/entity/user.entity';
+import { SanitizedUser, User } from '@/users/entity/user.entity';
 import { UsersService } from '@/users/services/users.service';
 import { OAuthProvider } from './enum/oauth-provider.enum';
 import { AuthService } from './services/auth.service';
@@ -51,13 +51,13 @@ export class AuthController {
         'No user data received from OAuth provider',
       );
     }
-    const user = req.user;
+    const user = req.user as SanitizedUser;
     const accessToken = this.authService.createAccessToken(
       user.id,
       user.email,
       user.roles,
     );
-    return { accessToken };
+    return { accessToken, user };
   }
 
   @Public()
@@ -77,7 +77,7 @@ export class AuthController {
       user.roles,
     );
 
-    return { accessToken };
+    return { accessToken, user };
   }
 
   @Public()
@@ -149,17 +149,20 @@ export class AuthController {
         invitedUser.roles,
       );
 
-      return { accessToken };
+      return { accessToken, user: User.sanitize(invitedUser) };
     }
 
-    const user = await this.usersService.createUser(body.email, body.password);
+    const newUser = await this.usersService.createUser(
+      body.email,
+      body.password,
+    );
     const accessToken = this.authService.createAccessToken(
-      user.id,
-      user.email,
-      user.roles,
+      newUser.id,
+      newUser.email,
+      newUser.roles,
     );
 
-    return { accessToken };
+    return { accessToken, user: User.sanitize(newUser) };
   }
 
   @Public()

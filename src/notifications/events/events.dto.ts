@@ -47,6 +47,82 @@ export class AIMessageError {
   username!: string;
 }
 
+// ---------------------------------------------------------------------------
+// Game WebSocket payloads
+// ---------------------------------------------------------------------------
+
+export class GameTickPayload {
+  /** Current multiplier, e.g. 1.42 */
+  multiplier!: number;
+  /** Milliseconds elapsed since round started */
+  elapsed!: number;
+}
+
+export class GamePhasePayload {
+  phase!: 'waiting' | 'running' | 'crashed';
+  roundId!: string;
+  /** sha256 of the server seed — for provably fair verification */
+  seedHash!: string;
+  /** ISO timestamp — only set for 'waiting' phase */
+  waitingEndsAt?: string;
+}
+
+export class GameCrashedPayload {
+  roundId!: string;
+  crashPoint!: number;
+  crashedAt!: Date;
+  /** Raw seed revealed after crash for provably fair verification */
+  seed!: string;
+}
+
+export class GameRoundStatePayload {
+  phase!: 'waiting' | 'running' | 'crashed';
+  roundId!: string | null;
+  seedHash!: string | null;
+  waitingEndsAt?: string;
+  multiplier?: number;
+  elapsed?: number;
+  activeBets!: BetSummary[];
+}
+
+export class BetSummary {
+  username!: string;
+  betAmountCents!: number;
+  isDemo!: boolean;
+  cashedOutAt?: number;
+}
+
+export class BetPlacedPayload {
+  username!: string;
+  betAmountCents!: number;
+  isDemo!: boolean;
+}
+
+export class BetCashedOutPayload {
+  username!: string;
+  multiplier!: number;
+  payoutCents!: number;
+  isDemo!: boolean;
+}
+
+export class BetAckPayload {
+  success!: boolean;
+  error?: string;
+}
+
+export class CashOutAckPayload {
+  success!: boolean;
+  multiplier?: number;
+  payoutCents?: number;
+  error?: string;
+}
+
+export class WalletUpdatedPayload {
+  balanceCents!: number;
+}
+
+// ---------------------------------------------------------------------------
+
 export interface WebSocketEmitEvents {
   connected: (message: WebSocketBaseMessage<SanitizedUser>) => void;
   exception: (message: WebSocketBaseMessage) => void;
@@ -60,6 +136,16 @@ export interface WebSocketEmitEvents {
   message: (data: ChatMessage) => void;
   aiMessageChunk: (data: AIMessageChunk) => void;
   aiError: (data: AIMessageError) => void;
+  // Game events
+  gameTick: (data: GameTickPayload) => void;
+  gamePhaseChange: (data: GamePhasePayload) => void;
+  gameCrashed: (data: GameCrashedPayload) => void;
+  gameRoundState: (data: GameRoundStatePayload) => void;
+  betPlaced: (data: BetPlacedPayload) => void;
+  betCashedOut: (data: BetCashedOutPayload) => void;
+  betAck: (data: BetAckPayload) => void;
+  cashOutAck: (data: CashOutAckPayload) => void;
+  walletUpdated: (data: WalletUpdatedPayload) => void;
 }
 
 export type EmitToClient = <K extends keyof WebSocketEmitEvents>(
@@ -71,12 +157,12 @@ export class ExtendedSocket extends Socket<
   DefaultEventsMap,
   WebSocketEmitEvents,
   DefaultEventsMap,
-  { user: SanitizedUser }
+  { user: SanitizedUser | null }
 > {}
 
 export class WSServer extends Server<
   DefaultEventsMap,
   WebSocketEmitEvents,
   DefaultEventsMap,
-  { user: SanitizedUser }
+  { user: SanitizedUser | null }
 > {}

@@ -7,6 +7,7 @@ import { AppConfigService } from '@/config/services/app.config.service';
 import { HelpersModule } from '@/core/helpers/helpers.module';
 import { PaginationModule } from '@/core/pagination/pagination.module';
 import { FileModule } from '@/file/file.module';
+import { GameModule } from '@/game/game.module';
 import { NotificationModule } from '@/notifications/notification.module';
 import { UsersModule } from '@/users/users.module';
 import { DatabaseModule } from '../db/database.module';
@@ -43,6 +44,7 @@ import { QueueModule } from './queue.module';
     QueueModule,
     RedisCacheThrottlerModule,
     FileModule,
+    GameModule,
   ],
   providers: [],
 })

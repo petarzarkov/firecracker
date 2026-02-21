@@ -62,3 +62,20 @@ export const STRING_LENGTH = {
 } as const;
 
 export const JOB_HANDLER_METADATA = 'JOB_HANDLER_METADATA';
+
+export const GAME = {
+  /** Duration of the betting window before each rocket launches (ms) */
+  WAITING_PHASE_MS: 10_000,
+  /** Cool-down between rounds (ms) */
+  COOLDOWN_MS: 5_000,
+  /** How often the multiplier tick is broadcast to clients (ms) */
+  TICK_INTERVAL_MS: 100,
+  /** Divisor in the e^(elapsed/DIVISOR) multiplier formula */
+  MULTIPLIER_DIVISOR: 15_000,
+  /** Minimum real bet in cents ($1) */
+  MIN_BET_CENTS: 100,
+  /** Starting virtual balance for demo/guest users in cents ($1,000) */
+  DEMO_INITIAL_BALANCE_CENTS: 100_000,
+  /** Redis TTL for demo wallet keys (seconds) */
+  DEMO_WALLET_TTL_SECONDS: 7_200,
+} as const;
