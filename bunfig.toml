@@ -1,0 +1,15 @@
+# Bun configuration
+# https://bun.sh/docs/runtime/bunfig
+
+[test]
+# Only run tests in src/ directory by default
+# Use `bun run test:e2e` for e2e tests with proper setup
+root = "./src"
+
+# Coverage
+coverageDir = "coverage" 
+coverageReporter  = ["text", "lcov"]  # default ["text"]
+# coverageThreshold = { lines = 0.7, functions = 0.6, statements = 0.7 }
+
+[test.reporter]
+junit = "coverage/test-results.xml"
