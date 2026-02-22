@@ -197,7 +197,15 @@ export function BetPanel() {
       isDemo: isDemoMode,
       ...(hasAutoCashOut ? { autoCashOutAt: autoCashOutTarget } : {}),
     });
-  }, [socket, canBet, clearBetError, amountCents, isDemoMode, hasAutoCashOut, autoCashOutTarget]);
+  }, [
+    socket,
+    canBet,
+    clearBetError,
+    amountCents,
+    isDemoMode,
+    hasAutoCashOut,
+    autoCashOutTarget,
+  ]);
 
   // Auto-play requires auto exit — turn off if exit target is removed
   useEffect(() => {
@@ -307,13 +315,7 @@ export function BetPanel() {
 
       {/* Error message */}
       {betError && (
-        <Text
-          fontSize="sm"
-          color="red.400"
-          fontFamily="mono"
-          mb={2}
-          px={1}
-        >
+        <Text fontSize="sm" color="red.400" fontFamily="mono" mb={2} px={1}>
           {betError}
         </Text>
       )}
@@ -345,23 +347,31 @@ export function BetPanel() {
         <Button
           size="xs"
           variant="outline"
-          borderColor={autoPlay ? 'green.500' : hasAutoCashOut ? 'gray.600' : 'gray.800'}
-          color={autoPlay ? 'green.400' : hasAutoCashOut ? 'gray.500' : 'gray.700'}
+          borderColor={
+            autoPlay ? 'green.500' : hasAutoCashOut ? 'gray.600' : 'gray.800'
+          }
+          color={
+            autoPlay ? 'green.400' : hasAutoCashOut ? 'gray.500' : 'gray.700'
+          }
           fontFamily="mono"
           fontSize="xs"
           disabled={!hasAutoCashOut}
           onClick={() => setAutoPlay(v => !v)}
           _hover={{ borderColor: 'green.400', color: 'green.300' }}
           _disabled={{ opacity: 0.35, cursor: 'not-allowed' }}
-          title={!hasAutoCashOut ? 'Set an AUTO EXIT value to enable auto-play' : autoPlay ? 'Auto-play ON — click to stop' : 'Auto-play: bet automatically each round'}
+          title={
+            !hasAutoCashOut
+              ? 'Set an AUTO EXIT value to enable auto-play'
+              : autoPlay
+                ? 'Auto-play ON — click to stop'
+                : 'Auto-play: bet automatically each round'
+          }
         >
           {autoPlay ? 'AUTO ON' : 'AUTO'}
         </Button>
       </Flex>
 
-      {myBet !== null && phase !== 'WAITING' && (
-        <BetStatusBar myBet={myBet} />
-      )}
+      {myBet !== null && phase !== 'WAITING' && <BetStatusBar myBet={myBet} />}
     </Box>
   );
 }

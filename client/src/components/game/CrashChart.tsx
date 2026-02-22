@@ -53,10 +53,13 @@ function drawStars(
   phase: GamePhase,
 ) {
   const speed =
-    phase === 'RUNNING' ? 9
-    : phase === 'WAITING' ? 1.5
-    : phase === 'CRASHED' ? 0.3
-    : 0.5;
+    phase === 'RUNNING'
+      ? 9
+      : phase === 'WAITING'
+        ? 1.5
+        : phase === 'CRASHED'
+          ? 0.3
+          : 0.5;
 
   for (const star of stars) {
     star.z -= speed;

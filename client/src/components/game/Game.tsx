@@ -315,7 +315,13 @@ export function Game() {
 
           {/* Content area — fills rest of tab panel, each panel scrolls */}
           <Box flex={1} minH={0} overflow="hidden">
-            <Tabs.Content value="game" h="full" overflow="hidden" p={0} bg="gray.900">
+            <Tabs.Content
+              value="game"
+              h="full"
+              overflow="hidden"
+              p={0}
+              bg="gray.900"
+            >
               <Box h="full" overflowY="auto" p={3}>
                 <BetPanel />
               </Box>
