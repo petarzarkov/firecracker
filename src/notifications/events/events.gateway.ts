@@ -55,6 +55,10 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   io!: WSServer | Emitter<WebSocketEmitEvents>;
 
+  private readonly chatRedis;
+  private static readonly CHAT_HISTORY_KEY = 'chat:global:history';
+  private static readonly CHAT_HISTORY_MAX = 50;
+
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: AppConfigService<ValidatedConfig>,
@@ -63,7 +67,9 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly contextService: ContextService,
     private readonly aiService: AIService,
     private readonly redisService: RedisService,
-  ) {}
+  ) {
+    this.chatRedis = this.redisService.newConnection('chat-history');
+  }
 
   onModuleInit() {
     // Check if we are in the worker process (where server is null)
@@ -212,6 +218,20 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       { payload: user },
     );
 
+    // Replay chat history to the newly connected client
+    try {
+      const rawMessages = await this.chatRedis.lrange(
+        EventsGateway.CHAT_HISTORY_KEY,
+        0,
+        -1,
+      );
+      for (const raw of rawMessages) {
+        client.emit('message', JSON.parse(raw) as ChatMessage);
+      }
+    } catch (err) {
+      this.logger.error('Failed to replay chat history', { err });
+    }
+
     if (user) {
       client.emit('connected', {
         message: `Connected to WS with id ${client.id}`,
@@ -273,6 +293,18 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       picture: user.picture,
     };
     this.io.to(ROOMS.CHAT).emit('message', chatMessage);
+
+    // Persist to Redis, keep only the last CHAT_HISTORY_MAX messages
+    const key = EventsGateway.CHAT_HISTORY_KEY;
+    void this.chatRedis
+      .rpush(key, JSON.stringify(chatMessage))
+      .then(() =>
+        this.chatRedis.ltrim(key, -EventsGateway.CHAT_HISTORY_MAX, -1),
+      )
+      .catch(err =>
+        this.logger.error('Failed to persist chat message', { err }),
+      );
+
     return { event: 'messageSent', data: { success: true } };
   }
 

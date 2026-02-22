@@ -16,6 +16,9 @@ import { GameRound } from './game-round.entity';
 @Index('game_bet_round_id_index', ['roundId'])
 @Index('game_bet_user_id_index', ['userId'])
 @Index('game_bet_status_index', ['status'])
+@Index('game_bet_round_user_unique_index', ['roundId', 'userId'], {
+  unique: true,
+})
 export class GameBet {
   @PrimaryGeneratedColumn('uuid', {
     primaryKeyConstraintName: 'PK_game_bet',

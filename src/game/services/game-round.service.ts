@@ -25,13 +25,17 @@ export class GameRoundService {
 
   /**
    * Generates a provably fair crash point from a seed.
-   * Uses HMAC-SHA256 with 1% house edge.
+   * Uses the BC.Game / Bustabit provably fair algorithm:
+   *   ~3% instant crash (1.00x) via h % 33 === 0 (house edge)
+   *   ~50% of rounds crash below 2x
+   *   P(crash ≥ x) ≈ 0.99 / x
    */
   generateCrashPoint(seed: string): number {
     const hash = createHmac('sha256', seed).digest('hex');
     const h = parseInt(hash.slice(0, 13), 16);
     const e = 2 ** 52;
-    return Math.max(1.0, Math.floor(((100 * e - h) / (e - h)) * 100) / 100);
+    if (h % 33 === 0) return 1.0; // ~3% instant crash (house edge)
+    return Math.max(1.0, Math.floor((99 * e) / (e - h)) / 100);
   }
 
   generateSeed(): string {
@@ -137,6 +141,10 @@ export class GameRoundService {
 
   getCurrentRound(): Promise<GameRound | null> {
     return this.gameRoundRepo.findCurrentRound();
+  }
+
+  getRecentCrashes(limit = 15): Promise<GameRound[]> {
+    return this.gameRoundRepo.findRecentCrashes(limit);
   }
 
   findById(id: string): Promise<GameRound | null> {

@@ -14,7 +14,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Emitter } from '@socket.io/redis-emitter';
-import { IsInt, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsNumber, IsOptional, Min } from 'class-validator';
 import { ContextLogger } from '@/infra/logger/services/context-logger.service';
 import { RedisService } from '@/infra/redis/services/redis.service';
 import {
@@ -22,6 +22,7 @@ import {
   BetCashedOutPayload,
   BetPlacedPayload,
   CashOutAckPayload,
+  CrashedRoundSummary,
   ExtendedSocket,
   GameCrashedPayload,
   GamePhasePayload,
@@ -44,6 +45,15 @@ class PlaceBetMessageDto {
   @IsInt()
   @Min(100)
   betAmountCents!: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isDemo?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1.01)
+  autoCashOutAt?: number;
 }
 
 // ── Gateway ────────────────────────────────────────────────────────────────
@@ -75,6 +85,9 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
    */
   io!: WSServer | Emitter<WebSocketEmitEvents>;
 
+  /** Dedicated Redis client for auto-cashout hash storage. */
+  private readonly redis;
+
   constructor(
     private readonly crashEngine: CrashEngineService,
     private readonly gameBetService: GameBetService,
@@ -83,7 +96,9 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
     private readonly walletService: WalletService,
     private readonly redisService: RedisService,
     private readonly logger: ContextLogger,
-  ) {}
+  ) {
+    this.redis = this.redisService.newConnection('game-auto-cashout');
+  }
 
   onModuleInit(): void {
     if (!this.server) {
@@ -94,10 +109,13 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
       this.emitter = new Emitter(redisClient);
       this.io = this.emitter;
     } else {
-      // Main process: use real server and wire the tick broadcast callback.
+      // Main process: use real server and wire callbacks.
       this.io = this.server;
       this.crashEngine.registerTickEmitter((multiplier, elapsed) => {
         this.emitTick({ multiplier, elapsed });
+      });
+      this.crashEngine.registerAutoCashOutHandler((roundId, multiplier) => {
+        this.#processAutoCashOuts(roundId, multiplier);
       });
     }
   }
@@ -108,24 +126,47 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
 
     // Send current game state to the newly connected client
     try {
-      const round = await this.gameRoundService.getCurrentRound();
+      const [round, recentRounds] = await Promise.all([
+        this.gameRoundService.getCurrentRound(),
+        this.gameRoundService.getRecentCrashes(15),
+      ]);
       const phase = this.crashEngine.getCurrentPhase();
-      const bets = round
-        ? await this.gameBetService.findByRoundId(round.id)
-        : [];
+      const [bets, demoBets] = round
+        ? await Promise.all([
+            this.gameBetService.findByRoundId(round.id),
+            this.demoService.getDemoRoundBets(round.id),
+          ])
+        : [[], []];
+
+      const recentCrashes: CrashedRoundSummary[] = recentRounds.map(r => ({
+        roundId: r.id,
+        crashPoint: Number(r.crashPoint),
+      }));
 
       const payload: GameRoundStatePayload = {
         phase: phase ?? 'waiting',
         roundId: round?.id ?? null,
         seedHash: round?.seedHash ?? null,
-        activeBets: bets.map(b => ({
-          username: b.userId, // resolved to username in future enhancement
-          betAmountCents: b.betAmountCents,
-          isDemo: false,
-          ...(b.cashedOutAt !== null
-            ? { cashedOutAt: Number(b.cashedOutAt) }
-            : {}),
-        })),
+        recentCrashes,
+        activeBets: [
+          ...bets.map(b => ({
+            username:
+              b.user?.displayName ?? b.user?.email?.split('@')[0] ?? b.userId,
+            betAmountCents: b.betAmountCents,
+            isDemo: false,
+            ...(b.cashedOutAt !== null
+              ? { cashedOutAt: Number(b.cashedOutAt) }
+              : {}),
+          })),
+          ...demoBets
+            .filter(b => b.username)
+            .map(b => ({
+              username: b.username as string,
+              betAmountCents: b.betAmountCents,
+              isDemo: true,
+              ...(b.cashedOutAt != null ? { cashedOutAt: b.cashedOutAt } : {}),
+            })),
+        ],
       };
 
       if (phase === GameRoundStatus.RUNNING) {
@@ -175,41 +216,74 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
     }
 
     try {
-      if (user) {
+      if (user && !data.isDemo) {
         // ── Authenticated real-money bet ───────────────────────────────
         const bet = await this.gameBetService.placeBet(
           user.id,
           roundId,
           data.betAmountCents,
-          () => {}, // placeholder — phase already validated above
+          () => {},
         );
 
+        const username = user.displayName ?? user.email.split('@')[0];
+        if (data.autoCashOutAt) {
+          await this.#storeAutoCashOut(
+            roundId,
+            user.id,
+            username,
+            data.autoCashOutAt,
+          );
+        }
+
         const wallet = await this.walletService.getWallet(user.id);
-        client.emit('betAck', { success: true });
+        const ack: BetAckPayload = {
+          success: true,
+          username,
+          betAmountCents: bet.betAmountCents,
+        };
+        client.emit('betAck', ack);
         client.to(ROOMS.user(user.id)).emit('walletUpdated', {
           balanceCents: wallet.balanceCents,
         });
 
         const broadcast: BetPlacedPayload = {
-          username: user.displayName ?? user.email.split('@')[0],
+          username,
           betAmountCents: bet.betAmountCents,
           isDemo: false,
         };
         this.io.to(GAME_ROOM).emit('betPlaced', broadcast);
       } else {
-        // ── Demo / guest bet ───────────────────────────────────────────
+        // ── Demo bet (authenticated users only) ────────────────────────
+        if (!user) {
+          client.emit('betAck', {
+            success: false,
+            error: 'Login required to place demo bets',
+          });
+          return;
+        }
+
+        const username = user.displayName ?? user.email.split('@')[0];
         const { bet, wallet } = await this.demoService.placeDemoBet(
           client.id,
           roundId,
           data.betAmountCents,
+          data.autoCashOutAt,
+          username,
         );
-        const demoWallet = wallet;
 
-        client.emit('betAck', { success: true });
-        client.emit('walletUpdated', { balanceCents: demoWallet.balanceCents });
+        // Remember demo mode for this socket so cashOut also uses demo path
+        client.data.isDemo = true;
+
+        const ack: BetAckPayload = {
+          success: true,
+          username,
+          betAmountCents: bet.betAmountCents,
+        };
+        client.emit('betAck', ack);
+        client.emit('walletUpdated', { balanceCents: wallet.balanceCents });
 
         const broadcast: BetPlacedPayload = {
-          username: demoWallet.username,
+          username,
           betAmountCents: bet.betAmountCents,
           isDemo: true,
         };
@@ -259,8 +333,8 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
     }
 
     try {
-      if (user) {
-        // ── Authenticated cashout ──────────────────────────────────────
+      if (user && !client.data.isDemo) {
+        // ── Authenticated real-money cashout ───────────────────────────
         const bet = await this.gameBetService.cashOut(
           user.id,
           roundId,
@@ -268,6 +342,7 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
         );
 
         const wallet = await this.walletService.getWallet(user.id);
+        client.data.isDemo = false;
         const ack: CashOutAckPayload = {
           success: true,
           multiplier: currentMultiplier,
@@ -293,6 +368,7 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
           currentMultiplier,
         );
 
+        client.data.isDemo = false;
         const ack: CashOutAckPayload = {
           success: true,
           multiplier: currentMultiplier,
@@ -302,7 +378,7 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
         client.emit('walletUpdated', { balanceCents: wallet.balanceCents });
 
         const broadcast: BetCashedOutPayload = {
-          username: wallet.username,
+          username: bet.username ?? wallet.username,
           multiplier: currentMultiplier,
           payoutCents: bet.payoutCents ?? 0,
           isDemo: true,
@@ -330,5 +406,99 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
 
   emitCrashed(data: GameCrashedPayload): void {
     this.io.to(GAME_ROOM).emit('gameCrashed', data);
+  }
+
+  // ── Auto-cashout ──────────────────────────────────────────────────────────
+
+  async #storeAutoCashOut(
+    roundId: string,
+    userId: string,
+    username: string,
+    autoCashOutAt: number,
+  ): Promise<void> {
+    const key = `game:auto-cashout:${roundId}`;
+    await this.redis.hset(
+      key,
+      userId,
+      JSON.stringify({ username, autoCashOutAt }),
+    );
+    await this.redis.expire(key, 3600);
+  }
+
+  /** Fire-and-forget: called on every tick from the engine. */
+  #processAutoCashOuts(roundId: string, multiplier: number): void {
+    void this.#doProcessAutoCashOuts(roundId, multiplier).catch(err =>
+      this.logger.error('Auto-cashout processing error', { err }),
+    );
+  }
+
+  async #doProcessAutoCashOuts(
+    roundId: string,
+    multiplier: number,
+  ): Promise<void> {
+    const key = `game:auto-cashout:${roundId}`;
+
+    // ── Real-money auto-cashouts ──────────────────────────────────────────
+    const entries = await this.redis.hgetall(key);
+    for (const [userId, raw] of Object.entries(entries)) {
+      const { username, autoCashOutAt } = JSON.parse(raw) as {
+        username: string;
+        autoCashOutAt: number;
+      };
+      if (autoCashOutAt > multiplier) continue;
+
+      try {
+        const bet = await this.gameBetService.cashOut(
+          userId,
+          roundId,
+          multiplier,
+        );
+        await this.redis.hdel(key, userId);
+
+        const wallet = await this.walletService.getWallet(userId);
+        this.io.to(ROOMS.user(userId)).emit('walletUpdated', {
+          balanceCents: wallet.balanceCents,
+        });
+
+        const broadcast: BetCashedOutPayload = {
+          username,
+          multiplier,
+          payoutCents: bet.payoutCents ?? 0,
+          isDemo: false,
+        };
+        this.io.to(GAME_ROOM).emit('betCashedOut', broadcast);
+      } catch {
+        // Bet may already be cashed out or round ended — skip silently
+      }
+    }
+
+    // ── Demo auto-cashouts ────────────────────────────────────────────────
+    const demoBets = await this.demoService.getAutoCashOutDemoBets(
+      roundId,
+      multiplier,
+    );
+    for (const { socketId, bet: demoBet } of demoBets) {
+      try {
+        const { bet: cashedBet, wallet } = await this.demoService.cashOutDemo(
+          socketId,
+          roundId,
+          multiplier,
+        );
+
+        this.server?.sockets.sockets.get(socketId)?.emit('walletUpdated', {
+          balanceCents: wallet.balanceCents,
+        });
+
+        const broadcast: BetCashedOutPayload = {
+          username: demoBet.username ?? wallet.username,
+          multiplier,
+          payoutCents: cashedBet.payoutCents ?? 0,
+          isDemo: true,
+        };
+        this.io.to(GAME_ROOM).emit('betCashedOut', broadcast);
+      } catch {
+        // Already cashed out — skip
+      }
+    }
   }
 }

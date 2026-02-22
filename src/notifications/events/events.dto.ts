@@ -75,6 +75,11 @@ export class GameCrashedPayload {
   seed!: string;
 }
 
+export class CrashedRoundSummary {
+  roundId!: string;
+  crashPoint!: number;
+}
+
 export class GameRoundStatePayload {
   phase!: 'waiting' | 'running' | 'crashed';
   roundId!: string | null;
@@ -83,6 +88,7 @@ export class GameRoundStatePayload {
   multiplier?: number;
   elapsed?: number;
   activeBets!: BetSummary[];
+  recentCrashes!: CrashedRoundSummary[];
 }
 
 export class BetSummary {
@@ -108,6 +114,9 @@ export class BetCashedOutPayload {
 export class BetAckPayload {
   success!: boolean;
   error?: string;
+  /** Display name used in betPlaced broadcast — lets client identify their own bet. */
+  username?: string;
+  betAmountCents?: number;
 }
 
 export class CashOutAckPayload {
@@ -157,12 +166,12 @@ export class ExtendedSocket extends Socket<
   DefaultEventsMap,
   WebSocketEmitEvents,
   DefaultEventsMap,
-  { user: SanitizedUser | null }
+  { user: SanitizedUser | null; isDemo?: boolean }
 > {}
 
 export class WSServer extends Server<
   DefaultEventsMap,
   WebSocketEmitEvents,
   DefaultEventsMap,
-  { user: SanitizedUser | null }
+  { user: SanitizedUser | null; isDemo?: boolean }
 > {}

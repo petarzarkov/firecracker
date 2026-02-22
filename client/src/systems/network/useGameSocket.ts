@@ -3,72 +3,93 @@ import { useSocket } from '@/SocketContext';
 import { useAuthStore } from '@/store/authStore';
 import { type BetEntry, type GamePhase, useGameStore } from '@/store/gameStore';
 
-interface BetSummary {
-  userId: string;
+// ── Server payload shapes (matching src/notifications/events/events.dto.ts) ──
+
+interface ServerBetSummary {
   username: string;
   betAmountCents: number;
-  status: 'ACTIVE' | 'CASHED_OUT' | 'LOST';
+  isDemo: boolean;
   cashedOutAt?: number;
-  payoutCents?: number;
 }
 
-interface GameRoundStatePayload {
-  roundId: string | null;
-  phase: GamePhase;
-  multiplier: number;
-  elapsed: number;
-  activeBets: BetSummary[];
-  waitingEndsAt?: string;
-  startedAt?: string;
-}
-
-interface GamePhasePayload {
+interface ServerCrashedRoundSummary {
   roundId: string;
-  phase: 'WAITING' | 'RUNNING' | 'CRASHED';
-  waitingEndsAt?: string;
-  startedAt?: string;
-  crashedAt?: string;
+  crashPoint: number;
 }
 
-interface GameCrashedPayload {
+interface ServerGameRoundStatePayload {
+  roundId: string | null;
+  phase: 'waiting' | 'running' | 'crashed';
+  seedHash: string | null;
+  multiplier?: number;
+  elapsed?: number;
+  activeBets: ServerBetSummary[];
+  waitingEndsAt?: string;
+  recentCrashes?: ServerCrashedRoundSummary[];
+}
+
+interface ServerGamePhasePayload {
+  roundId: string;
+  phase: 'waiting' | 'running' | 'crashed';
+  seedHash: string;
+  waitingEndsAt?: string;
+}
+
+interface ServerGameCrashedPayload {
   roundId: string;
   crashPoint: number;
   seed: string;
-  elapsed: number;
+  crashedAt: string;
 }
 
-interface BetEventPayload {
-  roundId: string;
-  bet: BetSummary;
+interface ServerBetPlacedPayload {
+  username: string;
+  betAmountCents: number;
+  isDemo: boolean;
+}
+
+interface ServerBetCashedOutPayload {
+  username: string;
+  multiplier: number;
+  payoutCents: number;
+  isDemo: boolean;
 }
 
 interface BetAckPayload {
   success: boolean;
-  bet?: BetSummary;
   error?: string;
+  username?: string;
+  betAmountCents?: number;
 }
 
 interface CashOutAckPayload {
   success: boolean;
-  cashedOutAt?: number;
+  multiplier?: number;
   payoutCents?: number;
   error?: string;
 }
 
-function mapBet(b: BetSummary): BetEntry {
+/**
+ * Map a server BetSummary to the client BetEntry shape.
+ * The server doesn't expose userId — username is used as the dedup key.
+ */
+function mapServerBet(b: ServerBetSummary): BetEntry {
   return {
-    userId: b.userId,
+    userId: b.username,
     username: b.username,
     betAmountCents: b.betAmountCents,
-    status: b.status,
+    status: b.cashedOutAt != null ? 'CASHED_OUT' : 'ACTIVE',
     cashedOutAt: b.cashedOutAt,
-    payoutCents: b.payoutCents,
   };
 }
 
 export function useGameSocket() {
   const socket = useSocket();
-  const userId = useAuthStore(state => state.user?.id);
+  // Match the formula the gateway uses when broadcasting bet usernames:
+  // user.displayName ?? user.email.split('@')[0]
+  const myUsername = useAuthStore(
+    state => state.user?.displayName ?? state.user?.email?.split('@')[0],
+  );
   const {
     setRoundState,
     setPhase,
@@ -76,36 +97,41 @@ export function useGameSocket() {
     setCrashed,
     addBet,
     updateBet,
-    setMyBet,
     setWalletBalance,
+    setDemoBalance,
+    setBetError,
   } = useGameStore();
 
   useEffect(() => {
     if (!socket) return;
 
-    socket.on('gameRoundState', (data: GameRoundStatePayload) => {
+    socket.on('gameRoundState', (data: ServerGameRoundStatePayload) => {
       setRoundState(
         {
-          ...data,
-          activeBets: data.activeBets.map(mapBet),
+          roundId: data.roundId,
+          phase: data.phase.toUpperCase() as GamePhase,
+          multiplier: data.multiplier ?? 1.0,
+          elapsed: data.elapsed ?? 0,
+          activeBets: data.activeBets.map(mapServerBet),
           waitingEndsAt: data.waitingEndsAt
             ? new Date(data.waitingEndsAt)
             : undefined,
-          startedAt: data.startedAt ? new Date(data.startedAt) : undefined,
+          recentCrashes: data.recentCrashes?.map(r => ({
+            roundId: r.roundId,
+            crashPoint: r.crashPoint,
+          })),
         },
-        userId,
+        myUsername,
       );
     });
 
-    socket.on('gamePhaseChange', (data: GamePhasePayload) => {
+    socket.on('gamePhaseChange', (data: ServerGamePhasePayload) => {
       setPhase({
         roundId: data.roundId,
-        phase: data.phase,
+        phase: data.phase.toUpperCase() as GamePhase,
         waitingEndsAt: data.waitingEndsAt
           ? new Date(data.waitingEndsAt)
           : undefined,
-        startedAt: data.startedAt ? new Date(data.startedAt) : undefined,
-        crashedAt: data.crashedAt ? new Date(data.crashedAt) : undefined,
       });
     });
 
@@ -113,21 +139,54 @@ export function useGameSocket() {
       addTick(data.multiplier, data.elapsed);
     });
 
-    socket.on('gameCrashed', (data: GameCrashedPayload) => {
+    socket.on('gameCrashed', (data: ServerGameCrashedPayload) => {
       setCrashed(data.roundId, data.crashPoint);
     });
 
-    socket.on('betPlaced', (data: BetEventPayload) => {
-      addBet(mapBet(data.bet), userId);
+    socket.on('betPlaced', (data: ServerBetPlacedPayload) => {
+      addBet(
+        {
+          userId: data.username,
+          username: data.username,
+          betAmountCents: data.betAmountCents,
+          status: 'ACTIVE',
+        },
+        myUsername,
+      );
     });
 
-    socket.on('betCashedOut', (data: BetEventPayload) => {
-      updateBet(mapBet(data.bet), userId);
+    socket.on('betCashedOut', (data: ServerBetCashedOutPayload) => {
+      // Preserve the original betAmountCents from the live store
+      const existing = useGameStore
+        .getState()
+        .activeBets.find(b => b.userId === data.username);
+      updateBet(
+        {
+          userId: data.username,
+          username: data.username,
+          betAmountCents: existing?.betAmountCents ?? 0,
+          status: 'CASHED_OUT',
+          cashedOutAt: data.multiplier,
+          payoutCents: data.payoutCents,
+        },
+        myUsername,
+      );
     });
 
     socket.on('betAck', (data: BetAckPayload) => {
-      if (data.success && data.bet) {
-        setMyBet(mapBet(data.bet));
+      if (data.success && data.username && data.betAmountCents != null) {
+        // Server confirmed the bet — set myBet directly without username matching
+        addBet(
+          {
+            userId: data.username,
+            username: data.username,
+            betAmountCents: data.betAmountCents,
+            status: 'ACTIVE',
+          },
+          data.username,
+        );
+      } else if (!data.success && data.error) {
+        setBetError(data.error);
       }
     });
 
@@ -136,7 +195,12 @@ export function useGameSocket() {
     });
 
     socket.on('walletUpdated', (data: { balanceCents: number }) => {
-      setWalletBalance(data.balanceCents);
+      const { isDemoMode } = useGameStore.getState();
+      if (isDemoMode) {
+        setDemoBalance(data.balanceCents);
+      } else {
+        setWalletBalance(data.balanceCents);
+      }
     });
 
     return () => {
@@ -152,14 +216,15 @@ export function useGameSocket() {
     };
   }, [
     socket,
-    userId,
+    myUsername,
     setRoundState,
     setPhase,
     addTick,
     setCrashed,
     addBet,
     updateBet,
-    setMyBet,
     setWalletBalance,
+    setDemoBalance,
+    setBetError,
   ]);
 }

@@ -1,11 +1,51 @@
 import { Box, Flex, Text } from '@chakra-ui/react';
-import { useGameStore } from '@/store/gameStore';
+import { useEffect, useRef } from 'react';
+import type { BetEntry, GamePhase } from '@/store/gameStore';
+import { liveRef, useGameStore } from '@/store/gameStore';
 
 function formatUSD(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+// Updates its text via RAF — no React re-renders on tick
+function LiveBetValue({ betAmountCents }: { betAmountCents: number }) {
+  const ref = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    let animId: number;
+    const update = () => {
+      if (ref.current) {
+        ref.current.textContent = formatUSD(
+          Math.floor(betAmountCents * liveRef.multiplier),
+        );
+      }
+      animId = requestAnimationFrame(update);
+    };
+    animId = requestAnimationFrame(update);
+    return () => cancelAnimationFrame(animId);
+  }, [betAmountCents]);
+
+  return (
+    <span
+      ref={ref}
+      style={{
+        fontSize: 'var(--chakra-font-sizes-xs)',
+        fontFamily: 'monospace',
+        color: 'var(--chakra-colors-yellow-400)',
+      }}
+    />
+  );
+}
+
+function betCashoutColor(bet: BetEntry, phase: GamePhase): string {
+  if (bet.status === 'CASHED_OUT') return 'green.400';
+  if (bet.status === 'LOST') return 'red.500';
+  if (phase === 'RUNNING') return 'yellow.400';
+  return 'gray.600';
+}
+
 export function PlayerList() {
+  // No multiplier subscription — LiveBetValue handles live updates via RAF
   const activeBets = useGameStore(state => state.activeBets);
   const phase = useGameStore(state => state.phase);
 
@@ -74,6 +114,7 @@ export function PlayerList() {
         {activeBets.map(bet => {
           const isCashedOut = bet.status === 'CASHED_OUT';
           const isLost = bet.status === 'LOST';
+          const isActive = bet.status === 'ACTIVE';
 
           return (
             <Flex
@@ -125,21 +166,34 @@ export function PlayerList() {
                 {formatUSD(bet.betAmountCents)}
               </Text>
 
-              <Text
-                fontSize="xs"
-                w="70px"
-                textAlign="right"
-                fontFamily="mono"
-                color={
-                  isCashedOut ? 'green.400' : isLost ? 'red.500' : 'gray.600'
-                }
-              >
-                {isCashedOut
-                  ? `${bet.cashedOutAt?.toFixed(2)}x`
-                  : isLost
-                    ? '—'
-                    : '...'}
-              </Text>
+              <Box w="70px" textAlign="right">
+                {isCashedOut && (
+                  <Text
+                    fontSize="xs"
+                    fontFamily="mono"
+                    color={betCashoutColor(bet, phase)}
+                  >
+                    {bet.cashedOutAt?.toFixed(2)}x
+                  </Text>
+                )}
+                {isLost && (
+                  <Text
+                    fontSize="xs"
+                    fontFamily="mono"
+                    color={betCashoutColor(bet, phase)}
+                  >
+                    —
+                  </Text>
+                )}
+                {isActive && phase === 'RUNNING' && (
+                  <LiveBetValue betAmountCents={bet.betAmountCents} />
+                )}
+                {isActive && phase !== 'RUNNING' && (
+                  <Text fontSize="xs" fontFamily="mono" color="gray.600">
+                    —
+                  </Text>
+                )}
+              </Box>
             </Flex>
           );
         })}

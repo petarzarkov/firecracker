@@ -142,7 +142,7 @@ export class GameLifecycleHandler {
       {},
       {
         delay: GAME.COOLDOWN_MS,
-        jobId: 'game-round-schedule',
+        jobId: `game-round-schedule-after-${roundId}`,
         queue: EVENTS.QUEUES.BACKGROUND_JOBS,
       },
     );

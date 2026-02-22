@@ -5,7 +5,9 @@ import type { ChatMessage, GlobalChatState, PlayerChatRoom } from '../types';
 interface ChatState {
   playerChats: Record<string, PlayerChatRoom>;
   globalChat: GlobalChatState;
+  connectedPlayers: number;
 
+  setConnectedPlayers: (count: number) => void;
   // Player chat actions
   createPlayerChat: (
     roomId: string,
@@ -32,6 +34,13 @@ export const useChatStore = create<ChatState>()(
     globalChat: {
       messages: [],
       isOpen: false,
+    },
+    connectedPlayers: 0,
+
+    setConnectedPlayers: count => {
+      set(state => {
+        state.connectedPlayers = count;
+      });
     },
 
     createPlayerChat: (

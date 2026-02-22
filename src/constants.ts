@@ -70,8 +70,8 @@ export const GAME = {
   COOLDOWN_MS: 5_000,
   /** How often the multiplier tick is broadcast to clients (ms) */
   TICK_INTERVAL_MS: 100,
-  /** Divisor in the e^(elapsed/DIVISOR) multiplier formula */
-  MULTIPLIER_DIVISOR: 15_000,
+  /** Divisor in the e^(elapsed/DIVISOR) multiplier formula — smaller = faster growth */
+  MULTIPLIER_DIVISOR: 10_000,
   /** Minimum real bet in cents ($1) */
   MIN_BET_CENTS: 100,
   /** Starting virtual balance for demo/guest users in cents ($1,000) */

@@ -43,7 +43,7 @@ export class GameBetRepository {
   }
 
   async findByRoundId(roundId: string): Promise<GameBet[]> {
-    return this.repo.findBy({ roundId });
+    return this.repo.find({ where: { roundId }, relations: ['user'] });
   }
 
   create(data: Partial<GameBet>): GameBet {

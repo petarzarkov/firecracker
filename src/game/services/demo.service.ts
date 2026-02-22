@@ -16,6 +16,8 @@ export interface DemoBet {
   cashedOut: boolean;
   cashedOutAt?: number;
   payoutCents?: number;
+  autoCashOutAt?: number;
+  username?: string;
 }
 
 @Injectable()
@@ -52,7 +54,7 @@ export class DemoService {
     const suffix = Math.floor(1000 + Math.random() * 9000);
     const wallet: DemoWallet = {
       balanceCents: GAME.DEMO_INITIAL_BALANCE_CENTS,
-      username: `Rocket#${suffix}`,
+      username: `Cracker#${suffix}`,
       createdAt: new Date().toISOString(),
     };
 
@@ -74,6 +76,8 @@ export class DemoService {
     socketId: string,
     roundId: string,
     betAmountCents: number,
+    autoCashOutAt?: number,
+    username?: string,
   ): Promise<{ bet: DemoBet; wallet: DemoWallet }> {
     const betKey = this.betKey(roundId, socketId);
 
@@ -100,12 +104,14 @@ export class DemoService {
       GAME.DEMO_WALLET_TTL_SECONDS,
     );
 
-    // Record bet
+    // Record bet — prefer the real user's display name over the generated wallet name
     const bet: DemoBet = {
       betAmountCents,
       roundId,
       placedAt: new Date().toISOString(),
       cashedOut: false,
+      username: username ?? wallet.username,
+      ...(autoCashOutAt ? { autoCashOutAt } : {}),
     };
     await this.redis.set(betKey, JSON.stringify(bet), 'EX', 3600);
 
@@ -196,5 +202,53 @@ export class DemoService {
   async getDemoBet(socketId: string, roundId: string): Promise<DemoBet | null> {
     const raw = await this.redis.get(this.betKey(roundId, socketId));
     return raw ? (JSON.parse(raw) as DemoBet) : null;
+  }
+
+  /**
+   * Returns all demo bets for the given round (for state hydration on connect).
+   */
+  async getDemoRoundBets(roundId: string): Promise<DemoBet[]> {
+    const pattern = this.roundBetsPattern(roundId);
+    const keys = await this.redis.keys(pattern);
+    const results: DemoBet[] = [];
+
+    for (const key of keys) {
+      const raw = await this.redis.get(key);
+      if (!raw) continue;
+      results.push(JSON.parse(raw) as DemoBet);
+    }
+
+    return results;
+  }
+
+  /**
+   * Returns all demo bets for a round that have an auto-cashout target
+   * at or below the given multiplier, and have not yet cashed out.
+   * Each entry includes the socketId extracted from the Redis key.
+   */
+  async getAutoCashOutDemoBets(
+    roundId: string,
+    multiplier: number,
+  ): Promise<Array<{ socketId: string; bet: DemoBet }>> {
+    const pattern = this.roundBetsPattern(roundId);
+    const keys = await this.redis.keys(pattern);
+    const results: Array<{ socketId: string; bet: DemoBet }> = [];
+
+    for (const key of keys) {
+      const raw = await this.redis.get(key);
+      if (!raw) continue;
+      const bet = JSON.parse(raw) as DemoBet;
+      if (
+        !bet.cashedOut &&
+        bet.autoCashOutAt != null &&
+        bet.autoCashOutAt <= multiplier
+      ) {
+        // Key format: demo:bet:{roundId}:{socketId}
+        const socketId = key.split(':').slice(3).join(':');
+        results.push({ socketId, bet });
+      }
+    }
+
+    return results;
   }
 }

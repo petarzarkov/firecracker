@@ -39,6 +39,11 @@ export class CrashEngineService implements OnModuleInit, OnModuleDestroy {
   private tickEmitter: ((multiplier: number, elapsed: number) => void) | null =
     null;
 
+  /** Called on each tick so the gateway can process auto-cashouts. */
+  private autoCashOutHandler:
+    | ((roundId: string, multiplier: number) => void)
+    | null = null;
+
   constructor(
     private readonly gameRoundRepo: GameRoundRepository,
     private readonly jobPublisher: JobPublisherService,
@@ -124,6 +129,12 @@ export class CrashEngineService implements OnModuleInit, OnModuleDestroy {
     this.tickEmitter = fn;
   }
 
+  registerAutoCashOutHandler(
+    fn: (roundId: string, multiplier: number) => void,
+  ): void {
+    this.autoCashOutHandler = fn;
+  }
+
   // ── Private ─────────────────────────────────────────────────────────────
 
   /**
@@ -141,7 +152,9 @@ export class CrashEngineService implements OnModuleInit, OnModuleDestroy {
         EVENTS.ROUTING_KEYS.GAME_ROUND_SCHEDULE,
         {},
         {
-          jobId: 'game-round-schedule-init',
+          // No jobId — BullMQ assigns a unique ID on every startup.
+          // A fixed ID would be deduplicated by BullMQ when the previous
+          // completed job is still in the completed set (removeOnComplete: count).
           queue: EVENTS.QUEUES.BACKGROUND_JOBS,
         },
       );
@@ -276,6 +289,9 @@ export class CrashEngineService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    if (this.currentRoundId) {
+      this.autoCashOutHandler?.(this.currentRoundId, multiplier);
+    }
     this.tickEmitter?.(multiplier, elapsed);
   }
 

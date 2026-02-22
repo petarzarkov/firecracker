@@ -1,4 +1,4 @@
-import { Box, Button, Flex, IconButton, Input, Text } from '@chakra-ui/react';
+import { Box, Flex, IconButton, Input, Tabs, Text } from '@chakra-ui/react';
 import { useEffect, useRef, useState } from 'react';
 import { FiExternalLink } from 'react-icons/fi';
 import { IoSend } from 'react-icons/io5';
@@ -12,15 +12,17 @@ import { BetPanel } from './BetPanel';
 import { CrashChart } from './CrashChart';
 import { PlayerList } from './PlayerList';
 import { RoundHistory } from './RoundHistory';
+import { UserMenu } from './UserMenu';
 import { WalletWidget } from './WalletWidget';
 
 // ── Inline global chat panel ───────────────────────────────────────────────
 
-function InlineChatPanel() {
+function InlineChatPanel({ full = false }: { full?: boolean }) {
   const socket = useSocket();
   const user = useAuthStore(state => state.user);
   const messages = useChatStore(state => state.globalChat.messages);
   const openGlobalChat = useChatStore(state => state.openGlobalChat);
+  const connectedPlayers = useChatStore(state => state.connectedPlayers);
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -42,9 +44,11 @@ function InlineChatPanel() {
   return (
     <Flex
       direction="column"
-      w={{ base: '190px', lg: '230px' }}
-      flexShrink={0}
-      borderRight="1px solid"
+      w={full ? '100%' : { base: '190px', lg: '230px' }}
+      h={full ? '100%' : undefined}
+      flex={full ? 1 : undefined}
+      flexShrink={full ? undefined : 0}
+      borderRight={full ? undefined : '1px solid'}
       borderColor="gray.700"
       bg="gray.900"
       overflow="hidden"
@@ -66,6 +70,11 @@ function InlineChatPanel() {
           letterSpacing="widest"
         >
           GLOBAL CHAT
+          {connectedPlayers > 0 && (
+            <Text as="span" color="green.500" fontWeight="normal" ml={1}>
+              ({connectedPlayers})
+            </Text>
+          )}
         </Text>
         <IconButton
           aria-label="Pop out chat"
@@ -180,16 +189,9 @@ export function Game() {
   useGameSocket();
 
   const socket = useSocket();
-  const user = useAuthStore(state => state.user);
-  const clearAuth = useAuthStore(state => state.clearAuth);
   const { globalChat, closeGlobalChat, playerChats } = useChatStore(
     state => state,
   );
-
-  function handleLogout() {
-    clearAuth();
-    window.location.href = '/';
-  }
 
   const handleSendGlobal = (message: string) => {
     socket?.emit('chatMessage', { message });
@@ -197,11 +199,12 @@ export function Game() {
 
   return (
     <Box
-      minH="100vh"
+      h="100dvh"
       bg="#0d0d0d"
       display="flex"
       flexDirection="column"
       fontFamily="mono"
+      overflow="hidden"
     >
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <Flex
@@ -226,6 +229,7 @@ export function Game() {
             color="green.400"
             letterSpacing="widest"
             style={{ textShadow: '0 0 10px #4CAF50' }}
+            display={{ base: 'none', sm: 'block' }}
           >
             FIRECRACKER
           </Text>
@@ -233,25 +237,106 @@ export function Game() {
 
         <Flex align="center" gap={3}>
           <WalletWidget />
-          <Text fontSize="sm" color="gray.400">
-            {user?.displayName ?? user?.email}
-          </Text>
-          <Button
-            size="xs"
-            variant="outline"
-            borderColor="gray.600"
-            color="gray.400"
-            fontFamily="mono"
-            onClick={handleLogout}
-            _hover={{ borderColor: 'red.500', color: 'red.400' }}
-          >
-            Logout
-          </Button>
+          <UserMenu />
         </Flex>
       </Flex>
 
-      {/* ── Main content ───────────────────────────────────────────────── */}
-      <Flex flex={1} overflow="hidden">
+      {/* ── Mobile layout (base → lg) ───────────────────────────────────── */}
+      <Box
+        display={{ base: 'flex', lg: 'none' }}
+        flex={1}
+        flexDirection="column"
+        overflow="hidden"
+      >
+        {/* Chart — fills all space above the fixed tab panel */}
+        <Box
+          flex={1}
+          minH={0}
+          overflow="hidden"
+          p={2}
+          pb={1}
+          display="flex"
+          flexDirection="column"
+        >
+          <CrashChart />
+        </Box>
+
+        {/* Tab panel — fixed height, never grows with content */}
+        <Tabs.Root
+          defaultValue="game"
+          display="flex"
+          flexDirection="column"
+          h="30vh"
+          flexShrink={0}
+          overflow="hidden"
+          variant="subtle"
+        >
+          {/* Tab bar */}
+          <Tabs.List
+            bg="gray.900"
+            borderTop="1px solid"
+            borderColor="gray.700"
+            flexShrink={0}
+          >
+            <Tabs.Trigger
+              value="game"
+              flex={1}
+              fontFamily="mono"
+              fontSize="xs"
+              letterSpacing="wide"
+              color="gray.500"
+              _selected={{ color: 'green.400', bg: 'gray.800' }}
+            >
+              CONTROLS
+            </Tabs.Trigger>
+            <Tabs.Trigger
+              value="players"
+              flex={1}
+              fontFamily="mono"
+              fontSize="xs"
+              letterSpacing="wide"
+              color="gray.500"
+              _selected={{ color: 'green.400', bg: 'gray.800' }}
+            >
+              PLAYERS
+            </Tabs.Trigger>
+            <Tabs.Trigger
+              value="chat"
+              flex={1}
+              fontFamily="mono"
+              fontSize="xs"
+              letterSpacing="wide"
+              color="gray.500"
+              _selected={{ color: 'green.400', bg: 'gray.800' }}
+            >
+              CHAT
+            </Tabs.Trigger>
+          </Tabs.List>
+
+          {/* Content area — fills rest of tab panel, each panel scrolls */}
+          <Box flex={1} minH={0} overflow="hidden">
+            <Tabs.Content value="game" h="full" overflow="hidden" p={0} bg="gray.900">
+              <Box h="full" overflowY="auto" p={3}>
+                <BetPanel />
+              </Box>
+            </Tabs.Content>
+
+            <Tabs.Content value="players" h="full" overflowY="auto" p={0}>
+              <Flex direction="column" p={2} gap={3}>
+                <RoundHistory />
+                <PlayerList />
+              </Flex>
+            </Tabs.Content>
+
+            <Tabs.Content value="chat" h="full" overflow="hidden" p={0}>
+              <InlineChatPanel full />
+            </Tabs.Content>
+          </Box>
+        </Tabs.Root>
+      </Box>
+
+      {/* ── Desktop layout (lg+) — 3 columns ───────────────────────────── */}
+      <Flex flex={1} overflow="hidden" display={{ base: 'none', lg: 'flex' }}>
         {/* Left: inline chat */}
         <InlineChatPanel />
 
@@ -288,7 +373,7 @@ export function Game() {
         </Flex>
       </Flex>
 
-      {/* ── Floating pop-out chat (triggered by inline panel's pop-out button) ── */}
+      {/* ── Floating pop-out chat ───────────────────────────────────────── */}
       {globalChat.isOpen && (
         <ChatWindow
           title="Global Chat"

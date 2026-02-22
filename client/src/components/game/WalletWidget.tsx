@@ -5,7 +5,13 @@ import { useGameStore } from '@/store/gameStore';
 
 export function WalletWidget() {
   const token = useAuthStore(state => state.token);
-  const { walletBalanceCents, setWalletBalance } = useGameStore();
+  const {
+    walletBalanceCents,
+    demoBalanceCents,
+    isDemoMode,
+    setWalletBalance,
+    setIsDemoMode,
+  } = useGameStore();
   const [depositing, setDepositing] = useState(false);
   const [depositAmount, setDepositAmount] = useState('20.00');
   const [depositLoading, setDepositLoading] = useState(false);
@@ -25,6 +31,11 @@ export function WalletWidget() {
       })
       .catch(() => {});
   }, [token, setWalletBalance]);
+
+  // Close deposit panel when switching to demo mode
+  useEffect(() => {
+    if (isDemoMode) setDepositing(false);
+  }, [isDemoMode]);
 
   async function handleDeposit() {
     if (!token) return;
@@ -60,41 +71,99 @@ export function WalletWidget() {
     }
   }
 
-  const balance = walletBalanceCents !== null ? walletBalanceCents / 100 : null;
+  const rawBalance = isDemoMode ? demoBalanceCents : walletBalanceCents;
+  const balance = rawBalance !== null ? rawBalance / 100 : null;
 
   return (
     <Box position="relative">
-      <Flex
-        align="center"
-        gap={2}
-        cursor="pointer"
-        onClick={() => setDepositing(v => !v)}
-        px={3}
-        py={1.5}
-        borderRadius="md"
-        bg="gray.800"
-        border="1px solid"
-        borderColor={depositing ? 'green.600' : 'gray.600'}
-        _hover={{ borderColor: 'green.600' }}
-        transition="border-color 0.2s"
-      >
-        <Text fontSize="xs" color="gray.500">
-          Balance
-        </Text>
-        <Text
-          fontSize="sm"
-          fontWeight="bold"
-          color={balance !== null ? 'green.400' : 'gray.500'}
-          fontFamily="mono"
+      <Flex align="center" gap={2}>
+        {/* REAL / DEMO segmented control */}
+        <Flex
+          align="center"
+          borderRadius="full"
+          bg="gray.800"
+          border="1px solid"
+          borderColor="gray.700"
+          p="2px"
         >
-          {balance !== null ? `$${balance.toFixed(2)}` : '...'}
-        </Text>
-        <Text fontSize="xs" color="gray.600">
-          ▾
-        </Text>
+          <Box
+            as="button"
+            px={3}
+            py={1}
+            borderRadius="full"
+            bg={!isDemoMode ? 'green.700' : 'transparent'}
+            color={!isDemoMode ? 'green.200' : 'gray.600'}
+            fontSize="xs"
+            fontFamily="mono"
+            fontWeight="bold"
+            letterSpacing="wide"
+            cursor="pointer"
+            onClick={() => setIsDemoMode(false)}
+            transition="all 0.15s"
+          >
+            REAL
+          </Box>
+          <Box
+            as="button"
+            px={3}
+            py={1}
+            borderRadius="full"
+            bg={isDemoMode ? 'yellow.700' : 'transparent'}
+            color={isDemoMode ? 'yellow.200' : 'gray.600'}
+            fontSize="xs"
+            fontFamily="mono"
+            fontWeight="bold"
+            letterSpacing="wide"
+            cursor="pointer"
+            onClick={() => setIsDemoMode(true)}
+            transition="all 0.15s"
+          >
+            DEMO
+          </Box>
+        </Flex>
+
+        {/* Balance display — clickable in real mode to open deposit */}
+        <Flex
+          align="center"
+          gap={2}
+          cursor={!isDemoMode ? 'pointer' : 'default'}
+          onClick={!isDemoMode ? () => setDepositing(v => !v) : undefined}
+          px={3}
+          py={1.5}
+          borderRadius="md"
+          bg="gray.800"
+          border="1px solid"
+          borderColor={depositing && !isDemoMode ? 'green.600' : 'gray.600'}
+          _hover={!isDemoMode ? { borderColor: 'green.600' } : {}}
+          transition="border-color 0.2s"
+        >
+          <Text fontSize="xs" color="gray.500">
+            {isDemoMode ? 'Demo' : 'Balance'}
+          </Text>
+          <Text
+            fontSize="sm"
+            fontWeight="bold"
+            color={
+              balance !== null
+                ? isDemoMode
+                  ? 'yellow.400'
+                  : 'green.400'
+                : 'gray.500'
+            }
+            fontFamily="mono"
+          >
+            {balance !== null ? `$${balance.toFixed(2)}` : '...'}
+          </Text>
+          {!isDemoMode && (
+            <Text fontSize="xs" color="gray.600">
+              ▾
+            </Text>
+          )}
+        </Flex>
       </Flex>
 
-      {depositing && (
+      {/* Deposit dropdown — real mode only */}
+      {depositing && !isDemoMode && (
         <Box
           position="absolute"
           top="calc(100% + 6px)"

@@ -32,6 +32,15 @@ export class GameRoundRepository {
     return this.repo.findOneBy({ id });
   }
 
+  findRecentCrashes(limit: number): Promise<GameRound[]> {
+    return this.repo.find({
+      where: { status: GameRoundStatus.CRASHED },
+      order: { crashedAt: 'DESC' },
+      take: limit,
+      select: { id: true, crashPoint: true, crashedAt: true },
+    });
+  }
+
   async getRoundHistory(
     pageOptions: PageOptionsDto,
   ): Promise<PageDto<GameRound>> {
