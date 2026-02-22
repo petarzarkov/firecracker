@@ -1,7 +1,7 @@
 import { Box, Flex, Text } from '@chakra-ui/react';
-import { useEffect, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import type { BetEntry, GamePhase } from '@/store/gameStore';
-import { liveRef, useGameStore } from '@/store/gameStore';
+import { getLiveMultiplier, useGameStore } from '@/store/gameStore';
 
 function formatUSD(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
@@ -16,7 +16,7 @@ function LiveBetValue({ betAmountCents }: { betAmountCents: number }) {
     const update = () => {
       if (ref.current) {
         ref.current.textContent = formatUSD(
-          Math.floor(betAmountCents * liveRef.multiplier),
+          Math.floor(betAmountCents * getLiveMultiplier()),
         );
       }
       animId = requestAnimationFrame(update);
@@ -37,12 +37,101 @@ function LiveBetValue({ betAmountCents }: { betAmountCents: number }) {
   );
 }
 
-function betCashoutColor(bet: BetEntry, phase: GamePhase): string {
-  if (bet.status === 'CASHED_OUT') return 'green.400';
-  if (bet.status === 'LOST') return 'red.500';
+function betCashoutColor(status: BetEntry['status'], phase: GamePhase): string {
+  if (status === 'CASHED_OUT') return 'green.400';
+  if (status === 'LOST') return 'red.500';
   if (phase === 'RUNNING') return 'yellow.400';
   return 'gray.600';
 }
+
+// Memoized — only re-renders when this specific bet reference or phase changes
+const BetRow = memo(function BetRow({
+  bet,
+  phase,
+}: {
+  bet: BetEntry;
+  phase: GamePhase;
+}) {
+  const isCashedOut = bet.status === 'CASHED_OUT';
+  const isLost = bet.status === 'LOST';
+  const isActive = bet.status === 'ACTIVE';
+
+  return (
+    <Flex
+      px={2}
+      py={1.5}
+      align="center"
+      borderRadius="sm"
+      bg={
+        isCashedOut
+          ? 'rgba(76,175,80,0.08)'
+          : isLost
+            ? 'rgba(255,68,68,0.06)'
+            : 'transparent'
+      }
+      _hover={{ bg: 'whiteAlpha.50' }}
+      transition="background 0.2s"
+    >
+      <Flex flex={1} align="center" gap={2} minW={0}>
+        <Box
+          w="6px"
+          h="6px"
+          borderRadius="full"
+          flexShrink={0}
+          bg={isCashedOut ? 'green.400' : isLost ? 'red.500' : 'blue.400'}
+        />
+        <Text
+          fontSize="xs"
+          color={isCashedOut ? 'green.300' : isLost ? 'gray.500' : 'gray.200'}
+          overflow="hidden"
+          textOverflow="ellipsis"
+          whiteSpace="nowrap"
+        >
+          {bet.username}
+        </Text>
+      </Flex>
+
+      <Text
+        fontSize="xs"
+        color="gray.400"
+        w="60px"
+        textAlign="right"
+        fontFamily="mono"
+      >
+        {formatUSD(bet.betAmountCents)}
+      </Text>
+
+      <Box w="70px" textAlign="right">
+        {isCashedOut && (
+          <Text
+            fontSize="xs"
+            fontFamily="mono"
+            color={betCashoutColor(bet.status, phase)}
+          >
+            {bet.cashedOutAt?.toFixed(2)}x
+          </Text>
+        )}
+        {isLost && (
+          <Text
+            fontSize="xs"
+            fontFamily="mono"
+            color={betCashoutColor(bet.status, phase)}
+          >
+            —
+          </Text>
+        )}
+        {isActive && phase === 'RUNNING' && (
+          <LiveBetValue betAmountCents={bet.betAmountCents} />
+        )}
+        {isActive && phase !== 'RUNNING' && (
+          <Text fontSize="xs" fontFamily="mono" color="gray.600">
+            —
+          </Text>
+        )}
+      </Box>
+    </Flex>
+  );
+});
 
 export function PlayerList() {
   // No multiplier subscription — LiveBetValue handles live updates via RAF
@@ -99,7 +188,7 @@ export function PlayerList() {
         </Text>
       </Flex>
 
-      {/* Bet rows */}
+      {/* Bet rows — each row is memoized, only re-renders when its bet changes */}
       <Box
         flex={1}
         overflowY="auto"
@@ -111,92 +200,9 @@ export function PlayerList() {
           },
         }}
       >
-        {activeBets.map(bet => {
-          const isCashedOut = bet.status === 'CASHED_OUT';
-          const isLost = bet.status === 'LOST';
-          const isActive = bet.status === 'ACTIVE';
-
-          return (
-            <Flex
-              key={bet.userId}
-              px={2}
-              py={1.5}
-              align="center"
-              borderRadius="sm"
-              bg={
-                isCashedOut
-                  ? 'rgba(76,175,80,0.08)'
-                  : isLost
-                    ? 'rgba(255,68,68,0.06)'
-                    : 'transparent'
-              }
-              _hover={{ bg: 'whiteAlpha.50' }}
-              transition="background 0.2s"
-            >
-              <Flex flex={1} align="center" gap={2} minW={0}>
-                <Box
-                  w="6px"
-                  h="6px"
-                  borderRadius="full"
-                  flexShrink={0}
-                  bg={
-                    isCashedOut ? 'green.400' : isLost ? 'red.500' : 'blue.400'
-                  }
-                />
-                <Text
-                  fontSize="xs"
-                  color={
-                    isCashedOut ? 'green.300' : isLost ? 'gray.500' : 'gray.200'
-                  }
-                  overflow="hidden"
-                  textOverflow="ellipsis"
-                  whiteSpace="nowrap"
-                >
-                  {bet.username}
-                </Text>
-              </Flex>
-
-              <Text
-                fontSize="xs"
-                color="gray.400"
-                w="60px"
-                textAlign="right"
-                fontFamily="mono"
-              >
-                {formatUSD(bet.betAmountCents)}
-              </Text>
-
-              <Box w="70px" textAlign="right">
-                {isCashedOut && (
-                  <Text
-                    fontSize="xs"
-                    fontFamily="mono"
-                    color={betCashoutColor(bet, phase)}
-                  >
-                    {bet.cashedOutAt?.toFixed(2)}x
-                  </Text>
-                )}
-                {isLost && (
-                  <Text
-                    fontSize="xs"
-                    fontFamily="mono"
-                    color={betCashoutColor(bet, phase)}
-                  >
-                    —
-                  </Text>
-                )}
-                {isActive && phase === 'RUNNING' && (
-                  <LiveBetValue betAmountCents={bet.betAmountCents} />
-                )}
-                {isActive && phase !== 'RUNNING' && (
-                  <Text fontSize="xs" fontFamily="mono" color="gray.600">
-                    —
-                  </Text>
-                )}
-              </Box>
-            </Flex>
-          );
-        })}
+        {activeBets.map(bet => (
+          <BetRow key={bet.userId} bet={bet} phase={phase} />
+        ))}
       </Box>
     </Box>
   );

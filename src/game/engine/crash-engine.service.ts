@@ -33,6 +33,7 @@ export class CrashEngineService implements OnModuleInit, OnModuleDestroy {
   private currentPhase: GameRoundStatus | null = null;
   private roundStartedAt: Date | null = null;
   private crashPoint: number | null = null;
+  private crashedAt: Date | null = null;
   private tickInterval: NodeJS.Timeout | null = null;
 
   /** Registered by GameGateway.onModuleInit() to avoid circular module imports. */
@@ -119,6 +120,27 @@ export class CrashEngineService implements OnModuleInit, OnModuleDestroy {
   setCrashed(): void {
     this.#clearTick();
     this.currentPhase = GameRoundStatus.CRASHED;
+    this.crashedAt = new Date();
+  }
+
+  /**
+   * If the round crashed within the given window (ms), returns the crash
+   * multiplier — enabling a grace-period cashout for clients whose request
+   * arrived just after the crash due to network latency.
+   * Returns null if outside the window or no crash recorded.
+   */
+  getCrashMultiplierIfRecent(windowMs: number): number | null {
+    if (
+      this.currentPhase !== GameRoundStatus.CRASHED ||
+      !this.crashedAt ||
+      this.crashPoint === null
+    ) {
+      return null;
+    }
+    if (Date.now() - this.crashedAt.getTime() <= windowMs) {
+      return this.crashPoint;
+    }
+    return null;
   }
 
   /**

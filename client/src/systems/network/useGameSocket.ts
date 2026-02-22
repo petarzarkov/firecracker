@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { startTransition, useEffect } from 'react';
 import { useSocket } from '@/SocketContext';
 import { useAuthStore } from '@/store/authStore';
 import { type BetEntry, type GamePhase, useGameStore } from '@/store/gameStore';
@@ -100,31 +100,37 @@ export function useGameSocket() {
     setWalletBalance,
     setDemoBalance,
     setBetError,
+    rollbackBet,
+    rollbackCashOut,
   } = useGameStore();
 
   useEffect(() => {
     if (!socket) return;
 
+    // Initial state sync on connect — deferred, large payload
     socket.on('gameRoundState', (data: ServerGameRoundStatePayload) => {
-      setRoundState(
-        {
-          roundId: data.roundId,
-          phase: data.phase.toUpperCase() as GamePhase,
-          multiplier: data.multiplier ?? 1.0,
-          elapsed: data.elapsed ?? 0,
-          activeBets: data.activeBets.map(mapServerBet),
-          waitingEndsAt: data.waitingEndsAt
-            ? new Date(data.waitingEndsAt)
-            : undefined,
-          recentCrashes: data.recentCrashes?.map(r => ({
-            roundId: r.roundId,
-            crashPoint: r.crashPoint,
-          })),
-        },
-        myUsername,
-      );
+      startTransition(() => {
+        setRoundState(
+          {
+            roundId: data.roundId,
+            phase: data.phase.toUpperCase() as GamePhase,
+            multiplier: data.multiplier ?? 1.0,
+            elapsed: data.elapsed ?? 0,
+            activeBets: data.activeBets.map(mapServerBet),
+            waitingEndsAt: data.waitingEndsAt
+              ? new Date(data.waitingEndsAt)
+              : undefined,
+            recentCrashes: data.recentCrashes?.map(r => ({
+              roundId: r.roundId,
+              crashPoint: r.crashPoint,
+            })),
+          },
+          myUsername,
+        );
+      });
     });
 
+    // Phase changes are urgent — drive chart/button state immediately
     socket.on('gamePhaseChange', (data: ServerGamePhasePayload) => {
       setPhase({
         roundId: data.roundId,
@@ -135,47 +141,19 @@ export function useGameSocket() {
       });
     });
 
+    // Ticks only mutate liveRef — no React state, always immediate
     socket.on('gameTick', (data: { multiplier: number; elapsed: number }) => {
       addTick(data.multiplier, data.elapsed);
     });
 
+    // Crash is urgent — updates phase + marks losing bets
     socket.on('gameCrashed', (data: ServerGameCrashedPayload) => {
       setCrashed(data.roundId, data.crashPoint);
     });
 
+    // Player list updates — deferred so they don't block RAF/setInterval
     socket.on('betPlaced', (data: ServerBetPlacedPayload) => {
-      addBet(
-        {
-          userId: data.username,
-          username: data.username,
-          betAmountCents: data.betAmountCents,
-          status: 'ACTIVE',
-        },
-        myUsername,
-      );
-    });
-
-    socket.on('betCashedOut', (data: ServerBetCashedOutPayload) => {
-      // Preserve the original betAmountCents from the live store
-      const existing = useGameStore
-        .getState()
-        .activeBets.find(b => b.userId === data.username);
-      updateBet(
-        {
-          userId: data.username,
-          username: data.username,
-          betAmountCents: existing?.betAmountCents ?? 0,
-          status: 'CASHED_OUT',
-          cashedOutAt: data.multiplier,
-          payoutCents: data.payoutCents,
-        },
-        myUsername,
-      );
-    });
-
-    socket.on('betAck', (data: BetAckPayload) => {
-      if (data.success && data.username && data.betAmountCents != null) {
-        // Server confirmed the bet — set myBet directly without username matching
+      startTransition(() => {
         addBet(
           {
             userId: data.username,
@@ -183,24 +161,63 @@ export function useGameSocket() {
             betAmountCents: data.betAmountCents,
             status: 'ACTIVE',
           },
-          data.username,
+          myUsername,
         );
+      });
+    });
+
+    socket.on('betCashedOut', (data: ServerBetCashedOutPayload) => {
+      startTransition(() => {
+        const existing = useGameStore
+          .getState()
+          .activeBets.find(b => b.userId === data.username);
+        updateBet(
+          {
+            userId: data.username,
+            username: data.username,
+            betAmountCents: existing?.betAmountCents ?? 0,
+            status: 'CASHED_OUT',
+            cashedOutAt: data.multiplier,
+            payoutCents: data.payoutCents,
+          },
+          myUsername,
+        );
+      });
+    });
+
+    socket.on('betAck', (data: BetAckPayload) => {
+      if (data.success && data.username && data.betAmountCents != null) {
+        // Confirm the optimistic bet with server-provided values (typically a no-op)
+        const username = data.username;
+        const betAmountCents = data.betAmountCents;
+        startTransition(() => {
+          addBet(
+            { userId: username, username, betAmountCents, status: 'ACTIVE' },
+            username,
+          );
+        });
       } else if (!data.success && data.error) {
-        setBetError(data.error);
+        rollbackBet(); // remove the optimistic bet entry
+        setBetError(data.error); // urgent — user needs immediate error feedback
       }
     });
 
-    socket.on('cashOutAck', (_data: CashOutAckPayload) => {
-      // betCashedOut broadcast handles the state update
+    socket.on('cashOutAck', (data: CashOutAckPayload) => {
+      if (!data.success) {
+        rollbackCashOut(); // undo optimistic cashout; phase-aware (LOST if crashed)
+      }
     });
 
+    // Balance update is low-priority display info
     socket.on('walletUpdated', (data: { balanceCents: number }) => {
-      const { isDemoMode } = useGameStore.getState();
-      if (isDemoMode) {
-        setDemoBalance(data.balanceCents);
-      } else {
-        setWalletBalance(data.balanceCents);
-      }
+      startTransition(() => {
+        const { isDemoMode } = useGameStore.getState();
+        if (isDemoMode) {
+          setDemoBalance(data.balanceCents);
+        } else {
+          setWalletBalance(data.balanceCents);
+        }
+      });
     });
 
     return () => {
@@ -226,5 +243,7 @@ export function useGameSocket() {
     setWalletBalance,
     setDemoBalance,
     setBetError,
+    rollbackBet,
+    rollbackCashOut,
   ]);
 }

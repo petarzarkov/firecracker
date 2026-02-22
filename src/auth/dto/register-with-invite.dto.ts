@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUrl,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 import { STRING_LENGTH } from '@/constants';
 import { PasswordDecorator } from '@/core/decorators/password.decorator';
 
@@ -16,4 +23,15 @@ export class RegisterWithInviteDto {
   @IsNotEmpty()
   @MaxLength(STRING_LENGTH.SHORT_MAX)
   invitationToken!: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(50)
+  displayName?: string;
+
+  @IsOptional()
+  @IsUrl()
+  @MaxLength(500)
+  picture?: string;
 }

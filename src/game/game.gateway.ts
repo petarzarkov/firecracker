@@ -188,6 +188,14 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
     } catch (err) {
       this.logger.error('Failed to send game state on connect', { err });
     }
+
+    // Send demo wallet balance immediately so the client can display it before the first bet
+    try {
+      const demoWallet = await this.demoService.getOrCreateWallet(client.id);
+      client.emit('walletUpdated', { balanceCents: demoWallet.balanceCents });
+    } catch (err) {
+      this.logger.error('Failed to send demo wallet on connect', { err });
+    }
   }
 
   // ── Inbound messages from clients ─────────────────────────────────────
@@ -306,30 +314,35 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
     const roundId = this.crashEngine.getCurrentRoundId();
     const phase = this.crashEngine.getCurrentPhase();
 
-    if (phase !== GameRoundStatus.RUNNING) {
-      const ack: CashOutAckPayload = {
-        success: false,
-        error: 'Round is not currently running',
-      };
-      client.emit('cashOutAck', ack);
-      return;
-    }
-
     if (!roundId) {
       client.emit('cashOutAck', { success: false, error: 'No active round' });
       return;
     }
 
-    // Capture the multiplier SYNCHRONOUSLY before any async operation
+    // Capture the multiplier SYNCHRONOUSLY before any async operation.
+    // If the round just crashed within the 300 ms grace window, honour the
+    // cashout at the crash multiplier so clients aren't punished for RTT.
     let currentMultiplier: number;
-    try {
-      currentMultiplier = this.crashEngine.getCurrentMultiplier();
-    } catch {
-      client.emit('cashOutAck', {
-        success: false,
-        error: 'Round ended — too late to cash out',
-      });
-      return;
+    if (phase === GameRoundStatus.RUNNING) {
+      try {
+        currentMultiplier = this.crashEngine.getCurrentMultiplier();
+      } catch {
+        client.emit('cashOutAck', {
+          success: false,
+          error: 'Round ended — too late to cash out',
+        });
+        return;
+      }
+    } else {
+      const graceMult = this.crashEngine.getCrashMultiplierIfRecent(300);
+      if (graceMult === null) {
+        client.emit('cashOutAck', {
+          success: false,
+          error: 'Round is not currently running',
+        });
+        return;
+      }
+      currentMultiplier = graceMult;
     }
 
     try {
@@ -448,10 +461,11 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
       if (autoCashOutAt > multiplier) continue;
 
       try {
+        const cashOutAt = Math.min(multiplier, autoCashOutAt);
         const bet = await this.gameBetService.cashOut(
           userId,
           roundId,
-          multiplier,
+          cashOutAt,
         );
         await this.redis.hdel(key, userId);
 
@@ -462,7 +476,7 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
 
         const broadcast: BetCashedOutPayload = {
           username,
-          multiplier,
+          multiplier: cashOutAt,
           payoutCents: bet.payoutCents ?? 0,
           isDemo: false,
         };
@@ -479,10 +493,14 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
     );
     for (const { socketId, bet: demoBet } of demoBets) {
       try {
+        const demoCashOutAt = Math.min(
+          multiplier,
+          demoBet.autoCashOutAt ?? multiplier,
+        );
         const { bet: cashedBet, wallet } = await this.demoService.cashOutDemo(
           socketId,
           roundId,
-          multiplier,
+          demoCashOutAt,
         );
 
         this.server?.sockets.sockets.get(socketId)?.emit('walletUpdated', {
@@ -491,7 +509,7 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
 
         const broadcast: BetCashedOutPayload = {
           username: demoBet.username ?? wallet.username,
-          multiplier,
+          multiplier: demoCashOutAt,
           payoutCents: cashedBet.payoutCents ?? 0,
           isDemo: true,
         };

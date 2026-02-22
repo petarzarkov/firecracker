@@ -1,6 +1,11 @@
 import { Box, Text, VStack } from '@chakra-ui/react';
 import { useEffect, useRef, useState } from 'react';
-import { type GamePhase, liveRef, useGameStore } from '@/store/gameStore';
+import {
+  type GamePhase,
+  getLiveMultiplier,
+  liveRef,
+  useGameStore,
+} from '@/store/gameStore';
 
 // ── Chart constants ─────────────────────────────────────────────────────────
 
@@ -256,7 +261,7 @@ export function CrashChart() {
 
       // Update the running multiplier text directly without React re-render
       if (multiplierSpanRef.current && currentPhase === 'RUNNING') {
-        multiplierSpanRef.current.textContent = `${liveRef.multiplier.toFixed(2)}x`;
+        multiplierSpanRef.current.textContent = `${getLiveMultiplier().toFixed(2)}x`;
       }
 
       animId = requestAnimationFrame(draw);

@@ -1,4 +1,12 @@
-import { Box, Flex, IconButton, Input, Tabs, Text } from '@chakra-ui/react';
+import {
+  Box,
+  Flex,
+  IconButton,
+  Image,
+  Input,
+  Tabs,
+  Text,
+} from '@chakra-ui/react';
 import { useEffect, useRef, useState } from 'react';
 import { FiExternalLink } from 'react-icons/fi';
 import { IoSend } from 'react-icons/io5';
@@ -110,22 +118,57 @@ function InlineChatPanel({ full = false }: { full?: boolean }) {
           </Text>
         ) : (
           messages.map(msg => (
-            <Box
+            <Flex
               key={`${new Date(msg.timestamp).getTime()}-${msg.senderId}`}
               mb={1.5}
+              gap={1.5}
+              align="flex-start"
             >
-              <Text
-                as="span"
-                fontSize="xs"
-                color="green.400"
-                fontWeight="medium"
-              >
-                {msg.senderName}:{' '}
-              </Text>
-              <Text as="span" fontSize="xs" color="gray.300">
-                {msg.message}
-              </Text>
-            </Box>
+              {msg.senderPicture ? (
+                <Image
+                  src={msg.senderPicture}
+                  alt={msg.senderName}
+                  boxSize="14px"
+                  borderRadius="full"
+                  objectFit="cover"
+                  flexShrink={0}
+                  mt="2px"
+                />
+              ) : (
+                <Flex
+                  w="14px"
+                  h="14px"
+                  borderRadius="full"
+                  bg="green.800"
+                  align="center"
+                  justify="center"
+                  flexShrink={0}
+                  mt="2px"
+                >
+                  <Text
+                    fontSize="7px"
+                    fontWeight="bold"
+                    color="white"
+                    lineHeight={1}
+                  >
+                    {msg.senderName.slice(0, 1).toUpperCase()}
+                  </Text>
+                </Flex>
+              )}
+              <Box flex={1} minW={0}>
+                <Text
+                  as="span"
+                  fontSize="xs"
+                  color="green.400"
+                  fontWeight="medium"
+                >
+                  {msg.senderName}:{' '}
+                </Text>
+                <Text as="span" fontSize="xs" color="gray.300">
+                  {msg.message}
+                </Text>
+              </Box>
+            </Flex>
           ))
         )}
       </Box>

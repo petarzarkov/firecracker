@@ -1,8 +1,9 @@
 import { Box, Button, Flex, Input, Text } from '@chakra-ui/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSocket } from '@/SocketContext';
+import { useAuthStore } from '@/store/authStore';
 import type { BetEntry } from '@/store/gameStore';
-import { liveRef, useGameStore } from '@/store/gameStore';
+import { getLiveMultiplier, useGameStore } from '@/store/gameStore';
 
 const QUICK_AMOUNTS = [1, 5, 10, 25, 50, 100];
 
@@ -29,20 +30,14 @@ function statusColor(status: BetEntry['status']): string {
 
 // ── Cash-out button — updates multiplier text via RAF, not React re-renders ──
 
-function CashOutButton({
-  loading,
-  onCashOut,
-}: {
-  loading: boolean;
-  onCashOut: () => void;
-}) {
+function CashOutButton({ onCashOut }: { onCashOut: () => void }) {
   const labelRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     let animId: number;
     const update = () => {
       if (labelRef.current) {
-        labelRef.current.textContent = `CASH OUT ${liveRef.multiplier.toFixed(2)}x`;
+        labelRef.current.textContent = `CASH OUT ${getLiveMultiplier().toFixed(2)}x`;
       }
       animId = requestAnimationFrame(update);
     };
@@ -53,7 +48,6 @@ function CashOutButton({
   return (
     <Button
       onClick={onCashOut}
-      loading={loading}
       bg="orange.500"
       color="white"
       fontWeight="black"
@@ -83,7 +77,7 @@ function BetStatusBar({ myBet }: { myBet: BetEntry }) {
     const update = () => {
       if (textRef.current) {
         const current = (
-          (myBet.betAmountCents * liveRef.multiplier) /
+          (myBet.betAmountCents * getLiveMultiplier()) /
           100
         ).toFixed(2);
         textRef.current.textContent = `Bet: $${(myBet.betAmountCents / 100).toFixed(2)} — Current: $${current}`;
@@ -122,19 +116,16 @@ function BetStatusBar({ myBet }: { myBet: BetEntry }) {
 
 function PlaceBetButton({
   canBet,
-  loading,
   myBet,
   onPlaceBet,
 }: {
   canBet: boolean;
-  loading: boolean;
   myBet: BetEntry | null;
   onPlaceBet: () => void;
 }) {
   return (
     <Button
       onClick={onPlaceBet}
-      loading={loading}
       disabled={!canBet}
       bg={canBet ? 'green.600' : 'gray.700'}
       color={canBet ? 'white' : 'gray.500'}
@@ -159,11 +150,21 @@ function PlaceBetButton({
 
 export function BetPanel() {
   const socket = useSocket();
-  // No multiplier subscription — tick data read from liveRef via RAF in subcomponents
-  const { phase, myBet, betError, clearBetError, isDemoMode } = useGameStore();
+  // Per-field selectors — BetPanel only re-renders when these specific fields change
+  const phase = useGameStore(state => state.phase);
+  const myBet = useGameStore(state => state.myBet);
+  const betError = useGameStore(state => state.betError);
+  const clearBetError = useGameStore(state => state.clearBetError);
+  const isDemoMode = useGameStore(state => state.isDemoMode);
+  const addBet = useGameStore(state => state.addBet);
+  const updateBet = useGameStore(state => state.updateBet);
+  // Username used for optimistic bet entry (same formula the gateway uses)
+  const myUsername = useAuthStore(
+    state => state.user?.displayName ?? state.user?.email?.split('@')[0],
+  );
+
   const [amount, setAmount] = useState('5.00');
   const [autoCashOut, setAutoCashOut] = useState('');
-  const [loading, setLoading] = useState(false);
   const [autoPlay, setAutoPlay] = useState(false);
 
   const amountCents = Math.round(Number.parseFloat(amount || '0') * 100);
@@ -174,24 +175,19 @@ export function BetPanel() {
   const canCashOut = phase === 'RUNNING' && myBet?.status === 'ACTIVE';
   const inputDisabled = phase !== 'WAITING' || myBet !== null;
 
-  // Clear loading when server confirms the action (myBet set) or phase leaves WAITING
-  useEffect(() => {
-    if (myBet !== null || phase !== 'WAITING') {
-      setLoading(false);
-    }
-  }, [myBet, phase]);
-
-  // Clear loading when bet fails
-  useEffect(() => {
-    if (betError) {
-      setLoading(false);
-    }
-  }, [betError]);
-
   const handlePlaceBet = useCallback(() => {
-    if (!socket || !canBet) return;
+    if (!socket || !canBet || !myUsername) return;
     clearBetError();
-    setLoading(true);
+    // Optimistic: show bet immediately — no loading state needed
+    addBet(
+      {
+        userId: myUsername,
+        username: myUsername,
+        betAmountCents: amountCents,
+        status: 'ACTIVE',
+      },
+      myUsername,
+    );
     socket.emit('placeBet', {
       betAmountCents: amountCents,
       isDemo: isDemoMode,
@@ -200,12 +196,30 @@ export function BetPanel() {
   }, [
     socket,
     canBet,
+    myUsername,
     clearBetError,
+    addBet,
     amountCents,
     isDemoMode,
     hasAutoCashOut,
     autoCashOutTarget,
   ]);
+
+  function handleCashOut() {
+    if (!socket || !canCashOut || !myBet) return;
+    const mult = getLiveMultiplier();
+    // Optimistic: show cashout result immediately — server will confirm with exact value
+    updateBet({
+      userId: myBet.userId,
+      username: myBet.username,
+      betAmountCents: myBet.betAmountCents,
+      status: 'CASHED_OUT',
+      cashedOutAt: mult,
+      payoutCents: Math.floor(myBet.betAmountCents * mult),
+      isOptimistic: true,
+    });
+    socket.emit('cashOut');
+  }
 
   // Auto-play requires auto exit — turn off if exit target is removed
   useEffect(() => {
@@ -218,12 +232,6 @@ export function BetPanel() {
       handlePlaceBet();
     }
   }, [autoPlay, canBet, handlePlaceBet]);
-
-  function handleCashOut() {
-    if (!socket || !canCashOut) return;
-    setLoading(true);
-    socket.emit('cashOut');
-  }
 
   return (
     <Box
@@ -293,19 +301,34 @@ export function BetPanel() {
               _focus={{ borderColor: 'yellow.500', outline: 'none' }}
               _placeholder={{ color: 'gray.600' }}
             />
-            <Text color="gray.500" fontSize="sm">
-              x
-            </Text>
+            {hasAutoCashOut && myBet === null ? (
+              <Box
+                as="button"
+                onClick={() => setAutoCashOut('')}
+                color="gray.400"
+                fontSize="lg"
+                lineHeight="1"
+                px={1}
+                cursor="pointer"
+                _hover={{ color: 'red.400' }}
+                title="Clear auto exit"
+              >
+                ×
+              </Box>
+            ) : (
+              <Text color="gray.600" fontSize="sm">
+                x
+              </Text>
+            )}
           </Flex>
         </Box>
 
         <Box pt={5}>
           {canCashOut ? (
-            <CashOutButton loading={loading} onCashOut={handleCashOut} />
+            <CashOutButton onCashOut={handleCashOut} />
           ) : (
             <PlaceBetButton
               canBet={canBet}
-              loading={loading}
               myBet={myBet}
               onPlaceBet={handlePlaceBet}
             />

@@ -31,13 +31,16 @@ export class UsersService {
     email: string,
     hashedPassword: string,
     roles: UserRole[],
+    picture?: string,
+    displayName?: string,
     additionalTransactionOps?: (txManager: EntityManager) => Promise<void>,
   ): Promise<User> {
     return this.entityManager.transaction(async txManager => {
       const user = txManager.create(User, {
         email,
         password: hashedPassword,
-        displayName: email.split('@')[0],
+        displayName: displayName || email.split('@')[0],
+        picture,
         roles,
       });
       const savedUser = await txManager.save(User, user);
@@ -68,11 +71,20 @@ export class UsersService {
     return this.usersRepository.findById(id);
   }
 
-  async createUser(email: string, password: string) {
+  async createUser(
+    email: string,
+    password: string,
+    picture?: string,
+    displayName?: string,
+  ): Promise<User> {
     const hashedPassword = await passwordUtil.hash(password);
-    const user = await this.createUserWithLocalAuth(email, hashedPassword, [
-      UserRole.USER,
-    ]);
+    const user = await this.createUserWithLocalAuth(
+      email,
+      hashedPassword,
+      [UserRole.USER],
+      picture,
+      displayName,
+    );
 
     // Publish user registered event
     await this.jobPublisher.publishJob(
@@ -88,7 +100,12 @@ export class UsersService {
     return user;
   }
 
-  async createUserFromInvite(inviteCode: string, password: string) {
+  async createUserFromInvite(
+    inviteCode: string,
+    password: string,
+    picture?: string,
+    displayName?: string,
+  ) {
     const invite = await this.invitesRepository.findOne({
       where: {
         inviteCode,
@@ -110,6 +127,8 @@ export class UsersService {
       invite.email,
       hashedPassword,
       [invite.role],
+      picture,
+      displayName,
       async txManager => {
         invite.status = InviteStatus.ACCEPTED;
         await txManager.save(invite);

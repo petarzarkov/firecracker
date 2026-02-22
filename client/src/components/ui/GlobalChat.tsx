@@ -1,4 +1,4 @@
-import { Box, Flex, IconButton, Stack, Text } from '@chakra-ui/react';
+import { Box, Flex, IconButton, Image, Stack, Text } from '@chakra-ui/react';
 import { useMemo } from 'react';
 import { MdExpandMore } from 'react-icons/md';
 import type { Socket } from 'socket.io-client';
@@ -101,7 +101,7 @@ function CollapsedChatOverlay() {
         ) : (
           <Stack gap={1}>
             {recentMessages.map(msg => (
-              <Box
+              <Flex
                 key={
                   new Date(msg.timestamp).getTime().toString() + msg.senderId
                 }
@@ -109,19 +109,54 @@ function CollapsedChatOverlay() {
                 py={1}
                 borderRadius="sm"
                 bg="whiteAlpha.50"
+                gap={1.5}
+                align="flex-start"
               >
-                <Text fontSize="2xs" color="gray.400" mb={0.5}>
-                  {msg.senderName}:
-                </Text>
-                <Text
-                  fontSize="xs"
-                  color="gray.200"
-                  maxLines={2}
-                  wordBreak="break-word"
-                >
-                  {msg.message}
-                </Text>
-              </Box>
+                {msg.senderPicture ? (
+                  <Image
+                    src={msg.senderPicture}
+                    alt={msg.senderName}
+                    boxSize="16px"
+                    borderRadius="full"
+                    objectFit="cover"
+                    flexShrink={0}
+                    mt="1px"
+                  />
+                ) : (
+                  <Flex
+                    w="16px"
+                    h="16px"
+                    borderRadius="full"
+                    bg="green.700"
+                    align="center"
+                    justify="center"
+                    flexShrink={0}
+                    mt="1px"
+                  >
+                    <Text
+                      fontSize="8px"
+                      fontWeight="bold"
+                      color="white"
+                      lineHeight={1}
+                    >
+                      {msg.senderName.slice(0, 1).toUpperCase()}
+                    </Text>
+                  </Flex>
+                )}
+                <Box flex={1} minW={0}>
+                  <Text fontSize="2xs" color="gray.400" mb={0.5}>
+                    {msg.senderName}:
+                  </Text>
+                  <Text
+                    fontSize="xs"
+                    color="gray.200"
+                    maxLines={2}
+                    wordBreak="break-word"
+                  >
+                    {msg.message}
+                  </Text>
+                </Box>
+              </Flex>
             ))}
           </Stack>
         )}

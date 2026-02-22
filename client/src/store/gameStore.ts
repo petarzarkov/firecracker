@@ -10,6 +10,8 @@ export interface BetEntry {
   status: 'ACTIVE' | 'CASHED_OUT' | 'LOST';
   cashedOutAt?: number;
   payoutCents?: number;
+  /** True when the update was applied locally before server confirmation. */
+  isOptimistic?: boolean;
 }
 
 export interface CrashedRound {
@@ -27,10 +29,33 @@ export interface ChartPoint {
  * Updated directly by addTick — NO Zustand set() call → no React re-renders on tick.
  * Canvas RAF loops in CrashChart / BetPanel / PlayerList read this directly.
  */
-export const liveRef: { multiplier: number; chartPoints: ChartPoint[] } = {
+export const liveRef: {
+  multiplier: number;
+  chartPoints: ChartPoint[];
+  /** Client-side timestamp (ms) for when the current round started. Set on RUNNING. */
+  roundStartedAtMs: number | null;
+} = {
   multiplier: 1.0,
   chartPoints: [],
+  roundStartedAtMs: null,
 };
+
+/** Multiplier divisor — must match GAME.MULTIPLIER_DIVISOR on the server. */
+const MULTIPLIER_DIVISOR = 10_000;
+
+/**
+ * Returns the interpolated current multiplier using the client's clock.
+ * When roundStartedAtMs is known this matches the server's live value exactly,
+ * eliminating the tick-interval gap on the cashout button display.
+ * Falls back to the last received tick value when not running.
+ */
+export function getLiveMultiplier(): number {
+  if (liveRef.roundStartedAtMs != null) {
+    const elapsed = Date.now() - liveRef.roundStartedAtMs;
+    return Math.floor(Math.exp(elapsed / MULTIPLIER_DIVISOR) * 100) / 100;
+  }
+  return liveRef.multiplier;
+}
 
 interface GameState {
   phase: GamePhase;
@@ -79,6 +104,14 @@ interface GameActions {
   setBetError: (error: string | null) => void;
   clearBetError: () => void;
   setIsDemoMode: (isDemoMode: boolean) => void;
+  /** Removes the optimistic place-bet entry when the server rejects it. */
+  rollbackBet: () => void;
+  /**
+   * Rolls back an optimistic cashout. Sets the status back to ACTIVE
+   * (or LOST if the round has already crashed) so the store is consistent
+   * regardless of which event — cashOutAck or gameCrashed — arrives first.
+   */
+  rollbackCashOut: () => void;
 }
 
 function buildSyntheticChart(elapsed: number): ChartPoint[] {
@@ -106,7 +139,7 @@ export const useGameStore = create<GameState & GameActions>()(
     demoBalanceCents: null,
     recentCrashes: [],
     betError: null,
-    isDemoMode: false,
+    isDemoMode: true,
 
     setRoundState: (payload, myUserId) => {
       // Populate liveRef for canvas RAF rendering (reconnect mid-round)
@@ -117,8 +150,11 @@ export const useGameStore = create<GameState & GameActions>()(
           multiplier: payload.multiplier,
         });
         liveRef.chartPoints = points;
+        // Back-compute startedAt from elapsed so the interpolation matches the server
+        liveRef.roundStartedAtMs = Date.now() - payload.elapsed;
       } else {
         liveRef.chartPoints = [];
+        liveRef.roundStartedAtMs = null;
       }
       liveRef.multiplier = payload.multiplier ?? 1.0;
 
@@ -149,6 +185,7 @@ export const useGameStore = create<GameState & GameActions>()(
         if (payload.phase === 'WAITING') {
           liveRef.chartPoints = [];
           liveRef.multiplier = 1.0;
+          liveRef.roundStartedAtMs = null;
           state.waitingEndsAt = payload.waitingEndsAt ?? null;
           state.multiplier = 1.0;
           state.activeBets = [];
@@ -156,7 +193,10 @@ export const useGameStore = create<GameState & GameActions>()(
         } else if (payload.phase === 'RUNNING') {
           liveRef.chartPoints = [{ elapsed: 0, multiplier: 1.0 }];
           liveRef.multiplier = 1.0;
+          liveRef.roundStartedAtMs = Date.now();
           state.startedAt = payload.startedAt ?? null;
+        } else if (payload.phase === 'CRASHED') {
+          liveRef.roundStartedAtMs = null;
         }
       });
     },
@@ -182,12 +222,23 @@ export const useGameStore = create<GameState & GameActions>()(
           state.recentCrashes = state.recentCrashes.slice(0, 20);
         }
 
-        if (state.myBet?.status === 'ACTIVE') {
+        // ACTIVE bets are lost. Optimistic cashouts that the server hadn't
+        // confirmed yet are also treated as lost (crash arrived before ack).
+        if (
+          state.myBet &&
+          (state.myBet.status === 'ACTIVE' || state.myBet.isOptimistic)
+        ) {
           state.myBet.status = 'LOST';
+          state.myBet.isOptimistic = false;
+          state.myBet.cashedOutAt = undefined;
+          state.myBet.payoutCents = undefined;
         }
         for (const bet of state.activeBets) {
-          if (bet.status === 'ACTIVE') {
+          if (bet.status === 'ACTIVE' || bet.isOptimistic) {
             bet.status = 'LOST';
+            bet.isOptimistic = false;
+            bet.cashedOutAt = undefined;
+            bet.payoutCents = undefined;
           }
         }
       });
@@ -264,6 +315,42 @@ export const useGameStore = create<GameState & GameActions>()(
     setIsDemoMode: isDemoMode => {
       set(state => {
         state.isDemoMode = isDemoMode;
+      });
+    },
+
+    rollbackBet: () => {
+      set(state => {
+        const myBet = state.myBet;
+        if (myBet) {
+          const idx = state.activeBets.findIndex(
+            b => b.userId === myBet.userId,
+          );
+          if (idx >= 0) state.activeBets.splice(idx, 1);
+          state.myBet = null;
+        }
+      });
+    },
+
+    rollbackCashOut: () => {
+      set(state => {
+        const myBet = state.myBet;
+        if (myBet?.isOptimistic && myBet.status === 'CASHED_OUT') {
+          // If round crashed before our ack arrived, mark as lost — otherwise restore active
+          const newStatus = state.phase === 'CRASHED' ? 'LOST' : 'ACTIVE';
+          const idx = state.activeBets.findIndex(
+            b => b.userId === myBet.userId,
+          );
+          if (idx >= 0) {
+            state.activeBets[idx].status = newStatus;
+            state.activeBets[idx].isOptimistic = false;
+            state.activeBets[idx].cashedOutAt = undefined;
+            state.activeBets[idx].payoutCents = undefined;
+          }
+          myBet.status = newStatus;
+          myBet.isOptimistic = false;
+          myBet.cashedOutAt = undefined;
+          myBet.payoutCents = undefined;
+        }
       });
     },
   })),

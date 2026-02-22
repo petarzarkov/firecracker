@@ -1,4 +1,4 @@
-import { Box, Flex, Menu, Text } from '@chakra-ui/react';
+import { Box, Flex, Image, Menu, Text } from '@chakra-ui/react';
 import { useAuthStore } from '@/store/authStore';
 
 function getInitials(displayName?: string | null, email?: string): string {
@@ -37,19 +37,35 @@ export function UserMenu() {
           _hover={{ bg: 'gray.800' }}
           transition="background 0.15s"
         >
-          <Flex
-            w={7}
-            h={7}
-            bg="green.700"
-            borderRadius="full"
-            align="center"
-            justify="center"
-            flexShrink={0}
-          >
-            <Text fontSize="xs" fontWeight="bold" color="white" lineHeight={1}>
-              {initials}
-            </Text>
-          </Flex>
+          {user.picture ? (
+            <Image
+              src={user.picture}
+              alt={displayLabel}
+              boxSize={7}
+              borderRadius="full"
+              flexShrink={0}
+              objectFit="cover"
+            />
+          ) : (
+            <Flex
+              w={7}
+              h={7}
+              bg="green.700"
+              borderRadius="full"
+              align="center"
+              justify="center"
+              flexShrink={0}
+            >
+              <Text
+                fontSize="xs"
+                fontWeight="bold"
+                color="white"
+                lineHeight={1}
+              >
+                {initials}
+              </Text>
+            </Flex>
+          )}
           <Text
             fontSize="sm"
             color="gray.300"
@@ -76,25 +92,56 @@ export function UserMenu() {
         minW="200px"
         zIndex={200}
       >
-        <Box px={3} py={2}>
-          <Text fontSize="xs" color="gray.500" fontFamily="mono" mb={1}>
-            ACCOUNT
-          </Text>
-          <Text
-            fontSize="sm"
-            color="gray.200"
-            fontFamily="mono"
-            fontWeight="bold"
-          >
-            {user.displayName ?? user.email.split('@')[0]}
-          </Text>
-          <Text fontSize="xs" color="gray.500" fontFamily="mono" mt={0.5}>
-            {user.email}
-          </Text>
-          <Text fontSize="xs" color="green.500" fontFamily="mono" mt={1}>
-            {user.roles.join(', ')}
-          </Text>
-        </Box>
+        <Flex px={3} py={2} gap={3} align="center">
+          {user.picture ? (
+            <Image
+              src={user.picture}
+              alt={displayLabel}
+              boxSize={10}
+              borderRadius="full"
+              objectFit="cover"
+              flexShrink={0}
+            />
+          ) : (
+            <Flex
+              w={10}
+              h={10}
+              bg="green.700"
+              borderRadius="full"
+              align="center"
+              justify="center"
+              flexShrink={0}
+            >
+              <Text
+                fontSize="sm"
+                fontWeight="bold"
+                color="white"
+                lineHeight={1}
+              >
+                {initials}
+              </Text>
+            </Flex>
+          )}
+          <Box>
+            <Text fontSize="xs" color="gray.500" fontFamily="mono" mb={0.5}>
+              ACCOUNT
+            </Text>
+            <Text
+              fontSize="sm"
+              color="gray.200"
+              fontFamily="mono"
+              fontWeight="bold"
+            >
+              {user.displayName ?? user.email.split('@')[0]}
+            </Text>
+            <Text fontSize="xs" color="gray.500" fontFamily="mono" mt={0.5}>
+              {user.email}
+            </Text>
+            <Text fontSize="xs" color="green.500" fontFamily="mono" mt={0.5}>
+              {user.roles.join(', ')}
+            </Text>
+          </Box>
+        </Flex>
         <Menu.Separator borderColor="gray.700" />
         <Menu.Item
           value="logout"

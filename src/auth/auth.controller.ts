@@ -32,6 +32,7 @@ import { RegisterWithInviteDto } from '@/auth/dto/register-with-invite.dto';
 import { CurrentUser } from '@/core/decorators/current-user.decorator';
 import { Public } from '@/core/decorators/public.decorator';
 import { UnionValidationPipe } from '@/core/pipes/union-validation.pipe';
+import { getTrendingBTTVEmotes } from '@/core/utils/avatar.util';
 import { SanitizedUser, User } from '@/users/entity/user.entity';
 import { UsersService } from '@/users/services/users.service';
 import { OAuthProvider } from './enum/oauth-provider.enum';
@@ -141,6 +142,8 @@ export class AuthController {
       const invitedUser = await this.usersService.createUserFromInvite(
         body.invitationToken,
         body.password,
+        body.picture,
+        body.displayName,
       );
 
       const accessToken = this.authService.createAccessToken(
@@ -155,6 +158,8 @@ export class AuthController {
     const newUser = await this.usersService.createUser(
       body.email,
       body.password,
+      body.picture,
+      body.displayName,
     );
     const accessToken = this.authService.createAccessToken(
       newUser.id,
@@ -244,5 +249,17 @@ export class AuthController {
   @ApiExcludeEndpoint()
   async linkedInAuthCallback(@Req() req: Request) {
     return this.handleOAuthCallback(req);
+  }
+
+  @Get('avatars/trending')
+  @Public()
+  @ApiOperation({ summary: 'Get trending avatar emotes' })
+  @ApiOkResponse({
+    description: 'List of trending emote URLs',
+    type: [String],
+  })
+  async getTrendingAvatars(): Promise<{ avatars: string[] }> {
+    const avatars = await getTrendingBTTVEmotes(20);
+    return { avatars };
   }
 }
