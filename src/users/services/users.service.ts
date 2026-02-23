@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import {
   ForbiddenException,
   Injectable,
@@ -27,6 +28,44 @@ export class UsersService {
     @InjectEntityManager() readonly entityManager: EntityManager,
   ) {}
 
+  private static generateDemoPassword(): string {
+    const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const lower = 'abcdefghijklmnopqrstuvwxyz';
+    const digits = '0123456789';
+    const syms = '!@#$%^&*';
+    const all = upper + lower + digits + syms;
+    const pick = (chars: string) => chars[randomBytes(1)[0] % chars.length];
+    const chars = [
+      pick(upper),
+      pick(lower),
+      pick(digits),
+      pick(syms),
+      ...Array.from({ length: 12 }, () => all[randomBytes(1)[0] % all.length]),
+    ];
+    for (let i = chars.length - 1; i > 0; i--) {
+      const j = randomBytes(1)[0] % (i + 1);
+      [chars[i], chars[j]] = [chars[j], chars[i]];
+    }
+    return chars.join('');
+  }
+
+  async createDemoUser(): Promise<User> {
+    const nanoId = randomBytes(8).toString('base64url').slice(0, 10);
+    const email = `demo_${nanoId}@demo.local`;
+    const hashedPassword = await passwordUtil.hash(
+      UsersService.generateDemoPassword(),
+    );
+    return this.createUserWithLocalAuth(
+      email,
+      hashedPassword,
+      [UserRole.USER],
+      undefined,
+      `Cracker#${nanoId.slice(0, 4).toUpperCase()}`,
+      undefined,
+      true,
+    );
+  }
+
   private async createUserWithLocalAuth(
     email: string,
     hashedPassword: string,
@@ -34,6 +73,7 @@ export class UsersService {
     picture?: string,
     displayName?: string,
     additionalTransactionOps?: (txManager: EntityManager) => Promise<void>,
+    isDemo = false,
   ): Promise<User> {
     return this.entityManager.transaction(async txManager => {
       const user = txManager.create(User, {
@@ -42,6 +82,7 @@ export class UsersService {
         displayName: displayName || email.split('@')[0],
         picture,
         roles,
+        isDemo,
       });
       const savedUser = await txManager.save(User, user);
 

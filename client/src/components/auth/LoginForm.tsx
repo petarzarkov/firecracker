@@ -12,8 +12,9 @@ import {
   Text,
 } from '@chakra-ui/react';
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
-import { FaGithub, FaLinkedin } from 'react-icons/fa';
+import { FaGamepad, FaGithub, FaLinkedin } from 'react-icons/fa';
 import { useAuthStore } from '../../store/authStore';
+import { useGameStore } from '../../store/gameStore';
 
 // --- Types ---
 type FormMode = 'login' | 'register' | 'requestReset' | 'resetPassword';
@@ -86,7 +87,13 @@ const InputField = ({ label, ...props }: InputProps & { label: string }) => (
   </Box>
 );
 
-const SocialButtons = ({ isLoading }: { isLoading: boolean }) => (
+const SocialButtons = ({
+  isLoading,
+  onDemoLogin,
+}: {
+  isLoading: boolean;
+  onDemoLogin: () => void;
+}) => (
   <>
     <Text textAlign="center" color="fg.muted" fontSize="sm" my={2}>
       or
@@ -126,6 +133,25 @@ const SocialButtons = ({ isLoading }: { isLoading: boolean }) => (
     <Text color="fg.muted" fontSize="xs" textAlign="center" mt={2}>
       Use your existing account credentials
     </Text>
+    <Box borderTop="1px solid" borderColor="gray.700" pt={3} mt={1}>
+      <Button
+        onClick={onDemoLogin}
+        disabled={isLoading}
+        variant="outline"
+        width="full"
+        bg="transparent"
+        color="yellow.400"
+        borderColor="yellow.600"
+        borderStyle="dashed"
+        _hover={{ bg: 'yellow.900', borderColor: 'yellow.400' }}
+      >
+        <Icon as={FaGamepad} />
+        Try Demo
+      </Button>
+      <Text color="fg.muted" fontSize="xs" textAlign="center" mt={1}>
+        Temporary account · play money only
+      </Text>
+    </Box>
   </>
 );
 
@@ -237,6 +263,24 @@ export function LoginForm() {
   });
 
   const setAuth = useAuthStore(state => state.setAuth);
+  const setIsDemoMode = useGameStore(state => state.setIsDemoMode);
+
+  const handleDemoLogin = async () => {
+    setStatus({ isLoading: true, error: '', success: '' });
+    try {
+      const response = await fetch('/api/auth/demo', { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Demo login failed');
+      setAuth(data.accessToken, data.user);
+      setIsDemoMode(true);
+    } catch (err) {
+      setStatus(prev => ({
+        ...prev,
+        isLoading: false,
+        error: err instanceof Error ? err.message : 'Demo login failed',
+      }));
+    }
+  };
 
   useEffect(() => {
     const token = new URLSearchParams(window.location.search).get('token');
@@ -474,7 +518,10 @@ export function LoginForm() {
                 >
                   Forgot Password?
                 </Link>
-                <SocialButtons isLoading={status.isLoading} />
+                <SocialButtons
+                  isLoading={status.isLoading}
+                  onDemoLogin={handleDemoLogin}
+                />
                 <Box mt={4}>
                   <Link color="blue.400" onClick={() => switchMode('register')}>
                     Don't have an account? Register

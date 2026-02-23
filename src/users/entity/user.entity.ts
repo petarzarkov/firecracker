@@ -79,6 +79,14 @@ export class User {
   @IsBoolean()
   suspended!: boolean;
 
+  @ApiProperty({
+    description: 'Whether this is an ephemeral demo account',
+    default: false,
+  })
+  @Column({ type: 'boolean', default: false })
+  @IsBoolean()
+  isDemo!: boolean;
+
   @ApiProperty()
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;

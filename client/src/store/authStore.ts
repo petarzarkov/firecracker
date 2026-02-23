@@ -8,6 +8,7 @@ export interface User {
   displayName?: string | null;
   picture?: string | null;
   roles: UserRole[];
+  isDemo?: boolean;
 }
 
 interface AuthState {

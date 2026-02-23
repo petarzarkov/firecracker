@@ -1,4 +1,4 @@
-import { Box, Flex, Image, Menu, Text } from '@chakra-ui/react';
+import { Badge, Box, Flex, Image, Menu, Text } from '@chakra-ui/react';
 import { useAuthStore } from '@/store/authStore';
 
 function getInitials(displayName?: string | null, email?: string): string {
@@ -123,9 +123,21 @@ export function UserMenu() {
             </Flex>
           )}
           <Box>
-            <Text fontSize="xs" color="gray.500" fontFamily="mono" mb={0.5}>
-              ACCOUNT
-            </Text>
+            <Flex align="center" gap={2} mb={0.5}>
+              <Text fontSize="xs" color="gray.500" fontFamily="mono">
+                ACCOUNT
+              </Text>
+              {user.isDemo && (
+                <Badge
+                  colorPalette="yellow"
+                  variant="subtle"
+                  fontSize="xs"
+                  fontFamily="mono"
+                >
+                  DEMO
+                </Badge>
+              )}
+            </Flex>
             <Text
               fontSize="sm"
               color="gray.200"

@@ -171,6 +171,22 @@ export class AuthController {
   }
 
   @Public()
+  @Post('demo')
+  @ApiOperation({
+    summary: 'Create an ephemeral demo account and return an access token',
+  })
+  @ApiOkResponse({ type: AuthResponseDto })
+  async loginDemo(): Promise<AuthResponseDto> {
+    const demoUser = await this.usersService.createDemoUser();
+    const accessToken = this.authService.createAccessToken(
+      demoUser.id,
+      demoUser.email,
+      demoUser.roles,
+    );
+    return { accessToken, user: User.sanitize(demoUser) };
+  }
+
+  @Public()
   @UseGuards(AuthGuard(OAuthProvider.GOOGLE))
   @Get('google')
   @ApiOperation({ summary: 'Initiate Google OAuth2 login flow' })
