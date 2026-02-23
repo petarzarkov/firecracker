@@ -31,12 +31,13 @@ export class FilesRepository extends Repository<FileEntity> {
     }
 
     if (query.search) {
-      const conditions = ['file.name ILIKE :search', 'fund.name ILIKE :search'];
+      const conditions = ['file.name ILIKE :search'];
 
       if (options.includeUserAndOrg) {
+        qb.leftJoin('file.user', 'user');
         conditions.push(
           'user.email ILIKE :search',
-          'user.fullName ILIKE :search',
+          'user.displayName ILIKE :search',
         );
       }
 

@@ -20,18 +20,29 @@ const PAD_T = 20;
 const PAD_B = 28;
 
 // For Y-axis HTML label positioning (labels at left: 4px use this for top%)
-// Labels are positioned relative to the chart area. Using the same formula as mToY.
 function mToYPct(m: number): number {
   const normalized = Math.min(Math.log(Math.max(1.001, m)) / LOG_MAX, 1);
-  // In canvas: y = PAD_T + CH * (1 - normalized). As % of total canvas height:
-  // We expose this as a percentage so HTML labels align regardless of canvas height.
-  // We'll compute the fraction of the canvas height (0..1) this represents.
-  // Since PAD_T and PAD_B are fixed pixels, we can't express this as a pure %
-  // without knowing canvas height. Use a known reference height (360px default).
   const REF_H = 360;
   const ch = REF_H - PAD_T - PAD_B;
   const y = PAD_T + ch * (1 - normalized);
   return (y / REF_H) * 100;
+}
+
+// ── Canvas coordinate helpers ────────────────────────────────────────────────
+
+function getTipCoords(
+  W: number,
+  H: number,
+  multiplier: number,
+): { x: number; y: number } | null {
+  if (liveRef.chartPoints.length === 0) return null;
+  const cw = W - PAD_L - PAD_R;
+  const ch = H - PAD_T - PAD_B;
+  const maxE = liveRef.chartPoints[liveRef.chartPoints.length - 1].elapsed;
+  const tipX = PAD_L + (maxE / Math.max(maxE, 1)) * cw;
+  const tipNorm = Math.min(Math.log(Math.max(1.001, multiplier)) / LOG_MAX, 1);
+  const tipY = PAD_T + ch * (1 - tipNorm);
+  return { x: tipX, y: tipY };
 }
 
 // ── Star field ─────────────────────────────────────────────────────────────
@@ -82,6 +93,147 @@ function drawStars(
     ctx.arc(px, py, size, 0, Math.PI * 2);
     ctx.fillStyle = `rgba(255,255,255,${(t * 0.85).toFixed(2)})`;
     ctx.fill();
+  }
+}
+
+// ── Background glow ──────────────────────────────────────────────────────────
+
+function glowColorForMultiplier(m: number): { rgb: string; alpha: number } {
+  if (m >= 10) return { rgb: '180,0,255', alpha: 0.07 };
+  if (m >= 5) return { rgb: '255,140,0', alpha: 0.06 };
+  if (m >= 2) return { rgb: '255,200,0', alpha: 0.05 };
+  return { rgb: '76,175,80', alpha: 0.04 };
+}
+
+function drawBackgroundGlow(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  H: number,
+  phase: GamePhase,
+  multiplier: number,
+  crashFlash: number,
+) {
+  if (crashFlash > 0) {
+    const flashAlpha = (crashFlash / 60) * 0.14;
+    const grad = ctx.createRadialGradient(
+      W / 2,
+      H / 2,
+      0,
+      W / 2,
+      H / 2,
+      W * 0.5,
+    );
+    grad.addColorStop(0, `rgba(255,68,68,${flashAlpha.toFixed(3)})`);
+    grad.addColorStop(1, 'rgba(255,68,68,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+    return;
+  }
+
+  if (phase !== 'RUNNING') return;
+
+  const tip = getTipCoords(W, H, multiplier);
+  if (!tip) return;
+
+  const { rgb, alpha } = glowColorForMultiplier(multiplier);
+  const radius = W * 0.32;
+  const grad = ctx.createRadialGradient(tip.x, tip.y, 0, tip.x, tip.y, radius);
+  grad.addColorStop(0, `rgba(${rgb},${alpha})`);
+  grad.addColorStop(1, `rgba(${rgb},0)`);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+}
+
+// ── Particle system ──────────────────────────────────────────────────────────
+
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  size: number;
+}
+
+function particleColorRgb(multiplier: number): string {
+  if (multiplier >= 10) return '180,0,255';
+  if (multiplier >= 5) return '255,140,0';
+  if (multiplier >= 2) return '255,200,0';
+  return '76,175,80';
+}
+
+function spawnParticles(
+  particles: Particle[],
+  tipX: number,
+  tipY: number,
+  multiplier: number,
+  burst: boolean,
+) {
+  const count = burst ? 40 : Math.min(Math.ceil(multiplier / 3), 6);
+  for (let i = 0; i < count; i++) {
+    const angle = burst
+      ? Math.random() * Math.PI * 2
+      : -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.8;
+    const speed = burst ? Math.random() * 4 + 1 : Math.random() * 2 + 0.5;
+    const maxLife = burst ? Math.random() * 30 + 20 : 25;
+    particles.push({
+      x: tipX + (Math.random() - 0.5) * 4,
+      y: tipY + (Math.random() - 0.5) * 4,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - (burst ? 0 : 0.5),
+      life: maxLife,
+      maxLife,
+      size: Math.random() * 1.5 + 0.5,
+    });
+  }
+  if (particles.length > 300) particles.splice(0, particles.length - 300);
+}
+
+function drawParticles(
+  ctx: CanvasRenderingContext2D,
+  particles: Particle[],
+  multiplier: number,
+  isCrashed: boolean,
+) {
+  const color = isCrashed ? '255,68,68' : particleColorRgb(multiplier);
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.08; // gravity
+    p.life -= 1;
+    if (p.life <= 0) {
+      particles.splice(i, 1);
+      continue;
+    }
+    const alpha = (p.life / p.maxLife) * 0.85;
+    const size = Math.max(0.3, (p.life / p.maxLife) * p.size * 2.5);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${color},${alpha.toFixed(2)})`;
+    ctx.fill();
+  }
+}
+
+function updateParticles(
+  particles: Particle[],
+  W: number,
+  H: number,
+  phase: GamePhase,
+  multiplier: number,
+  crashBurstFired: React.MutableRefObject<boolean>,
+) {
+  if (phase === 'RUNNING') {
+    const tip = getTipCoords(W, H, multiplier);
+    if (tip) spawnParticles(particles, tip.x, tip.y, multiplier, false);
+  }
+  if (phase === 'CRASHED' && !crashBurstFired.current) {
+    const tip = getTipCoords(W, H, liveRef.multiplier);
+    if (tip) {
+      spawnParticles(particles, tip.x, tip.y, liveRef.multiplier, true);
+      crashBurstFired.current = true;
+    }
   }
 }
 
@@ -153,7 +305,10 @@ function drawChart(
   ctx.fillStyle = grad;
   ctx.fill();
 
-  // Curve
+  // Curve + end-dot with glow
+  ctx.save();
+  ctx.shadowBlur = 12;
+  ctx.shadowColor = color;
   ctx.strokeStyle = color;
   ctx.lineWidth = 3;
   ctx.lineJoin = 'round';
@@ -166,8 +321,6 @@ function drawChart(
     else ctx.lineTo(x, y);
   }
   ctx.stroke();
-
-  // End dot
   ctx.beginPath();
   ctx.arc(lx, ly, 7, 0, Math.PI * 2);
   ctx.fillStyle = `${color}4D`;
@@ -176,6 +329,7 @@ function drawChart(
   ctx.arc(lx, ly, 4, 0, Math.PI * 2);
   ctx.fillStyle = color;
   ctx.fill();
+  ctx.restore();
 }
 
 // ── Countdown overlay ───────────────────────────────────────────────────────
@@ -208,25 +362,27 @@ function CountdownDisplay() {
 export function CrashChart() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const starsRef = useRef<Star[]>(initStars());
-  // Span updated via textContent in the RAF loop — no React re-renders on tick
+  const particlesRef = useRef<Particle[]>([]);
+  const crashBurstFiredRef = useRef(false);
+  const crashFlashRef = useRef(0);
   const multiplierSpanRef = useRef<HTMLElement>(null);
 
-  // Subscribe ONLY to phase — ticks no longer trigger re-renders
   const phase = useGameStore(state => state.phase);
-  // Keep a ref in sync so the RAF closure always sees the latest phase
   const phaseRef = useRef<GamePhase>(phase);
   phaseRef.current = phase;
 
-  // On crash, capture the crash multiplier for the static overlay
+  useEffect(() => {
+    if (phase !== 'CRASHED') crashBurstFiredRef.current = false;
+  }, [phase]);
+
   const [crashMultiplier, setCrashMultiplier] = useState(1.0);
   useEffect(() => {
     if (phase === 'CRASHED') {
       setCrashMultiplier(liveRef.multiplier);
+      crashFlashRef.current = 60;
     }
   }, [phase]);
 
-  // Single RAF loop: stars + chart + multiplier text update.
-  // No React state is read here — everything comes from refs and liveRef.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -241,7 +397,6 @@ export function CrashChart() {
         return;
       }
 
-      // Resize backing store to match CSS size (handles window resize & DPR)
       if (canvas.width !== W || canvas.height !== H) {
         canvas.width = W;
         canvas.height = H;
@@ -254,14 +409,42 @@ export function CrashChart() {
       }
 
       const currentPhase = phaseRef.current;
+      const currentMultiplier = getLiveMultiplier();
 
       ctx.clearRect(0, 0, W, H);
+
+      drawBackgroundGlow(
+        ctx,
+        W,
+        H,
+        currentPhase,
+        currentMultiplier,
+        crashFlashRef.current,
+      );
+      if (crashFlashRef.current > 0) crashFlashRef.current -= 1;
+
       drawStars(ctx, W, H, starsRef.current, currentPhase);
       drawChart(ctx, W, H, currentPhase);
 
-      // Update the running multiplier text directly without React re-render
+      updateParticles(
+        particlesRef.current,
+        W,
+        H,
+        currentPhase,
+        currentMultiplier,
+        crashBurstFiredRef,
+      );
+      if (particlesRef.current.length > 0) {
+        drawParticles(
+          ctx,
+          particlesRef.current,
+          currentMultiplier,
+          currentPhase === 'CRASHED',
+        );
+      }
+
       if (multiplierSpanRef.current && currentPhase === 'RUNNING') {
-        multiplierSpanRef.current.textContent = `${getLiveMultiplier().toFixed(2)}x`;
+        multiplierSpanRef.current.textContent = `${currentMultiplier.toFixed(2)}x`;
       }
 
       animId = requestAnimationFrame(draw);
@@ -269,7 +452,7 @@ export function CrashChart() {
 
     animId = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(animId);
-  }, []); // No deps — RAF runs continuously, reads from refs
+  }, []);
 
   return (
     <Box
@@ -282,7 +465,6 @@ export function CrashChart() {
       border="1px solid"
       borderColor="gray.700"
     >
-      {/* Single canvas: stars + chart curve (no React re-renders for ticks) */}
       <canvas
         ref={canvasRef}
         style={{
@@ -294,7 +476,7 @@ export function CrashChart() {
         }}
       />
 
-      {/* Y-axis labels — HTML overlay, fixed font size (doesn't stretch) */}
+      {/* Y-axis labels */}
       {GRID_MULTIPLIERS.map(m => {
         const topPct = mToYPct(m);
         if (topPct < 0 || topPct > 100) return null;
@@ -309,9 +491,10 @@ export function CrashChart() {
             userSelect="none"
           >
             <Text
-              fontSize="10px"
-              color="rgba(255,255,255,0.35)"
+              fontSize="11px"
+              color="rgba(255,255,255,0.55)"
               fontFamily="monospace"
+              fontWeight="medium"
               lineHeight={1}
               whiteSpace="nowrap"
             >
@@ -328,7 +511,6 @@ export function CrashChart() {
         }
       `}</style>
 
-      {/* Center overlay — re-renders ONLY when phase changes, not on ticks */}
       <VStack
         position="absolute"
         inset={0}
@@ -377,7 +559,6 @@ export function CrashChart() {
           )}
           {phase === 'WAITING' && <CountdownDisplay />}
 
-          {/* Running multiplier — inner span updated via textContent in RAF, no re-renders */}
           {phase === 'RUNNING' && (
             <Box
               fontSize={{ base: '5xl', lg: '7xl' }}
@@ -393,7 +574,6 @@ export function CrashChart() {
             </Box>
           )}
 
-          {/* Crashed — static, captured once when phase changes */}
           {phase === 'CRASHED' && (
             <Box>
               <Text

@@ -104,11 +104,13 @@ function InlineChatPanel({ full = false }: { full?: boolean }) {
         overflowY="auto"
         p={2}
         css={{
-          '&::-webkit-scrollbar': { width: '3px' },
-          '&::-webkit-scrollbar-track': { background: 'transparent' },
+          '&::-webkit-scrollbar': { width: '5px' },
+          '&::-webkit-scrollbar-track': {
+            background: 'rgba(255,255,255,0.04)',
+          },
           '&::-webkit-scrollbar-thumb': {
-            background: 'rgba(255,255,255,0.12)',
-            borderRadius: '2px',
+            background: 'rgba(255,255,255,0.22)',
+            borderRadius: '3px',
           },
         }}
       >
@@ -164,7 +166,7 @@ function InlineChatPanel({ full = false }: { full?: boolean }) {
                 >
                   {msg.senderName}:{' '}
                 </Text>
-                <Text as="span" fontSize="xs" color="gray.300">
+                <Text as="span" fontSize="xs" color="gray.100">
                   {msg.message}
                 </Text>
               </Box>

@@ -69,17 +69,54 @@ const BetRow = memo(function BetRow({
             ? 'rgba(255,68,68,0.06)'
             : 'transparent'
       }
+      opacity={isLost ? 0.5 : 1}
       _hover={{ bg: 'whiteAlpha.50' }}
-      transition="background 0.2s"
+      transition="background 0.2s, opacity 0.3s"
     >
       <Flex flex={1} align="center" gap={2} minW={0}>
-        <Box
-          w="6px"
-          h="6px"
-          borderRadius="full"
-          flexShrink={0}
-          bg={isCashedOut ? 'green.400' : isLost ? 'red.500' : 'blue.400'}
-        />
+        {/* Status indicator */}
+        {isCashedOut ? (
+          <Text
+            fontSize="10px"
+            fontWeight="bold"
+            color="green.400"
+            lineHeight={1}
+            flexShrink={0}
+          >
+            ✓
+          </Text>
+        ) : isLost ? (
+          <Text
+            fontSize="10px"
+            fontWeight="bold"
+            color="red.500"
+            lineHeight={1}
+            flexShrink={0}
+          >
+            ×
+          </Text>
+        ) : (
+          <>
+            <style>{`
+              @keyframes pl-pulse {
+                0%, 100% { transform: scale(1); opacity: 1; }
+                50% { transform: scale(1.7); opacity: 0.5; }
+              }
+            `}</style>
+            <Box
+              w="6px"
+              h="6px"
+              borderRadius="full"
+              flexShrink={0}
+              bg="blue.400"
+              style={
+                isActive && phase === 'RUNNING'
+                  ? { animation: 'pl-pulse 1s ease-in-out infinite' }
+                  : undefined
+              }
+            />
+          </>
+        )}
         <Text
           fontSize="xs"
           color={isCashedOut ? 'green.300' : isLost ? 'gray.500' : 'gray.200'}
@@ -134,7 +171,6 @@ const BetRow = memo(function BetRow({
 });
 
 export function PlayerList() {
-  // No multiplier subscription — LiveBetValue handles live updates via RAF
   const activeBets = useGameStore(state => state.activeBets);
   const phase = useGameStore(state => state.phase);
 

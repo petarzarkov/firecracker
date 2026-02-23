@@ -52,6 +52,7 @@ export class DatabaseModule {
             );
             return true;
           },
+          maxQueryExecutionTime: 1000,
           verboseRetryLog: true,
           cache: {
             type: 'ioredis',

@@ -31,7 +31,7 @@ export class UsersRepository {
 
     if (search) {
       queryBuilder.andWhere(
-        '(user.username ILIKE :search OR user.email ILIKE :search)',
+        '(user.displayName ILIKE :search OR user.email ILIKE :search)',
         {
           search: `%${search}%`,
         },

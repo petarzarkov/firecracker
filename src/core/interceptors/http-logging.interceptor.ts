@@ -35,10 +35,9 @@ export class HttpLoggingInterceptor implements NestInterceptor {
     });
 
     return next.handle().pipe(
-      tap((responseBody: unknown) => {
+      tap(() => {
         this.logger.log('Sent Response', {
           statusCode: resp.statusCode,
-          responseBody: responseBody,
           elapsed: Date.now() - resp.locals.startTime,
         });
       }),

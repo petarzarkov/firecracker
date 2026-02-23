@@ -37,8 +37,8 @@ import { JobDispatcherService } from './services/job-dispatcher.service';
               type: 'exponential',
               delay: redisConfig.queues.retryDelayMs,
             },
-            removeOnComplete: { count: 100 },
-            removeOnFail: { count: 500 },
+            removeOnComplete: { count: 100, age: 3600 },
+            removeOnFail: { count: 500, age: 86400 },
           },
         };
       },
@@ -56,8 +56,8 @@ import { JobDispatcherService } from './services/job-dispatcher.service';
               type: 'exponential',
               delay: redisConfig.queues.retryDelayMs,
             },
-            removeOnComplete: { count: 100 },
-            removeOnFail: { count: 500 },
+            removeOnComplete: { count: 100, age: 3600 },
+            removeOnFail: { count: 500, age: 86400 },
           },
         };
       },

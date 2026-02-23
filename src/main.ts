@@ -63,9 +63,6 @@ async function bootstrap() {
   app.useGlobalInterceptors(httpLoggingInterceptor);
   app.useGlobalFilters(genericExceptionFilter, typeOrmExceptionFilter);
 
-  // Global configuration
-  app.setGlobalPrefix(GLOBAL_PREFIX);
-
   // Trust proxy for correct IP detection behind load balancers
   app.set('trust proxy', true);
 
