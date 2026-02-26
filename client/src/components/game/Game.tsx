@@ -271,10 +271,15 @@ export function Game() {
           <Text
             fontSize="lg"
             fontWeight="black"
-            color="green.400"
             letterSpacing="widest"
-            style={{ textShadow: '0 0 10px #4CAF50' }}
             display={{ base: 'none', sm: 'block' }}
+            style={{
+              background:
+                'linear-gradient(135deg, #ff9500 0%, #ff6b00 50%, #e74c3c 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+            }}
           >
             FIRECRACKER
           </Text>

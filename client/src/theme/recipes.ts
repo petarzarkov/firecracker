@@ -23,6 +23,38 @@ export const buttonRecipe = defineRecipe({
           bg: 'brand.100',
         },
       },
+      fire: {
+        background:
+          'linear-gradient(90deg, #ff6b00, #e74c3c, #ff9500, #e74c3c)',
+        backgroundSize: '200% auto',
+        animation: 'buttonShimmer 3s linear infinite',
+        color: 'white',
+        fontWeight: 'black',
+        letterSpacing: 'wider',
+        borderRadius: '8px',
+        boxShadow: '0 4px 15px rgba(255,107,0,0.35)',
+        _hover: {
+          filter: 'brightness(1.2)',
+          transform: 'translateY(-1px)',
+          boxShadow: '0 6px 20px rgba(255,107,0,0.5)',
+        },
+        _active: {
+          filter: 'brightness(0.9)',
+          transform: 'translateY(0px)',
+        },
+      },
+      glass: {
+        background: 'rgba(255,255,255,0.07)',
+        border: '1px solid rgba(255,255,255,0.15)',
+        color: 'white',
+        borderRadius: '8px',
+        _hover: {
+          filter: 'brightness(1.6)',
+        },
+        _active: {
+          filter: 'brightness(0.9)',
+        },
+      },
     },
   },
   defaultVariants: {
