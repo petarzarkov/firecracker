@@ -56,14 +56,6 @@ export class AuthProvider {
   })
   authProviderId!: string | null;
 
-  @Column({
-    type: 'varchar',
-    nullable: true,
-    select: false,
-    length: STRING_LENGTH.PASSWORD_HASH_MAX,
-  })
-  passwordHash!: string | null;
-
   @ApiProperty()
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;

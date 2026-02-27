@@ -90,7 +90,6 @@ export class UsersService {
         userId: savedUser.id,
         provider: OAuthProvider.LOCAL,
         authProviderId: null,
-        passwordHash: hashedPassword,
       });
       await txManager.save(AuthProvider, authProvider);
 

@@ -110,17 +110,6 @@ export class AuthService {
     await this.entityManager.transaction(async transactionalEntityManager => {
       user.password = hashedPassword;
       await transactionalEntityManager.save(user);
-
-      // Update LOCAL auth provider password hash if it exists
-      const localAuthProvider =
-        await this.authProvidersRepository.findByUserIdAndProvider(
-          user.id,
-          OAuthProvider.LOCAL,
-        );
-      if (localAuthProvider) {
-        localAuthProvider.passwordHash = hashedPassword;
-        await transactionalEntityManager.save(localAuthProvider);
-      }
     });
 
     await this.passwordResetTokensRepository.invalidateUserTokens(user.id);
@@ -193,7 +182,6 @@ export class AuthService {
             userId: user.id,
             provider,
             authProviderId,
-            passwordHash: null,
           });
         }
       } else {
@@ -220,7 +208,6 @@ export class AuthService {
                 userId: savedUser.id,
                 provider,
                 authProviderId,
-                passwordHash: null,
               },
             );
             await transactionalEntityManager.save(
