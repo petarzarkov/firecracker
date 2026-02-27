@@ -97,15 +97,6 @@ const SocialButtons = ({
         Continue with LinkedIn
       </Button>
     </Stack>
-    <Text
-      color="rgba(255,255,255,0.35)"
-      fontSize="xs"
-      textAlign="center"
-      mt={2}
-      fontFamily="monospace"
-    >
-      Use your existing account credentials
-    </Text>
     <Box
       style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}
       pt={3}
@@ -125,15 +116,6 @@ const SocialButtons = ({
         <Icon as={FaGamepad} />
         Try Demo
       </Button>
-      <Text
-        color="rgba(255,255,255,0.35)"
-        fontSize="xs"
-        textAlign="center"
-        mt={1}
-        fontFamily="monospace"
-      >
-        Temporary account · play money only
-      </Text>
     </Box>
   </>
 );
@@ -330,8 +312,8 @@ export function LoginForm() {
           as="form"
           onSubmit={handleSubmit}
           borderRadius="xl"
-          width="420px"
-          maxW="92vw"
+          width="460px"
+          maxW="110vw"
           p="8"
           position="relative"
           zIndex={1}
