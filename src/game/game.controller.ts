@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, NotFoundException, Query } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiJwtAuth } from '@/core/decorators/api-jwt-auth.decorator';
 import { CurrentUser } from '@/core/decorators/current-user.decorator';
@@ -12,6 +12,7 @@ import {
   CurrentRoundResponseDto,
   GameRoundResponseDto,
   ListRoundsQueryDto,
+  VerifyRoundResponseDto,
 } from './dto/game-round.dto';
 import { CrashEngineService } from './engine/crash-engine.service';
 import { GameBet } from './entity/game-bet.entity';
@@ -19,6 +20,15 @@ import { GameRound } from './entity/game-round.entity';
 import { GameRoundStatus } from './enum/game-round-status.enum';
 import { GameBetService } from './services/game-bet.service';
 import { GameRoundService } from './services/game-round.service';
+
+const VERIFY_FORMULA = [
+  '1. assert SHA256(serverSeed) === seedHash',
+  '2. hash = HMAC-SHA256(key=serverSeed, msg=clientSeed + ":" + nonce)',
+  '3. h = parseInt(hash.slice(0, 13), 16)',
+  '4. e = 2 ** 52',
+  '5. if h % 33 === 0 → crashPoint = 1.00',
+  '   else → crashPoint = Math.max(1.0, Math.floor((99 * e) / (e - h)) / 100)',
+].join('\n');
 
 @ApiTags('game')
 @Controller('game')
@@ -42,6 +52,7 @@ export class GameController {
         id: '',
         status: GameRoundStatus.WAITING,
         seedHash: '',
+        nonce: 0,
         createdAt: new Date(),
       };
     }
@@ -50,13 +61,15 @@ export class GameController {
       id: round.id,
       status: round.status,
       seedHash: round.seedHash,
+      nonce: Number(round.nonce),
       waitingEndsAt: round.waitingEndsAt ?? undefined,
       startedAt: round.startedAt ?? undefined,
       crashedAt: round.crashedAt ?? undefined,
       createdAt: round.createdAt,
-      // Reveal seed + crashPoint only after crash (provably fair)
+      // Reveal seed + clientSeed + crashPoint only after crash (provably fair)
       ...(round.status === GameRoundStatus.CRASHED && {
         seed: round.seed,
+        clientSeed: round.clientSeed ?? 'firecracker',
         crashPoint: Number(round.crashPoint),
       }),
     };
@@ -100,6 +113,38 @@ export class GameController {
     return round ? this.#mapRound(round) : null;
   }
 
+  @Get('verify/:id')
+  @Public()
+  @ApiOperation({
+    summary: 'Provably fair verification data for a crashed round',
+    description:
+      'Returns all inputs required to independently verify the crash point. ' +
+      'Only available for CRASHED rounds.',
+  })
+  @ApiOkResponse({ type: VerifyRoundResponseDto })
+  async verifyRound(
+    @UuidParam({ name: 'id' }) id: string,
+  ): Promise<VerifyRoundResponseDto> {
+    const round = await this.gameRoundService.findById(id);
+
+    if (!round) throw new NotFoundException(`Round ${id} not found`);
+
+    if (round.status !== GameRoundStatus.CRASHED) {
+      throw new NotFoundException(
+        `Round ${id} has not crashed yet — verification is only available after crash`,
+      );
+    }
+
+    return {
+      roundId: round.id,
+      serverSeed: round.seed,
+      clientSeed: round.clientSeed ?? 'firecracker',
+      nonce: Number(round.nonce),
+      crashPoint: Number(round.crashPoint),
+      formula: VERIFY_FORMULA,
+    };
+  }
+
   @Get('my-bets')
   @ApiJwtAuth()
   @ApiOperation({ summary: 'My bet history' })
@@ -120,11 +165,13 @@ export class GameController {
       id: r.id,
       status: r.status,
       seedHash: r.seedHash,
+      nonce: Number(r.nonce),
       waitingEndsAt: r.waitingEndsAt ?? undefined,
       startedAt: r.startedAt ?? undefined,
       crashedAt: r.crashedAt ?? undefined,
       createdAt: r.createdAt,
-      // Only expose secret fields after crash
+      // Expose clientSeed always (it's public), expose seed+crashPoint only after crash
+      clientSeed: r.clientSeed ?? undefined,
       ...(r.status === GameRoundStatus.CRASHED && {
         seed: r.seed,
         crashPoint: Number(r.crashPoint),

@@ -26,17 +26,33 @@ export class GameRound {
   seed!: string;
 
   /**
-   * sha256(seed) — published to clients before the round starts
+   * SHA256(serverSeed) — published to clients before the round starts
    * so they can verify the crash point was predetermined.
    */
   @Column({ type: 'varchar', length: 128 })
   seedHash!: string;
 
   /**
-   * The crash multiplier derived from seed. Secret until crash.
+   * Combined client seed: SHA256(sorted(playerSeeds).join(':'))
+   * or "firecracker" if no players submitted seeds.
+   * Set at transition to RUNNING, publicly revealed.
    */
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
-  crashPoint!: number;
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  clientSeed!: string | null;
+
+  /**
+   * Per-round sequence counter for provably fair verification.
+   * Prevents seed reuse across rounds.
+   */
+  @Column({ type: 'bigint', default: 0 })
+  nonce!: number;
+
+  /**
+   * The crash multiplier derived from HMAC-SHA256(serverSeed, clientSeed:nonce).
+   * Secret until crash. Computed at transition to RUNNING.
+   */
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  crashPoint!: number | null;
 
   @Column({
     type: 'enum',

@@ -61,8 +61,10 @@ export class GameTickPayload {
 export class GamePhasePayload {
   phase!: 'waiting' | 'running' | 'crashed';
   roundId!: string;
-  /** sha256 of the server seed — for provably fair verification */
+  /** SHA256(serverSeed) — commitment published before round starts */
   seedHash!: string;
+  /** Per-round sequence counter for provably fair verification */
+  nonce?: number;
   /** ISO timestamp — only set for 'waiting' phase */
   waitingEndsAt?: string;
 }
@@ -71,8 +73,17 @@ export class GameCrashedPayload {
   roundId!: string;
   crashPoint!: number;
   crashedAt!: Date;
-  /** Raw seed revealed after crash for provably fair verification */
+  /** Raw server seed revealed after crash — verify SHA256(seed) === seedHash */
   seed!: string;
+  /** Combined client seed used in crash point derivation */
+  clientSeed!: string;
+  /** Round nonce used in crash point derivation */
+  nonce!: number;
+}
+
+export class SeedAckPayload {
+  success!: boolean;
+  error?: string;
 }
 
 export class CrashedRoundSummary {
@@ -84,6 +95,7 @@ export class GameRoundStatePayload {
   phase!: 'waiting' | 'running' | 'crashed';
   roundId!: string | null;
   seedHash!: string | null;
+  nonce?: number;
   waitingEndsAt?: string;
   multiplier?: number;
   elapsed?: number;
@@ -154,6 +166,7 @@ export interface WebSocketEmitEvents {
   betCashedOut: (data: BetCashedOutPayload) => void;
   betAck: (data: BetAckPayload) => void;
   cashOutAck: (data: CashOutAckPayload) => void;
+  seedAck: (data: SeedAckPayload) => void;
   walletUpdated: (data: WalletUpdatedPayload) => void;
 }
 

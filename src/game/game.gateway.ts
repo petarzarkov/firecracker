@@ -14,7 +14,17 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Emitter } from '@socket.io/redis-emitter';
-import { IsBoolean, IsInt, IsNumber, IsOptional, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+  MinLength,
+} from 'class-validator';
+import { GAME } from '@/constants';
 import { ContextLogger } from '@/infra/logger/services/context-logger.service';
 import { RedisService } from '@/infra/redis/services/redis.service';
 import {
@@ -28,6 +38,7 @@ import {
   GamePhasePayload,
   GameRoundStatePayload,
   GameTickPayload,
+  SeedAckPayload,
   WebSocketEmitEvents,
   WSServer,
 } from '@/notifications/events/events.dto';
@@ -55,6 +66,17 @@ class PlaceBetMessageDto {
   @Min(1.01)
   autoCashOutAt?: number;
 }
+
+class SubmitClientSeedMessageDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  seed!: string;
+}
+
+/** Redis key for storing per-round client seeds during WAITING phase. */
+export const clientSeedsKey = (roundId: string) =>
+  `game:client-seeds:${roundId}`;
 
 // ── Gateway ────────────────────────────────────────────────────────────────
 
@@ -147,6 +169,7 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
         phase: phase ?? 'waiting',
         roundId: round?.id ?? null,
         seedHash: round?.seedHash ?? null,
+        nonce: round?.nonce,
         recentCrashes,
         activeBets: [
           ...bets.map(b => ({
@@ -405,6 +428,35 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
           : 'Failed to cash out';
       client.emit('cashOutAck', { success: false, error: message });
     }
+  }
+
+  @SubscribeMessage('submitClientSeed')
+  async handleSubmitClientSeed(
+    @MessageBody() data: SubmitClientSeedMessageDto,
+    @ConnectedSocket() client: ExtendedSocket,
+  ): Promise<void> {
+    const roundId = this.crashEngine.getCurrentRoundId();
+    const phase = this.crashEngine.getCurrentPhase();
+
+    if (phase !== GameRoundStatus.WAITING || !roundId) {
+      const ack: SeedAckPayload = {
+        success: false,
+        error: 'Client seeds are only accepted during the waiting phase',
+      };
+      client.emit('seedAck', ack);
+      return;
+    }
+
+    // Use userId for authenticated users, socketId for guests
+    const user = client.data.user;
+    const key = clientSeedsKey(roundId);
+    const field = user?.id ?? client.id;
+
+    await this.redis.hset(key, field, data.seed);
+    // TTL: waiting phase + 30s buffer
+    await this.redis.expire(key, Math.ceil(GAME.WAITING_PHASE_MS / 1000) + 30);
+
+    client.emit('seedAck', { success: true });
   }
 
   // ── Emission helpers (called by CrashEngineService and GameLifecycleHandler) ──

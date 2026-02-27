@@ -8,7 +8,7 @@ import { type JobHandlerPayload } from '@/infra/queue/types/queue-job.type';
 import { RedisService } from '@/infra/redis/services/redis.service';
 import { EVENTS } from '@/notifications/events/events';
 import type { EngineCommand } from '../engine/crash-engine.service';
-import { GameGateway } from '../game.gateway';
+import { clientSeedsKey, GameGateway } from '../game.gateway';
 import { DemoService } from '../services/demo.service';
 import { GameRoundService } from '../services/game-round.service';
 
@@ -48,6 +48,7 @@ export class GameLifecycleHandler {
       phase: 'waiting',
       roundId: round.id,
       seedHash: round.seedHash,
+      nonce: round.nonce,
       waitingEndsAt: round.waitingEndsAt?.toISOString(),
     });
 
@@ -88,13 +89,25 @@ export class GameLifecycleHandler {
   ): Promise<void> {
     const { roundId } = job.data.payload;
 
-    const round = await this.gameRoundService.transitionToRunning(roundId);
+    // Collect all player-submitted seeds from Redis, then clean up the key
+    const seedsKey = clientSeedsKey(roundId);
+    const seedsHash = await this.pub.hgetall(seedsKey);
+    const playerSeeds = Object.values(seedsHash ?? {});
+    if (playerSeeds.length > 0) {
+      await this.pub.del(seedsKey);
+    }
+
+    const round = await this.gameRoundService.transitionToRunning(
+      roundId,
+      playerSeeds,
+    );
 
     // Broadcast phase change to all clients via Redis emitter
     this.gameGateway.emitPhaseChange({
       phase: 'running',
       roundId: round.id,
       seedHash: round.seedHash,
+      nonce: round.nonce,
     });
 
     // Tell the main-process engine to start the tick loop
@@ -105,7 +118,10 @@ export class GameLifecycleHandler {
       startedAt: (round.startedAt ?? new Date()).toISOString(),
     });
 
-    this.logger.log('Round started', { roundId: round.id });
+    this.logger.log('Round started', {
+      roundId: round.id,
+      playerSeedsCount: playerSeeds.length,
+    });
   }
 
   /**
@@ -129,11 +145,14 @@ export class GameLifecycleHandler {
     await this.#publishEngineCommand({ action: 'crash' });
 
     // Broadcast crash to all clients via Redis emitter
+    // Reveal seed, clientSeed, nonce so players can verify independently
     this.gameGateway.emitCrashed({
       roundId: round.id,
       crashPoint: Number(round.crashPoint),
       crashedAt: round.crashedAt ?? new Date(),
       seed: round.seed,
+      clientSeed: round.clientSeed ?? 'firecracker',
+      nonce: Number(round.nonce),
     });
 
     // Schedule next round after cooldown
