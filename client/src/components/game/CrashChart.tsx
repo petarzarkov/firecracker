@@ -13,6 +13,21 @@ const GRID_MULTIPLIERS = [1, 1.5, 2, 3, 5, 10, 20, 50];
 const LOG_MAX = Math.log(50);
 const STAR_COUNT = 150;
 
+// Percentage offsets to find the wick tip relative to the image's exact center.
+// The wick is ~16% to the left, and ~39% down from the center of the image asset.
+const WICK_OFFSET_X_PCT = -0.16;
+const WICK_OFFSET_Y_PCT = 0.39;
+
+const FIREWORK_COLORS = [
+  '255,68,68', // red
+  '255,210,50', // gold
+  '68,170,255', // blue
+  '100,255,120', // green
+  '210,50,255', // purple
+  '255,120,0', // orange
+  '0,230,220', // cyan
+];
+
 // Fixed canvas padding (px) — keeps consistent margins regardless of canvas size
 const PAD_L = 40;
 const PAD_R = 15;
@@ -144,6 +159,209 @@ function drawBackgroundGlow(
   ctx.fillRect(0, 0, W, H);
 }
 
+// ── Wick animations ──────────────────────────────────────────────────────────
+
+interface WickSpark {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  size: number;
+  color: string;
+}
+
+const WICK_SPARK_COLORS = [
+  '255,200,50',
+  '255,140,0',
+  '255,255,180',
+  '255,90,0',
+];
+
+function drawWickGlow(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
+  const outer = ctx.createRadialGradient(cx, cy, 2, cx, cy, 18);
+  outer.addColorStop(0, 'rgba(255,160,30,0.55)');
+  outer.addColorStop(0.4, 'rgba(255,100,0,0.25)');
+  outer.addColorStop(1, 'rgba(255,80,0,0)');
+  ctx.fillStyle = outer;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 18, 0, Math.PI * 2);
+  ctx.fill();
+
+  const inner = ctx.createRadialGradient(cx, cy, 0, cx, cy, 6);
+  inner.addColorStop(0, 'rgba(255,255,220,0.95)');
+  inner.addColorStop(0.5, 'rgba(255,200,60,0.7)');
+  inner.addColorStop(1, 'rgba(255,120,0,0)');
+  ctx.fillStyle = inner;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, 1.8, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255,255,255,0.95)';
+  ctx.fill();
+}
+
+function spawnWickSparks(sparks: WickSpark[], cx: number, cy: number) {
+  const count = Math.floor(Math.random() * 3) + 2;
+  for (let i = 0; i < count; i++) {
+    const angle = -Math.PI / 2 + (Math.random() - 0.5) * 1.2;
+    const speed = Math.random() * 1.7 + 0.8;
+    const maxLife = Math.floor(Math.random() * 15) + 10;
+    sparks.push({
+      x: cx + (Math.random() - 0.5) * 5,
+      y: cy,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: maxLife,
+      maxLife,
+      size: Math.random() * 1.2 + 0.4,
+      color:
+        WICK_SPARK_COLORS[Math.floor(Math.random() * WICK_SPARK_COLORS.length)],
+    });
+  }
+  if (sparks.length > 80) sparks.splice(0, sparks.length - 80);
+}
+
+function drawWickSparks(ctx: CanvasRenderingContext2D, sparks: WickSpark[]) {
+  for (let i = sparks.length - 1; i >= 0; i--) {
+    const s = sparks[i];
+    s.x += s.vx;
+    s.y += s.vy;
+    s.vy -= 0.06; // float upward
+    s.vx *= 0.93; // air resistance
+    s.life -= 1;
+    if (s.life <= 0) {
+      sparks.splice(i, 1);
+      continue;
+    }
+    const t = s.life / s.maxLife;
+    const alpha = t * 0.9;
+    const radius = Math.max(0.3, t * s.size * 2.2);
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${s.color},${alpha.toFixed(2)})`;
+    ctx.fill();
+  }
+}
+
+// ── Firework system ───────────────────────────────────────────────────────────
+
+interface FireworkRocket {
+  x: number;
+  y: number;
+  targetY: number;
+  speed: number;
+  delay: number;
+  trail: Array<{ x: number; y: number }>;
+  exploded: boolean;
+  color: string;
+}
+
+interface FireworkParticle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  size: number;
+  color: string;
+}
+
+function spawnFireworks(rockets: FireworkRocket[], W: number, H: number) {
+  const count = 6;
+  for (let i = 0; i < count; i++) {
+    rockets.push({
+      x: PAD_L + Math.random() * (W - PAD_L - PAD_R),
+      y: H,
+      targetY: H * 0.15 + Math.random() * H * 0.35,
+      speed: 8 + Math.random() * 6,
+      delay: i * 5,
+      trail: [],
+      exploded: false,
+      color:
+        FIREWORK_COLORS[Math.floor(Math.random() * FIREWORK_COLORS.length)],
+    });
+  }
+}
+
+function updateAndDrawFireworks(
+  ctx: CanvasRenderingContext2D,
+  rockets: FireworkRocket[],
+  particles: FireworkParticle[],
+) {
+  // Rockets
+  for (const rocket of rockets) {
+    if (rocket.exploded) continue;
+    if (rocket.delay > 0) {
+      rocket.delay -= 1;
+      continue;
+    }
+    rocket.trail.push({ x: rocket.x, y: rocket.y });
+    if (rocket.trail.length > 8) rocket.trail.shift();
+    rocket.y -= rocket.speed;
+
+    for (let t = 0; t < rocket.trail.length; t++) {
+      const alpha = ((t + 1) / rocket.trail.length) * 0.55;
+      const r = 1 + (t / rocket.trail.length) * 1.5;
+      ctx.beginPath();
+      ctx.arc(rocket.trail[t].x, rocket.trail[t].y, r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${rocket.color},${alpha.toFixed(2)})`;
+      ctx.fill();
+    }
+
+    ctx.beginPath();
+    ctx.arc(rocket.x, rocket.y, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${rocket.color},0.95)`;
+    ctx.fill();
+
+    if (rocket.y <= rocket.targetY) {
+      rocket.exploded = true;
+      const burstCount = 45 + Math.floor(Math.random() * 20);
+      for (let i = 0; i < burstCount; i++) {
+        const angle =
+          (Math.PI * 2 * i) / burstCount + (Math.random() - 0.5) * 0.3;
+        const speed = 2 + Math.random() * 4;
+        const maxLife = 45 + Math.floor(Math.random() * 20);
+        particles.push({
+          x: rocket.x,
+          y: rocket.y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: maxLife,
+          maxLife,
+          size: Math.random() * 1.5 + 0.8,
+          color: rocket.color,
+        });
+      }
+    }
+  }
+
+  // Burst particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.12; // gravity
+    p.vx *= 0.97; // drag
+    p.life -= 1;
+    if (p.life <= 0) {
+      particles.splice(i, 1);
+      continue;
+    }
+    const t = p.life / p.maxLife;
+    const alpha = t * 0.88;
+    const radius = Math.max(0.3, t * p.size * 2.5);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${p.color},${alpha.toFixed(2)})`;
+    ctx.fill();
+  }
+}
+
 // ── Particle system ──────────────────────────────────────────────────────────
 
 interface Particle {
@@ -201,7 +419,7 @@ function drawParticles(
     const p = particles[i];
     p.x += p.vx;
     p.y += p.vy;
-    p.vy += 0.08; // gravity
+    p.vy += 0.08;
     p.life -= 1;
     if (p.life <= 0) {
       particles.splice(i, 1);
@@ -305,7 +523,7 @@ function drawChart(
   ctx.fillStyle = grad;
   ctx.fill();
 
-  // Curve + end-dot with glow
+  // Curve + end-dot
   ctx.save();
   ctx.shadowBlur = 12;
   ctx.shadowColor = color;
@@ -330,6 +548,36 @@ function drawChart(
   ctx.fillStyle = color;
   ctx.fill();
   ctx.restore();
+}
+
+// ── Phase effects orchestrator ───────────────────────────────────────────────
+
+function drawPhaseEffects(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  H: number,
+  phase: GamePhase,
+  wickSparks: WickSpark[],
+  rockets: FireworkRocket[],
+  fwParticles: FireworkParticle[],
+  fireworksFiredRef: React.MutableRefObject<boolean>,
+  wickX: number,
+  wickY: number,
+) {
+  if (phase === 'WAITING') {
+    drawWickGlow(ctx, wickX, wickY);
+  }
+  if (phase === 'RUNNING') {
+    spawnWickSparks(wickSparks, wickX, wickY);
+    drawWickSparks(ctx, wickSparks);
+  }
+  if (phase === 'CRASHED' && !fireworksFiredRef.current) {
+    spawnFireworks(rockets, W, H);
+    fireworksFiredRef.current = true;
+  }
+  if (rockets.length > 0 || fwParticles.length > 0) {
+    updateAndDrawFireworks(ctx, rockets, fwParticles);
+  }
 }
 
 // ── Countdown overlay ───────────────────────────────────────────────────────
@@ -361,18 +609,33 @@ function CountdownDisplay() {
 
 export function CrashChart() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // NEW: Ref to track the exact screen position of the rocket image
+  const imageRef = useRef<HTMLImageElement>(null);
+
   const starsRef = useRef<Star[]>(initStars());
   const particlesRef = useRef<Particle[]>([]);
   const crashBurstFiredRef = useRef(false);
   const crashFlashRef = useRef(0);
   const multiplierSpanRef = useRef<HTMLElement>(null);
+  const wickSparksRef = useRef<WickSpark[]>([]);
+  const fireworkRocketsRef = useRef<FireworkRocket[]>([]);
+  const fireworkParticlesRef = useRef<FireworkParticle[]>([]);
+  const fireworksFiredRef = useRef(false);
 
   const phase = useGameStore(state => state.phase);
   const phaseRef = useRef<GamePhase>(phase);
   phaseRef.current = phase;
 
   useEffect(() => {
-    if (phase !== 'CRASHED') crashBurstFiredRef.current = false;
+    if (phase !== 'CRASHED') {
+      crashBurstFiredRef.current = false;
+      fireworksFiredRef.current = false;
+      fireworkRocketsRef.current = [];
+      fireworkParticlesRef.current = [];
+    }
+    if (phase !== 'RUNNING') {
+      wickSparksRef.current = [];
+    }
   }, [phase]);
 
   const [crashMultiplier, setCrashMultiplier] = useState(1.0);
@@ -426,6 +689,36 @@ export function CrashChart() {
       drawStars(ctx, W, H, starsRef.current, currentPhase);
       drawChart(ctx, W, H, currentPhase);
 
+      // --- Calculate dynamic wick coordinates ---
+      let wickX = W / 2;
+      let wickY = H / 2;
+
+      // Ensure the spark precisely follows the image, even while pulsing
+      if (imageRef.current) {
+        const imgRect = imageRef.current.getBoundingClientRect();
+        const canvasRect = canvas.getBoundingClientRect();
+
+        // Find the absolute center of the image element relative to the canvas
+        const imgCenterX = imgRect.left - canvasRect.left + imgRect.width / 2;
+        const imgCenterY = imgRect.top - canvasRect.top + imgRect.height / 2;
+
+        wickX = imgCenterX + imgRect.width * WICK_OFFSET_X_PCT;
+        wickY = imgCenterY + imgRect.height * WICK_OFFSET_Y_PCT;
+      }
+
+      drawPhaseEffects(
+        ctx,
+        W,
+        H,
+        currentPhase,
+        wickSparksRef.current,
+        fireworkRocketsRef.current,
+        fireworkParticlesRef.current,
+        fireworksFiredRef,
+        wickX,
+        wickY,
+      );
+
       updateParticles(
         particlesRef.current,
         W,
@@ -476,7 +769,6 @@ export function CrashChart() {
         }}
       />
 
-      {/* Y-axis labels */}
       {GRID_MULTIPLIERS.map(m => {
         const topPct = mToYPct(m);
         if (topPct < 0 || topPct > 100) return null;
@@ -530,6 +822,7 @@ export function CrashChart() {
             }}
           >
             <img
+              ref={imageRef} // <-- Attached the ref here
               src="/png/android-chrome-192x192.png"
               alt="firecracker"
               width={phase === 'RUNNING' ? 120 : 90}
