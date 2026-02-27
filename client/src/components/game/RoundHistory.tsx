@@ -16,7 +16,7 @@ export function RoundHistory() {
     <Box>
       <Text
         fontSize="xs"
-        color="gray.500"
+        color="#aaa"
         fontWeight="bold"
         letterSpacing="wide"
         mb={2}
@@ -29,7 +29,7 @@ export function RoundHistory() {
           No rounds yet
         </Text>
       ) : (
-        <Flex flexWrap="wrap" gap={1}>
+        <Flex flexWrap="wrap" gap={1.5}>
           {recentCrashes.map((r, index) => {
             const color = crashColor(r.crashPoint);
             const isLatest = index === 0;
@@ -57,10 +57,11 @@ export function RoundHistory() {
                   borderRadius="full"
                   border="1px solid"
                   borderColor={color}
+                  bg={`${color}1a`}
                   fontSize={isLatest ? 'sm' : 'xs'}
                   fontFamily="mono"
                   fontWeight="bold"
-                  color={color}
+                  color="white"
                   boxShadow={isLatest ? `0 0 6px ${color}` : 'none'}
                 >
                   {r.crashPoint.toFixed(2)}x

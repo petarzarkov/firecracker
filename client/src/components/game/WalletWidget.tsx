@@ -17,9 +17,6 @@ export function WalletWidget() {
       border="1px solid"
       borderColor="gray.700"
     >
-      <Text fontSize="xs" color="gray.500" fontFamily="mono">
-        DEMO
-      </Text>
       <Text
         fontSize="sm"
         fontWeight="bold"

@@ -148,16 +148,16 @@ function PlaceBetButton({
     <Button
       onClick={onPlaceBet}
       disabled={!canBet}
-      bg={canBet ? 'green.600' : 'gray.700'}
-      color={canBet ? 'white' : 'gray.500'}
+      bg={canBet ? 'green.600' : '#2a2a2a'}
+      color={canBet ? 'white' : '#888'}
       fontWeight="black"
       fontSize="md"
       px={5}
       py={4}
       borderRadius="lg"
-      _hover={{ bg: canBet ? 'green.500' : 'gray.700' }}
+      _hover={{ bg: canBet ? 'green.500' : '#333' }}
       _active={{ bg: 'green.700' }}
-      _disabled={{ cursor: 'not-allowed', opacity: 0.6 }}
+      _disabled={{ cursor: 'not-allowed', opacity: 1 }}
       fontFamily="mono"
       letterSpacing="wide"
       minW="140px"
@@ -183,7 +183,7 @@ function BetAmountInput({
     <Box flex={1}>
       <Text
         fontSize="sm"
-        color="gray.400"
+        color="#aaa"
         mb={1}
         letterSpacing="wide"
         fontWeight="semibold"
@@ -191,7 +191,7 @@ function BetAmountInput({
         BET AMOUNT
       </Text>
       <Flex align="center" gap={2}>
-        <Text color="gray.400" fontSize="lg">
+        <Text color="#aaa" fontSize="lg">
           $
         </Text>
         <Input
@@ -200,9 +200,9 @@ function BetAmountInput({
           type="number"
           min="1"
           step="1"
-          bg="gray.800"
+          bg="#1e1e1e"
           border="1px solid"
-          borderColor="gray.500"
+          borderColor="#444"
           color="white"
           fontFamily="mono"
           fontSize="lg"
@@ -346,13 +346,13 @@ export function BetPanel() {
               letterSpacing="wide"
               px={3}
               py={1.5}
-              color="gray.600"
+              color="#888"
               _selected={{
                 color: 'green.400',
                 borderBottom: '2px solid',
                 borderColor: 'green.500',
               }}
-              _hover={{ color: 'gray.300' }}
+              _hover={{ color: '#ccc' }}
             >
               {tab.toUpperCase()}
             </Tabs.Trigger>
@@ -454,7 +454,7 @@ export function BetPanel() {
       <Flex gap={3} align="flex-end" mt={2}>
         <Box flex={1}>
           <Flex gap={2} flexWrap="wrap" align="center">
-            <Text fontSize="xs" color="gray.600" alignSelf="center" mr={1}>
+            <Text fontSize="xs" color="#999" alignSelf="center" mr={1}>
               Quick:
             </Text>
             {QUICK_AMOUNTS.map(a => (
@@ -462,19 +462,20 @@ export function BetPanel() {
                 key={a}
                 size="xs"
                 variant="outline"
-                borderColor="gray.600"
-                color="gray.400"
+                borderColor="#555"
+                color="#ccc"
                 fontFamily="mono"
                 fontSize="xs"
                 onClick={() => setAmount(a.toFixed(2))}
                 disabled={inputDisabled}
                 _hover={{
-                  borderColor: 'green.500',
-                  color: 'green.400',
-                  bg: 'rgba(255,107,0,0.1)',
+                  borderColor: 'green.400',
+                  color: 'green.300',
+                  bg: 'rgba(255,107,0,0.12)',
                 }}
                 _disabled={{ opacity: 0.4, cursor: 'not-allowed' }}
                 px={3}
+                py={1}
               >
                 ${a}
               </Button>

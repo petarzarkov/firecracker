@@ -19,7 +19,7 @@ export function CountdownDisplay() {
   }, [waitingEndsAt]);
 
   return (
-    <Text fontSize="2xl" color="gray.400" fontWeight="semibold">
+    <Text fontSize="2xl" color="#b0b0b0" fontWeight="semibold">
       {secs > 0 ? `Starting in ${secs}s` : 'Starting...'}
     </Text>
   );

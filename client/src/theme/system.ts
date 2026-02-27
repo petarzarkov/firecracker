@@ -4,7 +4,7 @@ import { buttonRecipe, dialogRecipe } from './recipes';
 const customConfig = defineConfig({
   globalCss: {
     html: {
-      fontSize: '20px', // 125% base — scales all rem tokens to match 125% zoom
+      fontSize: '18px', // 125% base — scales all rem tokens to match 125% zoom
     },
     body: {
       bg: 'gaming.darker',

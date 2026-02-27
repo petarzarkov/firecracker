@@ -116,7 +116,7 @@ function InlineChatPanel({ full = false }: { full?: boolean }) {
         }}
       >
         {messages.length === 0 ? (
-          <Text fontSize="xs" color="gray.600" textAlign="center" mt={6} px={1}>
+          <Text fontSize="xs" color="#888" textAlign="center" mt={6} px={1}>
             No messages yet
           </Text>
         ) : (
@@ -192,12 +192,12 @@ function InlineChatPanel({ full = false }: { full?: boolean }) {
               value={input}
               onChange={e => setInput(e.target.value)}
               placeholder="Say something..."
-              bg="gray.800"
+              bg="#1e1e1e"
               border="1px solid"
-              borderColor="gray.700"
+              borderColor="#333"
               color="gray.200"
               borderRadius="sm"
-              _placeholder={{ color: 'gray.600', fontSize: '11px' }}
+              _placeholder={{ color: '#777', fontSize: '11px' }}
               _focus={{ borderColor: 'green.600', outline: 'none' }}
               autoComplete="off"
               maxLength={200}
@@ -384,7 +384,7 @@ export function Game() {
               p={0}
               bg="gray.900"
             >
-              <Box h="full" overflowY="auto" p={3}>
+              <Box h="full" overflowY="auto" p={0}>
                 <BetPanel />
               </Box>
             </Tabs.Content>
@@ -415,7 +415,7 @@ export function Game() {
           w={{ base: '185px', lg: '205px' }}
           flexShrink={0}
           borderRight="1px solid"
-          borderColor="gray.700"
+          borderColor="#2e2e2e"
           overflow="hidden"
         >
           <PlayerHistory />
@@ -437,13 +437,13 @@ export function Game() {
           gap={3}
           bg="gray.900"
           borderLeft="1px solid"
-          borderColor="gray.700"
+          borderColor="#2e2e2e"
           overflow="hidden"
         >
           <RoundHistory />
           <Box
             borderTop="1px solid"
-            borderColor="gray.700"
+            borderColor="#2e2e2e"
             pt={3}
             flex={1}
             overflow="hidden"

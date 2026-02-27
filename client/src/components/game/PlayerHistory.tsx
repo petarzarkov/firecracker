@@ -21,20 +21,20 @@ function BetRow({ bet }: { bet: BetEntry }) {
   const isWon = bet.status === 'cashed_out';
   const isLost = bet.status === 'lost';
   const dotColor = isWon
-    ? 'green.500'
+    ? '#4ade80'
     : isLost
-      ? 'red.500'
+      ? '#f87171'
       : bet.status === 'active'
-        ? 'blue.500'
-        : 'gray.500';
-  const resultColor = isWon ? 'green.400' : isLost ? 'red.400' : 'gray.500';
+        ? '#60a5fa'
+        : '#666';
+  const resultColor = isWon ? '#fbbf24' : isLost ? '#f87171' : '#888';
 
   const profitCents = isWon
     ? (bet.payoutCents ?? 0) - bet.betAmountCents
     : isLost
       ? -bet.betAmountCents
       : 0;
-  const profitColor = profitCents >= 0 ? 'green.400' : 'red.400';
+  const profitColor = profitCents >= 0 ? '#4ade80' : '#f87171';
   const profitLabel =
     isWon || isLost
       ? `${profitCents >= 0 ? '+' : '-'}$${fmtCents(Math.abs(profitCents))}`
@@ -152,7 +152,7 @@ export function PlayerHistory() {
         <Text
           fontSize="xs"
           fontWeight="bold"
-          color="gray.400"
+          color="#aaa"
           letterSpacing="widest"
         >
           MY BETS
@@ -175,7 +175,7 @@ export function PlayerHistory() {
         }}
       >
         {bets.length === 0 && !isLoading ? (
-          <Text fontSize="xs" color="gray.600" textAlign="center" mt={6} px={2}>
+          <Text fontSize="xs" color="#888" textAlign="center" mt={6} px={2}>
             No bets yet
           </Text>
         ) : (
