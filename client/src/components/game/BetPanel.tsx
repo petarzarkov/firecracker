@@ -318,6 +318,96 @@ export function BetPanel() {
       p={{ base: 2, lg: 3 }}
     >
       {/*
+       * Action row — always the same height regardless of active tab.
+       * AUTO toggle is always rendered (visibility:hidden when on manual)
+       * so this row never changes height either.
+       */}
+      <Flex gap={3} align="flex-end" mt={2}>
+        <Box flex={1}>
+          <Flex gap={2} flexWrap="wrap" align="center">
+            <Text fontSize="xs" color="#999" alignSelf="center" mr={1}>
+              Quick:
+            </Text>
+            {QUICK_AMOUNTS.map(a => (
+              <Button
+                key={a}
+                size="xs"
+                variant="outline"
+                borderColor="#555"
+                color="#ccc"
+                fontFamily="mono"
+                fontSize="xs"
+                onClick={() => setAmount(a.toFixed(2))}
+                disabled={inputDisabled}
+                _hover={{
+                  borderColor: 'green.400',
+                  color: 'green.300',
+                  bg: 'rgba(255,107,0,0.12)',
+                }}
+                _disabled={{ opacity: 0.4, cursor: 'not-allowed' }}
+                px={3}
+                py={1}
+              >
+                ${a}
+              </Button>
+            ))}
+            {/* AUTO toggle — always rendered; invisible on manual to keep row height stable */}
+            <Button
+              size="xs"
+              variant="outline"
+              borderColor={
+                autoPlay
+                  ? 'green.500'
+                  : hasAutoCashOut
+                    ? 'gray.600'
+                    : 'gray.800'
+              }
+              color={
+                autoPlay
+                  ? 'green.400'
+                  : hasAutoCashOut
+                    ? 'gray.500'
+                    : 'gray.700'
+              }
+              fontFamily="mono"
+              fontSize="xs"
+              disabled={!hasAutoCashOut || activeTab !== 'auto'}
+              onClick={() => setAutoPlay(v => !v)}
+              visibility={activeTab === 'auto' ? 'visible' : 'hidden'}
+              pointerEvents={activeTab === 'auto' ? 'auto' : 'none'}
+              _hover={{
+                borderColor: 'green.400',
+                color: 'green.300',
+                bg: 'rgba(255,107,0,0.1)',
+              }}
+              _disabled={{ opacity: 0.35, cursor: 'not-allowed' }}
+              title={
+                activeTab !== 'auto'
+                  ? undefined
+                  : !hasAutoCashOut
+                    ? 'Set an AUTO EXIT value to enable auto-play'
+                    : autoPlay
+                      ? 'Auto-play ON — click to stop'
+                      : 'Auto-play: bet automatically each round'
+              }
+            >
+              {autoPlay ? 'AUTO ON' : 'AUTO'}
+            </Button>
+          </Flex>
+        </Box>
+
+        <Box flexShrink={0}>{actionButton}</Box>
+      </Flex>
+
+      {/*
+       * Status bar — always rendered with a fixed min-height so its appearance
+       * never shifts the chart above. Uses visibility:hidden when not active.
+       */}
+      <BetStatusBar
+        myBet={myBet}
+        show={myBet !== null && phase !== 'WAITING'}
+      />
+      {/*
        * Tabs contain ONLY the config inputs so both tabs have the same height.
        * The action button and quick bets live outside the tabs — this prevents
        * height changes when switching Manual ↔ Auto, which would resize the
@@ -445,96 +535,6 @@ export function BetPanel() {
       >
         {betError ?? '\u00A0'}
       </Text>
-
-      {/*
-       * Action row — always the same height regardless of active tab.
-       * AUTO toggle is always rendered (visibility:hidden when on manual)
-       * so this row never changes height either.
-       */}
-      <Flex gap={3} align="flex-end" mt={2}>
-        <Box flex={1}>
-          <Flex gap={2} flexWrap="wrap" align="center">
-            <Text fontSize="xs" color="#999" alignSelf="center" mr={1}>
-              Quick:
-            </Text>
-            {QUICK_AMOUNTS.map(a => (
-              <Button
-                key={a}
-                size="xs"
-                variant="outline"
-                borderColor="#555"
-                color="#ccc"
-                fontFamily="mono"
-                fontSize="xs"
-                onClick={() => setAmount(a.toFixed(2))}
-                disabled={inputDisabled}
-                _hover={{
-                  borderColor: 'green.400',
-                  color: 'green.300',
-                  bg: 'rgba(255,107,0,0.12)',
-                }}
-                _disabled={{ opacity: 0.4, cursor: 'not-allowed' }}
-                px={3}
-                py={1}
-              >
-                ${a}
-              </Button>
-            ))}
-            {/* AUTO toggle — always rendered; invisible on manual to keep row height stable */}
-            <Button
-              size="xs"
-              variant="outline"
-              borderColor={
-                autoPlay
-                  ? 'green.500'
-                  : hasAutoCashOut
-                    ? 'gray.600'
-                    : 'gray.800'
-              }
-              color={
-                autoPlay
-                  ? 'green.400'
-                  : hasAutoCashOut
-                    ? 'gray.500'
-                    : 'gray.700'
-              }
-              fontFamily="mono"
-              fontSize="xs"
-              disabled={!hasAutoCashOut || activeTab !== 'auto'}
-              onClick={() => setAutoPlay(v => !v)}
-              visibility={activeTab === 'auto' ? 'visible' : 'hidden'}
-              pointerEvents={activeTab === 'auto' ? 'auto' : 'none'}
-              _hover={{
-                borderColor: 'green.400',
-                color: 'green.300',
-                bg: 'rgba(255,107,0,0.1)',
-              }}
-              _disabled={{ opacity: 0.35, cursor: 'not-allowed' }}
-              title={
-                activeTab !== 'auto'
-                  ? undefined
-                  : !hasAutoCashOut
-                    ? 'Set an AUTO EXIT value to enable auto-play'
-                    : autoPlay
-                      ? 'Auto-play ON — click to stop'
-                      : 'Auto-play: bet automatically each round'
-              }
-            >
-              {autoPlay ? 'AUTO ON' : 'AUTO'}
-            </Button>
-          </Flex>
-        </Box>
-        <Box flexShrink={0}>{actionButton}</Box>
-      </Flex>
-
-      {/*
-       * Status bar — always rendered with a fixed min-height so its appearance
-       * never shifts the chart above. Uses visibility:hidden when not active.
-       */}
-      <BetStatusBar
-        myBet={myBet}
-        show={myBet !== null && phase !== 'WAITING'}
-      />
     </Box>
   );
 }
