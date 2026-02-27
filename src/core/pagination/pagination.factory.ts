@@ -119,7 +119,18 @@ export class PaginationFactory<
       }
     }
 
-    queryBuilder.take(pageOptionsDto.take + 1);
+    // When joins are present, TypeORM wraps take/skip in a subquery and tries to
+    // parse ORDER BY expressions to resolve aliases. Raw SQL functions like
+    // date_trunc('milliseconds', alias.col) confuse the parser (it splits on the
+    // first "." and gets an invalid alias). Use limit() instead — it emits a plain
+    // LIMIT without subquery wrapping. This is safe for ManyToOne joins (no row
+    // inflation), which is the only join pattern used with paginated queries here.
+    const hasJoins = queryBuilder.expressionMap.joinAttributes.length > 0;
+    if (hasJoins) {
+      queryBuilder.limit(pageOptionsDto.take + 1);
+    } else {
+      queryBuilder.take(pageOptionsDto.take + 1);
+    }
 
     const entities: Entity[] =
       computedColumns && computedColumns.length > 0

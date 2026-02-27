@@ -41,6 +41,15 @@
             "maxAllowedComplexity": 30
           }
         }
+      },
+      "nursery": {
+        "noExcessiveLinesPerFile": {
+          "level": "error",
+          "options": {
+            "maxLines": 500,
+            "skipBlankLines": true
+          }
+        }
       }
     }
   },
@@ -54,6 +63,18 @@
       "arrowParentheses": "asNeeded"
     }
   },
+  "overrides": [
+    {
+      "includes": ["client/**"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "useHookAtTopLevel": "error"
+          }
+        }
+      }
+    }
+  ],
   "assist": {
     "enabled": true,
     "actions": {

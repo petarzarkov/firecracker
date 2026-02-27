@@ -4,7 +4,7 @@ import { useGameStore } from '@/store/gameStore';
 function crashColor(cp: number): string {
   if (cp < 1.5) return '#ff4444';
   if (cp < 2) return '#ff8844';
-  if (cp < 5) return '#4CAF50';
+  if (cp < 5) return '#ffd700';
   if (cp < 10) return '#44aaff';
   return '#bb44ff';
 }

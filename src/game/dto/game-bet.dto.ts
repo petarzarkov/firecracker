@@ -10,6 +10,7 @@ export class GameBetResponseDto {
   @ApiProperty({ enum: GameBetStatus }) status!: GameBetStatus;
   @ApiPropertyOptional() cashedOutAt?: number;
   @ApiPropertyOptional() payoutCents?: number;
+  @ApiPropertyOptional() crashPoint?: number;
   @ApiProperty() createdAt!: Date;
 }
 

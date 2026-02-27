@@ -188,6 +188,8 @@ export class GameController {
       status: b.status,
       cashedOutAt: b.cashedOutAt !== null ? Number(b.cashedOutAt) : undefined,
       payoutCents: b.payoutCents ?? undefined,
+      crashPoint:
+        b.round?.crashPoint != null ? Number(b.round.crashPoint) : undefined,
       createdAt: b.createdAt,
     };
   }

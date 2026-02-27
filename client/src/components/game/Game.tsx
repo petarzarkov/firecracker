@@ -18,6 +18,7 @@ import { useChatStore } from '@/store/chatStore';
 import { useGameSocket } from '@/systems/network/useGameSocket';
 import { BetPanel } from './BetPanel';
 import { CrashChart } from './CrashChart';
+import { PlayerHistory } from './PlayerHistory';
 import { PlayerList } from './PlayerList';
 import { RoundHistory } from './RoundHistory';
 import { UserMenu } from './UserMenu';
@@ -351,6 +352,17 @@ export function Game() {
               PLAYERS
             </Tabs.Trigger>
             <Tabs.Trigger
+              value="history"
+              flex={1}
+              fontFamily="mono"
+              fontSize="xs"
+              letterSpacing="wide"
+              color="gray.500"
+              _selected={{ color: 'green.400', bg: 'gray.800' }}
+            >
+              MY BETS
+            </Tabs.Trigger>
+            <Tabs.Trigger
               value="chat"
               flex={1}
               fontFamily="mono"
@@ -377,6 +389,10 @@ export function Game() {
               </Box>
             </Tabs.Content>
 
+            <Tabs.Content value="history" h="full" overflow="hidden" p={0}>
+              <PlayerHistory />
+            </Tabs.Content>
+
             <Tabs.Content value="players" h="full" overflowY="auto" p={0}>
               <Flex direction="column" p={2} gap={3}>
                 <RoundHistory />
@@ -393,8 +409,18 @@ export function Game() {
 
       {/* ── Desktop layout (lg+) — 3 columns ───────────────────────────── */}
       <Flex flex={1} overflow="hidden" display={{ base: 'none', lg: 'flex' }}>
-        {/* Left: inline chat */}
-        <InlineChatPanel />
+        {/* Left: player bet history (top half) + global chat (bottom half) */}
+        <Flex
+          direction="column"
+          w={{ base: '190px', lg: '230px' }}
+          flexShrink={0}
+          borderRight="1px solid"
+          borderColor="gray.700"
+          overflow="hidden"
+        >
+          <PlayerHistory />
+          <InlineChatPanel full />
+        </Flex>
 
         {/* Center: chart + bet panel */}
         <Flex flex={1} direction="column" p={4} gap={3} overflow="hidden">

@@ -67,13 +67,20 @@ function CashOutButton({ onCashOut }: { onCashOut: () => void }) {
   );
 }
 
-// ── Bet status bar — live current value via RAF for ACTIVE status ───────────
+// ── Bet status bar — always rendered; visibility toggled to avoid layout jumps ─
 
-function BetStatusBar({ myBet }: { myBet: BetEntry }) {
+function BetStatusBar({
+  myBet,
+  show,
+}: {
+  myBet: BetEntry | null;
+  show: boolean;
+}) {
   const textRef = useRef<HTMLSpanElement>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: optional chaining is intentional — deps change when myBet transitions
   useEffect(() => {
-    if (myBet.status !== 'ACTIVE') return;
+    if (!myBet || myBet.status !== 'ACTIVE') return;
     let animId: number;
     const update = () => {
       if (textRef.current) {
@@ -87,33 +94,46 @@ function BetStatusBar({ myBet }: { myBet: BetEntry }) {
     };
     animId = requestAnimationFrame(update);
     return () => cancelAnimationFrame(animId);
-  }, [myBet.status, myBet.betAmountCents]);
+  }, [myBet?.status, myBet?.betAmountCents]);
 
   return (
-    <Box mt={3} p={2} borderRadius="md" bg={statusBg(myBet.status)}>
-      {myBet.status === 'ACTIVE' ? (
-        <span
-          ref={textRef}
-          style={{
-            fontSize: 'var(--chakra-font-sizes-sm)',
-            color: 'var(--chakra-colors-blue-300)',
-            fontFamily: 'monospace',
-          }}
-        >
-          Bet: ${(myBet.betAmountCents / 100).toFixed(2)} — Current: $...
-        </span>
-      ) : (
-        <Text fontSize="sm" color={statusColor(myBet.status)} fontFamily="mono">
-          {myBet.status === 'CASHED_OUT'
-            ? `Cashed out at ${myBet.cashedOutAt?.toFixed(2)}x — Won $${((myBet.payoutCents ?? 0) / 100).toFixed(2)}`
-            : `Lost $${(myBet.betAmountCents / 100).toFixed(2)}`}
-        </Text>
-      )}
+    <Box
+      mt={3}
+      p={2}
+      borderRadius="md"
+      minH="36px"
+      bg={show && myBet ? statusBg(myBet.status) : 'transparent'}
+      visibility={show ? 'visible' : 'hidden'}
+    >
+      {show &&
+        myBet &&
+        (myBet.status === 'ACTIVE' ? (
+          <span
+            ref={textRef}
+            style={{
+              fontSize: 'var(--chakra-font-sizes-sm)',
+              color: 'var(--chakra-colors-blue-300)',
+              fontFamily: 'monospace',
+            }}
+          >
+            Bet: ${(myBet.betAmountCents / 100).toFixed(2)} — Current: $...
+          </span>
+        ) : (
+          <Text
+            fontSize="sm"
+            color={statusColor(myBet.status)}
+            fontFamily="mono"
+          >
+            {myBet.status === 'CASHED_OUT'
+              ? `Cashed out at ${myBet.cashedOutAt?.toFixed(2)}x — Won $${((myBet.payoutCents ?? 0) / 100).toFixed(2)}`
+              : `Lost $${(myBet.betAmountCents / 100).toFixed(2)}`}
+          </Text>
+        ))}
     </Box>
   );
 }
 
-// ── Place bet button ─────────────────────────────────────────────────────────
+// ── Place bet button — fixed dimensions to prevent layout jumps ──────────────
 
 function PlaceBetButton({
   canBet,
@@ -124,7 +144,6 @@ function PlaceBetButton({
   myBet: BetEntry | null;
   onPlaceBet: () => void;
 }) {
-  const isIdle = myBet === null;
   return (
     <Button
       onClick={onPlaceBet}
@@ -132,9 +151,9 @@ function PlaceBetButton({
       bg={canBet ? 'green.600' : 'gray.700'}
       color={canBet ? 'white' : 'gray.500'}
       fontWeight="black"
-      fontSize={isIdle ? 'lg' : 'md'}
+      fontSize="lg"
       px={6}
-      py={canBet ? 8 : 7}
+      py={8}
       borderRadius="lg"
       _hover={{ bg: canBet ? 'green.500' : 'gray.700' }}
       _active={{ bg: 'green.700' }}
@@ -142,7 +161,7 @@ function PlaceBetButton({
       fontFamily="mono"
       letterSpacing="wide"
       minW="160px"
-      boxShadow={canBet ? '0 0 20px #4CAF5060' : 'none'}
+      boxShadow={canBet ? '0 0 20px rgba(255,107,0,0.38)' : 'none'}
     >
       {betButtonLabel(myBet)}
     </Button>
@@ -200,46 +219,6 @@ function BetAmountInput({
   );
 }
 
-// ── Quick bet presets ────────────────────────────────────────────────────────
-
-function QuickBets({
-  disabled,
-  onSelect,
-}: {
-  disabled: boolean;
-  onSelect: (v: string) => void;
-}) {
-  return (
-    <Flex gap={2} flexWrap="wrap" align="center">
-      <Text fontSize="xs" color="gray.600" alignSelf="center" mr={1}>
-        Quick:
-      </Text>
-      {QUICK_AMOUNTS.map(a => (
-        <Button
-          key={a}
-          size="xs"
-          variant="outline"
-          borderColor="gray.600"
-          color="gray.400"
-          fontFamily="mono"
-          fontSize="xs"
-          onClick={() => onSelect(a.toFixed(2))}
-          disabled={disabled}
-          _hover={{
-            borderColor: 'green.500',
-            color: 'green.400',
-            bg: 'rgba(76,175,80,0.1)',
-          }}
-          _disabled={{ opacity: 0.4, cursor: 'not-allowed' }}
-          px={3}
-        >
-          ${a}
-        </Button>
-      ))}
-    </Flex>
-  );
-}
-
 // ── BetPanel ────────────────────────────────────────────────────────────────
 
 export function BetPanel() {
@@ -258,6 +237,7 @@ export function BetPanel() {
   const [amount, setAmount] = useState('5.00');
   const [autoCashOut, setAutoCashOut] = useState('');
   const [autoPlay, setAutoPlay] = useState(false);
+  const [activeTab, setActiveTab] = useState<'manual' | 'auto'>('manual');
 
   const amountCents = Math.round(Number.parseFloat(amount || '0') * 100);
   const autoCashOutTarget = Number.parseFloat(autoCashOut);
@@ -332,12 +312,23 @@ export function BetPanel() {
   return (
     <Box
       bg="gray.900"
-      borderRadius={{ base: 'none', lg: 'lg' }}
-      border={{ base: 'none', lg: '1px solid' }}
-      borderColor="gray.700"
+      borderRadius="lg"
+      border="1px solid"
+      borderColor="orange.400"
       p={{ base: 3, lg: 4 }}
     >
-      <Tabs.Root defaultValue="manual" variant="plain" size="sm">
+      {/*
+       * Tabs contain ONLY the config inputs so both tabs have the same height.
+       * The action button and quick bets live outside the tabs — this prevents
+       * height changes when switching Manual ↔ Auto, which would resize the
+       * canvas and displace the chart line.
+       */}
+      <Tabs.Root
+        defaultValue="manual"
+        variant="plain"
+        size="sm"
+        onValueChange={e => setActiveTab(e.value as 'manual' | 'auto')}
+      >
         {/* Tab headers */}
         <Tabs.List
           mb={3}
@@ -368,27 +359,18 @@ export function BetPanel() {
           ))}
         </Tabs.List>
 
-        {/* Manual tab */}
+        {/* Manual tab — bet amount only */}
         <Tabs.Content value="manual">
-          <Flex gap={3} align="flex-end" mb={3}>
-            <BetAmountInput
-              amount={amount}
-              onChange={setAmount}
-              disabled={inputDisabled}
-            />
-            <Box pb={0}>{actionButton}</Box>
-          </Flex>
-          {betError && (
-            <Text fontSize="sm" color="red.400" fontFamily="mono" mb={2} px={1}>
-              {betError}
-            </Text>
-          )}
-          <QuickBets disabled={inputDisabled} onSelect={setAmount} />
+          <BetAmountInput
+            amount={amount}
+            onChange={setAmount}
+            disabled={inputDisabled}
+          />
         </Tabs.Content>
 
-        {/* Auto tab */}
+        {/* Auto tab — bet amount + auto exit target (same row height as manual) */}
         <Tabs.Content value="auto">
-          <Flex gap={3} align="flex-end" mb={3}>
+          <Flex gap={3} align="flex-end">
             <BetAmountInput
               amount={amount}
               onChange={setAmount}
@@ -444,20 +426,60 @@ export function BetPanel() {
                 )}
               </Flex>
             </Box>
-
-            <Box pb={0}>{actionButton}</Box>
           </Flex>
+        </Tabs.Content>
+      </Tabs.Root>
 
-          {betError && (
-            <Text fontSize="sm" color="red.400" fontFamily="mono" mb={2} px={1}>
-              {betError}
+      {/*
+       * Error slot — always rendered at fixed height so its appearance never
+       * shifts the action row. Uses visibility:hidden when there is no error.
+       */}
+      <Text
+        fontSize="sm"
+        color="red.400"
+        fontFamily="mono"
+        mt={2}
+        px={1}
+        minH="1.25rem"
+        visibility={betError ? 'visible' : 'hidden'}
+      >
+        {betError ?? '\u00A0'}
+      </Text>
+
+      {/*
+       * Action row — always the same height regardless of active tab.
+       * AUTO toggle is always rendered (visibility:hidden when on manual)
+       * so this row never changes height either.
+       */}
+      <Flex gap={3} align="flex-end" mt={1}>
+        <Box flex={1}>
+          <Flex gap={2} flexWrap="wrap" align="center">
+            <Text fontSize="xs" color="gray.600" alignSelf="center" mr={1}>
+              Quick:
             </Text>
-          )}
-
-          <Flex gap={3} align="center" flexWrap="wrap">
-            <QuickBets disabled={inputDisabled} onSelect={setAmount} />
-
-            {/* Auto-play toggle — lives here, away from quick bet amounts */}
+            {QUICK_AMOUNTS.map(a => (
+              <Button
+                key={a}
+                size="xs"
+                variant="outline"
+                borderColor="gray.600"
+                color="gray.400"
+                fontFamily="mono"
+                fontSize="xs"
+                onClick={() => setAmount(a.toFixed(2))}
+                disabled={inputDisabled}
+                _hover={{
+                  borderColor: 'green.500',
+                  color: 'green.400',
+                  bg: 'rgba(255,107,0,0.1)',
+                }}
+                _disabled={{ opacity: 0.4, cursor: 'not-allowed' }}
+                px={3}
+              >
+                ${a}
+              </Button>
+            ))}
+            {/* AUTO toggle — always rendered; invisible on manual to keep row height stable */}
             <Button
               size="xs"
               variant="outline"
@@ -477,29 +499,41 @@ export function BetPanel() {
               }
               fontFamily="mono"
               fontSize="xs"
-              disabled={!hasAutoCashOut}
+              disabled={!hasAutoCashOut || activeTab !== 'auto'}
               onClick={() => setAutoPlay(v => !v)}
+              visibility={activeTab === 'auto' ? 'visible' : 'hidden'}
+              pointerEvents={activeTab === 'auto' ? 'auto' : 'none'}
               _hover={{
                 borderColor: 'green.400',
                 color: 'green.300',
-                bg: 'rgba(76,175,80,0.1)',
+                bg: 'rgba(255,107,0,0.1)',
               }}
               _disabled={{ opacity: 0.35, cursor: 'not-allowed' }}
               title={
-                !hasAutoCashOut
-                  ? 'Set an AUTO EXIT value to enable auto-play'
-                  : autoPlay
-                    ? 'Auto-play ON — click to stop'
-                    : 'Auto-play: bet automatically each round'
+                activeTab !== 'auto'
+                  ? undefined
+                  : !hasAutoCashOut
+                    ? 'Set an AUTO EXIT value to enable auto-play'
+                    : autoPlay
+                      ? 'Auto-play ON — click to stop'
+                      : 'Auto-play: bet automatically each round'
               }
             >
               {autoPlay ? 'AUTO ON' : 'AUTO'}
             </Button>
           </Flex>
-        </Tabs.Content>
-      </Tabs.Root>
+        </Box>
+        <Box flexShrink={0}>{actionButton}</Box>
+      </Flex>
 
-      {myBet !== null && phase !== 'WAITING' && <BetStatusBar myBet={myBet} />}
+      {/*
+       * Status bar — always rendered with a fixed min-height so its appearance
+       * never shifts the chart above. Uses visibility:hidden when not active.
+       */}
+      <BetStatusBar
+        myBet={myBet}
+        show={myBet !== null && phase !== 'WAITING'}
+      />
     </Box>
   );
 }

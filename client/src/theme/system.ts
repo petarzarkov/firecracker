@@ -80,6 +80,21 @@ const customConfig = defineConfig({
           900: { value: '#110e08' },
           950: { value: '#0a0700' },
         },
+        // Override Chakra's green palette with fire/orange tones so all
+        // green.* tokens automatically render in the fire theme.
+        green: {
+          50: { value: '#fff3e0' },
+          100: { value: '#ffe0b2' },
+          200: { value: '#ffcc80' },
+          300: { value: '#ffb347' },
+          400: { value: '#ff9500' },
+          500: { value: '#ff6b00' },
+          600: { value: '#e05500' },
+          700: { value: '#b84300' },
+          800: { value: '#8b3200' },
+          900: { value: '#5a1e00' },
+          950: { value: '#3a1000' },
+        },
       },
       fonts: {
         body: { value: 'monospace' },

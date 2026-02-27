@@ -40,6 +40,7 @@ export class GameBetRepository {
   ): Promise<PageDto<GameBet>> {
     const qb = this.repo
       .createQueryBuilder('game_bet')
+      .leftJoinAndSelect('game_bet.round', 'round')
       .where('game_bet.user_id = :userId', { userId });
     return this.paginationFactory.paginate(qb, pageOptions);
   }

@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/nursery/noExcessiveLinesPerFile: test file is allowed */
 import {
   afterEach,
   beforeEach,
