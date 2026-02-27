@@ -47,15 +47,16 @@ export class WalletService {
     return this.stripeClient;
   }
 
-  async getWallet(userId: string): Promise<Wallet> {
-    return this.walletRepo.getOrCreate(userId);
+  async getWallet(userId: string, isDemo = false): Promise<Wallet> {
+    return this.walletRepo.getOrCreate(userId, isDemo);
   }
 
   async getTransactions(
     userId: string,
     pageOptions: PageOptionsDto,
+    isDemo = false,
   ): Promise<PageDto<WalletTransaction>> {
-    const wallet = await this.walletRepo.findByUserId(userId);
+    const wallet = await this.walletRepo.findByUserId(userId, isDemo);
     if (!wallet) {
       return {
         data: [],

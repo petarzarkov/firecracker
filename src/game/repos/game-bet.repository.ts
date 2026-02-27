@@ -20,10 +20,12 @@ export class GameBetRepository {
   findActiveByRoundAndUser(
     roundId: string,
     userId: string,
+    isDemo = false,
   ): Promise<GameBet | null> {
     return this.repo.findOneBy({
       roundId,
       userId,
+      isDemo,
       status: GameBetStatus.ACTIVE,
     });
   }

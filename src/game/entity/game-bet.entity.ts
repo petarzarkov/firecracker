@@ -16,7 +16,7 @@ import { GameRound } from './game-round.entity';
 @Index('game_bet_round_id_index', ['roundId'])
 @Index('game_bet_user_id_index', ['userId'])
 @Index('game_bet_status_index', ['status'])
-@Index('game_bet_round_user_unique_index', ['roundId', 'userId'], {
+@Index('game_bet_round_user_demo_index', ['roundId', 'userId', 'isDemo'], {
   unique: true,
 })
 export class GameBet {
@@ -58,6 +58,13 @@ export class GameBet {
     default: GameBetStatus.ACTIVE,
   })
   status!: GameBetStatus;
+
+  /**
+   * Distinguishes demo bets (backed by the demo wallet) from real-money bets.
+   * Both follow the exact same DB flow — only the wallet used differs.
+   */
+  @Column({ type: 'boolean', default: false })
+  isDemo!: boolean;
 
   @ManyToOne(() => GameRound, { onDelete: 'CASCADE' })
   @JoinColumn({

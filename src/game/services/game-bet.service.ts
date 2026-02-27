@@ -24,14 +24,16 @@ export class GameBetService {
   ) {}
 
   /**
-   * Places a real-money bet for an authenticated user.
+   * Places a bet for an authenticated user.
    * Protected by an advisory lock to prevent duplicate bets in the same round.
+   * Pass isDemo=true to debit the demo wallet and record a demo bet.
    */
   async placeBet(
     userId: string,
     roundId: string,
     betAmountCents: number,
-    _currentMultiplierFn: () => void, // unused here, but verifies round is WAITING via caller
+    _currentMultiplierFn: () => void,
+    isDemo = false,
   ): Promise<GameBet> {
     if (betAmountCents < GAME.MIN_BET_CENTS) {
       throw new BadRequestException(
@@ -39,76 +41,80 @@ export class GameBetService {
       );
     }
 
-    const result = await this.pgLockService.withLock(
-      `game_bet_${userId}_${roundId}`,
-      async manager => {
-        // Check for existing active bet in this round
-        const existing = await this.gameBetRepo.findActiveByRoundAndUser(
-          roundId,
-          userId,
+    const lockKey = `game_bet_${userId}_${roundId}_${isDemo ? 'demo' : 'real'}`;
+    const result = await this.pgLockService.withLock(lockKey, async manager => {
+      const existing = await this.gameBetRepo.findActiveByRoundAndUser(
+        roundId,
+        userId,
+        isDemo,
+      );
+      if (existing) {
+        throw new BadRequestException(
+          isDemo
+            ? 'You already have an active demo bet in this round'
+            : 'You already have an active bet in this round',
         );
-        if (existing) {
-          throw new BadRequestException(
-            'You already have an active bet in this round',
-          );
-        }
+      }
 
-        // Get wallet and check balance
-        const wallet = await manager.findOneBy(Wallet, { userId });
-        if (!wallet) {
-          throw new BadRequestException(
-            'Wallet not found. Please contact support.',
-          );
-        }
-
-        if (wallet.balanceCents < betAmountCents) {
-          throw new BadRequestException('Insufficient wallet balance');
-        }
-
-        // Atomic debit: only succeeds if balance is still sufficient
-        const affected = await this.walletRepo.debitCents(
-          wallet.id,
-          betAmountCents,
-          manager,
+      const wallet = await manager.findOneBy(Wallet, { userId, isDemo });
+      if (!wallet) {
+        throw new BadRequestException(
+          isDemo
+            ? 'Demo wallet not found — please reconnect'
+            : 'Wallet not found. Please contact support.',
         );
-        if (affected === 0) {
-          throw new BadRequestException('Insufficient wallet balance');
-        }
+      }
 
-        const updatedWallet = await manager.findOneByOrFail(Wallet, {
-          id: wallet.id,
-        });
+      if (wallet.balanceCents < betAmountCents) {
+        throw new BadRequestException(
+          isDemo ? 'Insufficient demo balance' : 'Insufficient wallet balance',
+        );
+      }
 
-        // Create bet
-        const bet = this.gameBetRepo.create({
-          roundId,
-          userId,
-          betAmountCents,
-          status: GameBetStatus.ACTIVE,
-        });
-        await this.gameBetRepo.save(bet, manager);
+      const affected = await this.walletRepo.debitCents(
+        wallet.id,
+        betAmountCents,
+        manager,
+      );
+      if (affected === 0) {
+        throw new BadRequestException(
+          isDemo ? 'Insufficient demo balance' : 'Insufficient wallet balance',
+        );
+      }
 
-        // Record wallet transaction
-        const txn = this.walletTxnRepo.create({
-          walletId: wallet.id,
-          type: WalletTransactionType.BET_DEBIT,
-          amountCents: betAmountCents,
-          balanceAfterCents: updatedWallet.balanceCents,
-          gameBetId: bet.id,
-          description: `Bet placed in round ${roundId}`,
-        });
-        await this.walletTxnRepo.save(txn, manager);
+      const updatedWallet = await manager.findOneByOrFail(Wallet, {
+        id: wallet.id,
+      });
 
-        this.logger.log('Bet placed', {
-          userId,
-          roundId,
-          betAmountCents,
-          remainingBalance: updatedWallet.balanceCents,
-        });
+      const bet = this.gameBetRepo.create({
+        roundId,
+        userId,
+        betAmountCents,
+        isDemo,
+        status: GameBetStatus.ACTIVE,
+      });
+      await this.gameBetRepo.save(bet, manager);
 
-        return bet;
-      },
-    );
+      const txn = this.walletTxnRepo.create({
+        walletId: wallet.id,
+        type: WalletTransactionType.BET_DEBIT,
+        amountCents: betAmountCents,
+        balanceAfterCents: updatedWallet.balanceCents,
+        gameBetId: bet.id,
+        description: `${isDemo ? 'Demo bet' : 'Bet'} placed in round ${roundId}`,
+      });
+      await this.walletTxnRepo.save(txn, manager);
+
+      this.logger.log('Bet placed', {
+        userId,
+        roundId,
+        betAmountCents,
+        isDemo,
+        remainingBalance: updatedWallet.balanceCents,
+      });
+
+      return bet;
+    });
 
     if (result === 'not_locked') {
       throw new BadRequestException('Could not place bet — please try again');
@@ -120,59 +126,59 @@ export class GameBetService {
   /**
    * Cashes out a bet at the current multiplier.
    * The multiplier must be captured synchronously before any async operations.
+   * Pass isDemo=true to credit the demo wallet.
    */
   async cashOut(
     userId: string,
     roundId: string,
     currentMultiplier: number,
+    isDemo = false,
   ): Promise<GameBet> {
-    const result = await this.pgLockService.withLock(
-      `game_cashout_${userId}_${roundId}`,
-      async manager => {
-        const bet = await this.gameBetRepo.findActiveByRoundAndUser(
-          roundId,
-          userId,
-        );
-        if (!bet) {
-          throw new BadRequestException('No active bet found for this round');
-        }
+    const lockKey = `game_cashout_${userId}_${roundId}_${isDemo ? 'demo' : 'real'}`;
+    const result = await this.pgLockService.withLock(lockKey, async manager => {
+      const bet = await this.gameBetRepo.findActiveByRoundAndUser(
+        roundId,
+        userId,
+        isDemo,
+      );
+      if (!bet) {
+        throw new BadRequestException('No active bet found for this round');
+      }
 
-        const payoutCents = Math.floor(bet.betAmountCents * currentMultiplier);
+      const payoutCents = Math.floor(bet.betAmountCents * currentMultiplier);
 
-        bet.status = GameBetStatus.CASHED_OUT;
-        bet.cashedOutAt = currentMultiplier;
-        bet.payoutCents = payoutCents;
-        await this.gameBetRepo.save(bet, manager);
+      bet.status = GameBetStatus.CASHED_OUT;
+      bet.cashedOutAt = currentMultiplier;
+      bet.payoutCents = payoutCents;
+      await this.gameBetRepo.save(bet, manager);
 
-        // Credit wallet
-        const wallet = await manager.findOneByOrFail(Wallet, { userId });
-        await this.walletRepo.creditCents(wallet.id, payoutCents, manager);
+      const wallet = await manager.findOneByOrFail(Wallet, { userId, isDemo });
+      await this.walletRepo.creditCents(wallet.id, payoutCents, manager);
 
-        const updatedWallet = await manager.findOneByOrFail(Wallet, {
-          id: wallet.id,
-        });
+      const updatedWallet = await manager.findOneByOrFail(Wallet, {
+        id: wallet.id,
+      });
 
-        // Record wallet transaction
-        const txn = this.walletTxnRepo.create({
-          walletId: wallet.id,
-          type: WalletTransactionType.WIN_CREDIT,
-          amountCents: payoutCents,
-          balanceAfterCents: updatedWallet.balanceCents,
-          gameBetId: bet.id,
-          description: `Cashout at ${currentMultiplier}x in round ${roundId}`,
-        });
-        await this.walletTxnRepo.save(txn, manager);
+      const txn = this.walletTxnRepo.create({
+        walletId: wallet.id,
+        type: WalletTransactionType.WIN_CREDIT,
+        amountCents: payoutCents,
+        balanceAfterCents: updatedWallet.balanceCents,
+        gameBetId: bet.id,
+        description: `${isDemo ? 'Demo cashout' : 'Cashout'} at ${currentMultiplier}x in round ${roundId}`,
+      });
+      await this.walletTxnRepo.save(txn, manager);
 
-        this.logger.log('Bet cashed out', {
-          userId,
-          roundId,
-          multiplier: currentMultiplier,
-          payoutCents,
-        });
+      this.logger.log('Bet cashed out', {
+        userId,
+        roundId,
+        multiplier: currentMultiplier,
+        payoutCents,
+        isDemo,
+      });
 
-        return bet;
-      },
-    );
+      return bet;
+    });
 
     if (result === 'not_locked') {
       throw new BadRequestException('Could not cash out — please try again');
@@ -182,7 +188,7 @@ export class GameBetService {
   }
 
   /**
-   * Marks all active bets in a round as LOST.
+   * Marks all active bets in a round as LOST (real and demo).
    * Called within an existing DB transaction during round crash settlement.
    */
   async settleAllBets(roundId: string, manager: EntityManager): Promise<void> {
@@ -193,8 +199,9 @@ export class GameBetService {
   findActiveByRoundAndUser(
     roundId: string,
     userId: string,
+    isDemo = false,
   ): Promise<GameBet | null> {
-    return this.gameBetRepo.findActiveByRoundAndUser(roundId, userId);
+    return this.gameBetRepo.findActiveByRoundAndUser(roundId, userId, isDemo);
   }
 
   findByRoundId(roundId: string): Promise<GameBet[]> {

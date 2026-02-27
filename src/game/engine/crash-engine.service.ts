@@ -291,7 +291,6 @@ export class CrashEngineService implements OnModuleInit, OnModuleDestroy {
       const roundId = this.currentRoundId ?? 'unknown';
       this.logger.log('Crash point reached', {
         roundId,
-        multiplier,
         crashPoint: this.crashPoint,
       });
 

@@ -4,14 +4,14 @@ import {
   Entity,
   Index,
   JoinColumn,
-  OneToOne,
+  ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { User } from '@/users/entity/user.entity';
 
 @Entity()
-@Index('wallet_user_id_index', ['userId'], { unique: true })
+@Index('wallet_user_id_is_demo_index', ['userId', 'isDemo'], { unique: true })
 export class Wallet {
   @PrimaryGeneratedColumn('uuid', {
     primaryKeyConstraintName: 'PK_wallet',
@@ -28,7 +28,14 @@ export class Wallet {
   @Column({ type: 'integer', default: 0 })
   balanceCents!: number;
 
-  @OneToOne(() => User, { onDelete: 'CASCADE' })
+  /**
+   * Each user has two wallets: one real (isDemo=false) and one demo (isDemo=true).
+   * Demo wallets are seeded with GAME.DEMO_INITIAL_BALANCE_CENTS on creation.
+   */
+  @Column({ type: 'boolean', default: false })
+  isDemo!: boolean;
+
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({
     name: 'user_id',
     foreignKeyConstraintName: 'FK_wallet_to_user',

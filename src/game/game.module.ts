@@ -13,7 +13,6 @@ import { GameBetRepository } from './repos/game-bet.repository';
 import { GameRoundRepository } from './repos/game-round.repository';
 import { WalletRepository } from './repos/wallet.repository';
 import { WalletTransactionRepository } from './repos/wallet-transaction.repository';
-import { DemoService } from './services/demo.service';
 import { GameBetService } from './services/game-bet.service';
 import { GameRoundService } from './services/game-round.service';
 import { WalletService } from './services/wallet.service';
@@ -52,7 +51,6 @@ import { WalletController } from './wallet.controller';
     GameRoundService,
     GameBetService,
     WalletService,
-    DemoService,
     // Engine — registers tick callback on GameGateway.onModuleInit()
     CrashEngineService,
     // Job handlers (auto-discovered by JobDispatcherService via DiscoveryService)

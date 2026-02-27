@@ -140,6 +140,8 @@ export class CashOutAckPayload {
 
 export class WalletUpdatedPayload {
   balanceCents!: number;
+  /** true when this update is for the demo wallet; false for the real wallet */
+  isDemo!: boolean;
 }
 
 // ---------------------------------------------------------------------------

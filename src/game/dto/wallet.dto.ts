@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, Max, Min } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsBoolean, IsInt, IsOptional, Max, Min } from 'class-validator';
 import { PageOptionsDto } from '@/core/pagination/dto/page-options.dto';
 import { WalletTransactionType } from '../enum/wallet-transaction-type.enum';
 
@@ -23,6 +24,8 @@ export class WalletResponseDto {
   @ApiProperty() userId!: string;
   @ApiProperty({ description: 'Current balance in cents' })
   balanceCents!: number;
+  @ApiProperty({ description: 'true for demo wallet, false for real wallet' })
+  isDemo!: boolean;
   @ApiProperty() createdAt!: Date;
   @ApiProperty() updatedAt!: Date;
 }
@@ -46,4 +49,25 @@ export class WalletTransactionResponseDto {
   @ApiProperty() createdAt!: Date;
 }
 
-export class ListTransactionsQueryDto extends PageOptionsDto {}
+export class ListTransactionsQueryDto extends PageOptionsDto {
+  @ApiPropertyOptional({
+    description:
+      'true = demo wallet transactions, false = real wallet transactions',
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }) => value === 'true' || value === true)
+  isDemo?: boolean;
+}
+
+export class WalletQueryDto {
+  @ApiPropertyOptional({
+    description: 'true = demo wallet, false = real wallet (default)',
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }) => value === 'true' || value === true)
+  isDemo?: boolean;
+}

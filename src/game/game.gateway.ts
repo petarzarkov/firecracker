@@ -45,7 +45,6 @@ import {
 import { ROOMS } from '@/notifications/events/events.gateway';
 import { CrashEngineService } from './engine/crash-engine.service';
 import { GameRoundStatus } from './enum/game-round-status.enum';
-import { DemoService } from './services/demo.service';
 import { GameBetService } from './services/game-bet.service';
 import { GameRoundService } from './services/game-round.service';
 import { WalletService } from './services/wallet.service';
@@ -77,6 +76,13 @@ class SubmitClientSeedMessageDto {
 /** Redis key for storing per-round client seeds during WAITING phase. */
 export const clientSeedsKey = (roundId: string) =>
   `game:client-seeds:${roundId}`;
+
+/** Generate a random 16-byte hex string for auto-seeding on bet placement. */
+function randomHex16(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Buffer.from(bytes).toString('hex');
+}
 
 // ── Gateway ────────────────────────────────────────────────────────────────
 
@@ -114,7 +120,6 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
     private readonly crashEngine: CrashEngineService,
     private readonly gameBetService: GameBetService,
     private readonly gameRoundService: GameRoundService,
-    private readonly demoService: DemoService,
     private readonly walletService: WalletService,
     private readonly redisService: RedisService,
     private readonly logger: ContextLogger,
@@ -143,7 +148,6 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
   }
 
   async handleConnection(client: ExtendedSocket): Promise<void> {
-    // Join the game broadcast room
     await client.join(GAME_ROOM);
 
     // Send current game state to the newly connected client
@@ -153,12 +157,9 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
         this.gameRoundService.getRecentCrashes(15),
       ]);
       const phase = this.crashEngine.getCurrentPhase();
-      const [bets, demoBets] = round
-        ? await Promise.all([
-            this.gameBetService.findByRoundId(round.id),
-            this.demoService.getDemoRoundBets(round.id),
-          ])
-        : [[], []];
+      const bets = round
+        ? await this.gameBetService.findByRoundId(round.id)
+        : [];
 
       const recentCrashes: CrashedRoundSummary[] = recentRounds.map(r => ({
         roundId: r.id,
@@ -171,25 +172,15 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
         seedHash: round?.seedHash ?? null,
         nonce: round?.nonce,
         recentCrashes,
-        activeBets: [
-          ...bets.map(b => ({
-            username:
-              b.user?.displayName ?? b.user?.email?.split('@')[0] ?? b.userId,
-            betAmountCents: b.betAmountCents,
-            isDemo: false,
-            ...(b.cashedOutAt !== null
-              ? { cashedOutAt: Number(b.cashedOutAt) }
-              : {}),
-          })),
-          ...demoBets
-            .filter(b => b.username)
-            .map(b => ({
-              username: b.username as string,
-              betAmountCents: b.betAmountCents,
-              isDemo: true,
-              ...(b.cashedOutAt != null ? { cashedOutAt: b.cashedOutAt } : {}),
-            })),
-        ],
+        activeBets: bets.map(b => ({
+          username:
+            b.user?.displayName ?? b.user?.email?.split('@')[0] ?? b.userId,
+          betAmountCents: b.betAmountCents,
+          isDemo: b.isDemo,
+          ...(b.cashedOutAt !== null
+            ? { cashedOutAt: Number(b.cashedOutAt) }
+            : {}),
+        })),
       };
 
       if (phase === GameRoundStatus.RUNNING) {
@@ -212,12 +203,18 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
       this.logger.error('Failed to send game state on connect', { err });
     }
 
-    // Send demo wallet balance immediately so the client can display it before the first bet
-    try {
-      const demoWallet = await this.demoService.getOrCreateWallet(client.id);
-      client.emit('walletUpdated', { balanceCents: demoWallet.balanceCents });
-    } catch (err) {
-      this.logger.error('Failed to send demo wallet on connect', { err });
+    // Send demo wallet balance for authenticated users
+    const user = client.data.user;
+    if (user) {
+      try {
+        const demoWallet = await this.walletService.getWallet(user.id, true);
+        this.io.to(ROOMS.user(user.id)).emit('walletUpdated', {
+          balanceCents: demoWallet.balanceCents,
+          isDemo: true,
+        });
+      } catch (err) {
+        this.logger.error('Failed to send demo wallet on connect', { err });
+      }
     }
   }
 
@@ -229,6 +226,15 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
     @ConnectedSocket() client: ExtendedSocket,
   ): Promise<void> {
     const user = client.data.user;
+
+    if (!user) {
+      client.emit('betAck', {
+        success: false,
+        error: 'Login required to place bets',
+      });
+      return;
+    }
+
     const roundId = this.crashEngine.getCurrentRoundId();
     const phase = this.crashEngine.getCurrentPhase();
 
@@ -246,80 +252,54 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
       return;
     }
 
+    const isDemo = data.isDemo ?? false;
+    const username = user.displayName ?? user.email.split('@')[0];
+
     try {
-      if (user && !data.isDemo) {
-        // ── Authenticated real-money bet ───────────────────────────────
-        const bet = await this.gameBetService.placeBet(
+      const bet = await this.gameBetService.placeBet(
+        user.id,
+        roundId,
+        data.betAmountCents,
+        () => {},
+        isDemo,
+      );
+
+      // Auto-contribute a random seed on behalf of the player so the crash
+      // point always includes bettor entropy. hsetnx preserves any seed the
+      // player submitted explicitly via 'submitClientSeed'.
+      await this.redis.hsetnx(clientSeedsKey(roundId), user.id, randomHex16());
+
+      if (data.autoCashOutAt) {
+        await this.#storeAutoCashOut(
+          roundId,
           user.id,
-          roundId,
-          data.betAmountCents,
-          () => {},
-        );
-
-        const username = user.displayName ?? user.email.split('@')[0];
-        if (data.autoCashOutAt) {
-          await this.#storeAutoCashOut(
-            roundId,
-            user.id,
-            username,
-            data.autoCashOutAt,
-          );
-        }
-
-        const wallet = await this.walletService.getWallet(user.id);
-        const ack: BetAckPayload = {
-          success: true,
           username,
-          betAmountCents: bet.betAmountCents,
-        };
-        client.emit('betAck', ack);
-        client.to(ROOMS.user(user.id)).emit('walletUpdated', {
-          balanceCents: wallet.balanceCents,
-        });
-
-        const broadcast: BetPlacedPayload = {
-          username,
-          betAmountCents: bet.betAmountCents,
-          isDemo: false,
-        };
-        this.io.to(GAME_ROOM).emit('betPlaced', broadcast);
-      } else {
-        // ── Demo bet (authenticated users only) ────────────────────────
-        if (!user) {
-          client.emit('betAck', {
-            success: false,
-            error: 'Login required to place demo bets',
-          });
-          return;
-        }
-
-        const username = user.displayName ?? user.email.split('@')[0];
-        const { bet, wallet } = await this.demoService.placeDemoBet(
-          client.id,
-          roundId,
-          data.betAmountCents,
           data.autoCashOutAt,
-          username,
+          isDemo,
         );
-
-        // Remember demo mode for this socket so cashOut also uses demo path
-        client.data.isDemo = true;
-
-        const ack: BetAckPayload = {
-          success: true,
-          username,
-          betAmountCents: bet.betAmountCents,
-        };
-        client.emit('betAck', ack);
-        client.emit('walletUpdated', { balanceCents: wallet.balanceCents });
-
-        const broadcast: BetPlacedPayload = {
-          username,
-          betAmountCents: bet.betAmountCents,
-          isDemo: true,
-        };
-        this.io.to(GAME_ROOM).emit('betPlaced', broadcast);
       }
+
+      const wallet = await this.walletService.getWallet(user.id, isDemo);
+      const ack: BetAckPayload = {
+        success: true,
+        username,
+        betAmountCents: bet.betAmountCents,
+      };
+      client.emit('betAck', ack);
+      this.io.to(ROOMS.user(user.id)).emit('walletUpdated', {
+        balanceCents: wallet.balanceCents,
+        isDemo,
+      });
+
+      // Track demo mode on the socket so cashOut uses the correct path
+      client.data.isDemo = isDemo;
+
+      const broadcast: BetPlacedPayload = {
+        username,
+        betAmountCents: bet.betAmountCents,
+        isDemo,
+      };
+      this.io.to(GAME_ROOM).emit('betPlaced', broadcast);
     } catch (err) {
       const message =
         err instanceof BadRequestException
@@ -336,6 +316,14 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
     const user = client.data.user;
     const roundId = this.crashEngine.getCurrentRoundId();
     const phase = this.crashEngine.getCurrentPhase();
+
+    if (!user) {
+      client.emit('cashOutAck', {
+        success: false,
+        error: 'Login required to cash out',
+      });
+      return;
+    }
 
     if (!roundId) {
       client.emit('cashOutAck', { success: false, error: 'No active round' });
@@ -368,59 +356,37 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
       currentMultiplier = graceMult;
     }
 
+    const isDemo = client.data.isDemo ?? false;
+
     try {
-      if (user && !client.data.isDemo) {
-        // ── Authenticated real-money cashout ───────────────────────────
-        const bet = await this.gameBetService.cashOut(
-          user.id,
-          roundId,
-          currentMultiplier,
-        );
+      const bet = await this.gameBetService.cashOut(
+        user.id,
+        roundId,
+        currentMultiplier,
+        isDemo,
+      );
 
-        const wallet = await this.walletService.getWallet(user.id);
-        client.data.isDemo = false;
-        const ack: CashOutAckPayload = {
-          success: true,
-          multiplier: currentMultiplier,
-          payoutCents: bet.payoutCents ?? 0,
-        };
-        client.emit('cashOutAck', ack);
-        client.to(ROOMS.user(user.id)).emit('walletUpdated', {
-          balanceCents: wallet.balanceCents,
-        });
+      const wallet = await this.walletService.getWallet(user.id, isDemo);
+      client.data.isDemo = false;
 
-        const broadcast: BetCashedOutPayload = {
-          username: user.displayName ?? user.email.split('@')[0],
-          multiplier: currentMultiplier,
-          payoutCents: bet.payoutCents ?? 0,
-          isDemo: false,
-        };
-        this.io.to(GAME_ROOM).emit('betCashedOut', broadcast);
-      } else {
-        // ── Demo cashout ───────────────────────────────────────────────
-        const { bet, wallet } = await this.demoService.cashOutDemo(
-          client.id,
-          roundId,
-          currentMultiplier,
-        );
+      const ack: CashOutAckPayload = {
+        success: true,
+        multiplier: currentMultiplier,
+        payoutCents: bet.payoutCents ?? 0,
+      };
+      client.emit('cashOutAck', ack);
+      this.io.to(ROOMS.user(user.id)).emit('walletUpdated', {
+        balanceCents: wallet.balanceCents,
+        isDemo,
+      });
 
-        client.data.isDemo = false;
-        const ack: CashOutAckPayload = {
-          success: true,
-          multiplier: currentMultiplier,
-          payoutCents: bet.payoutCents,
-        };
-        client.emit('cashOutAck', ack);
-        client.emit('walletUpdated', { balanceCents: wallet.balanceCents });
-
-        const broadcast: BetCashedOutPayload = {
-          username: bet.username ?? wallet.username,
-          multiplier: currentMultiplier,
-          payoutCents: bet.payoutCents ?? 0,
-          isDemo: true,
-        };
-        this.io.to(GAME_ROOM).emit('betCashedOut', broadcast);
-      }
+      const broadcast: BetCashedOutPayload = {
+        username: user.displayName ?? user.email.split('@')[0],
+        multiplier: currentMultiplier,
+        payoutCents: bet.payoutCents ?? 0,
+        isDemo,
+      };
+      this.io.to(GAME_ROOM).emit('betCashedOut', broadcast);
     } catch (err) {
       const message =
         err instanceof BadRequestException
@@ -447,13 +413,11 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
       return;
     }
 
-    // Use userId for authenticated users, socketId for guests
     const user = client.data.user;
     const key = clientSeedsKey(roundId);
     const field = user?.id ?? client.id;
 
     await this.redis.hset(key, field, data.seed);
-    // TTL: waiting phase + 30s buffer
     await this.redis.expire(key, Math.ceil(GAME.WAITING_PHASE_MS / 1000) + 30);
 
     client.emit('seedAck', { success: true });
@@ -480,12 +444,13 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
     userId: string,
     username: string,
     autoCashOutAt: number,
+    isDemo: boolean,
   ): Promise<void> {
     const key = `game:auto-cashout:${roundId}`;
     await this.redis.hset(
       key,
       userId,
-      JSON.stringify({ username, autoCashOutAt }),
+      JSON.stringify({ username, autoCashOutAt, isDemo }),
     );
     await this.redis.expire(key, 3600);
   }
@@ -502,13 +467,13 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
     multiplier: number,
   ): Promise<void> {
     const key = `game:auto-cashout:${roundId}`;
-
-    // ── Real-money auto-cashouts ──────────────────────────────────────────
     const entries = await this.redis.hgetall(key);
+
     for (const [userId, raw] of Object.entries(entries)) {
-      const { username, autoCashOutAt } = JSON.parse(raw) as {
+      const { username, autoCashOutAt, isDemo } = JSON.parse(raw) as {
         username: string;
         autoCashOutAt: number;
+        isDemo: boolean;
       };
       if (autoCashOutAt > multiplier) continue;
 
@@ -518,56 +483,25 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
           userId,
           roundId,
           cashOutAt,
+          isDemo,
         );
         await this.redis.hdel(key, userId);
 
-        const wallet = await this.walletService.getWallet(userId);
+        const wallet = await this.walletService.getWallet(userId, isDemo);
         this.io.to(ROOMS.user(userId)).emit('walletUpdated', {
           balanceCents: wallet.balanceCents,
+          isDemo,
         });
 
         const broadcast: BetCashedOutPayload = {
           username,
           multiplier: cashOutAt,
           payoutCents: bet.payoutCents ?? 0,
-          isDemo: false,
+          isDemo,
         };
         this.io.to(GAME_ROOM).emit('betCashedOut', broadcast);
       } catch {
         // Bet may already be cashed out or round ended — skip silently
-      }
-    }
-
-    // ── Demo auto-cashouts ────────────────────────────────────────────────
-    const demoBets = await this.demoService.getAutoCashOutDemoBets(
-      roundId,
-      multiplier,
-    );
-    for (const { socketId, bet: demoBet } of demoBets) {
-      try {
-        const demoCashOutAt = Math.min(
-          multiplier,
-          demoBet.autoCashOutAt ?? multiplier,
-        );
-        const { bet: cashedBet, wallet } = await this.demoService.cashOutDemo(
-          socketId,
-          roundId,
-          demoCashOutAt,
-        );
-
-        this.server?.sockets.sockets.get(socketId)?.emit('walletUpdated', {
-          balanceCents: wallet.balanceCents,
-        });
-
-        const broadcast: BetCashedOutPayload = {
-          username: demoBet.username ?? wallet.username,
-          multiplier: demoCashOutAt,
-          payoutCents: cashedBet.payoutCents ?? 0,
-          isDemo: true,
-        };
-        this.io.to(GAME_ROOM).emit('betCashedOut', broadcast);
-      } catch {
-        // Already cashed out — skip
       }
     }
   }

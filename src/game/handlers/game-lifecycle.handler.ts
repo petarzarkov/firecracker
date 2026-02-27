@@ -9,7 +9,6 @@ import { RedisService } from '@/infra/redis/services/redis.service';
 import { EVENTS } from '@/notifications/events/events';
 import type { EngineCommand } from '../engine/crash-engine.service';
 import { clientSeedsKey, GameGateway } from '../game.gateway';
-import { DemoService } from '../services/demo.service';
 import { GameRoundService } from '../services/game-round.service';
 
 /** Redis pub/sub channel that the main-process CrashEngineService subscribes to. */
@@ -21,7 +20,6 @@ export class GameLifecycleHandler {
 
   constructor(
     private readonly gameRoundService: GameRoundService,
-    private readonly demoService: DemoService,
     private readonly gameGateway: GameGateway,
     private readonly jobPublisher: JobPublisherService,
     private readonly redisService: RedisService,
@@ -137,9 +135,6 @@ export class GameLifecycleHandler {
     const { roundId } = job.data.payload;
 
     const round = await this.gameRoundService.transitionToCrashed(roundId);
-
-    // Settle demo bets in Redis
-    await this.demoService.settleDemoBets(roundId);
 
     // Tell the main-process engine to stop the tick loop
     await this.#publishEngineCommand({ action: 'crash' });

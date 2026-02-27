@@ -21,6 +21,7 @@ import {
   CreateDepositSessionDto,
   DepositSessionResponseDto,
   ListTransactionsQueryDto,
+  WalletQueryDto,
   WalletResponseDto,
   WalletTransactionResponseDto,
   WithdrawDto,
@@ -40,8 +41,12 @@ export class WalletController {
   @ApiOkResponse({ type: WalletResponseDto })
   async getWallet(
     @CurrentUser() user: SanitizedUser,
+    @Query() query: WalletQueryDto,
   ): Promise<WalletResponseDto> {
-    const wallet = await this.walletService.getWallet(user.id);
+    const wallet = await this.walletService.getWallet(
+      user.id,
+      query.isDemo ?? false,
+    );
     return this.#mapWallet(wallet);
   }
 
@@ -53,7 +58,11 @@ export class WalletController {
     @CurrentUser() user: SanitizedUser,
     @Query() query: ListTransactionsQueryDto,
   ): Promise<PageDto<WalletTransactionResponseDto>> {
-    const page = await this.walletService.getTransactions(user.id, query);
+    const page = await this.walletService.getTransactions(
+      user.id,
+      query,
+      query.isDemo ?? false,
+    );
     return {
       ...page,
       data: page.data.map(t => this.#mapTransaction(t)),
@@ -138,6 +147,7 @@ export class WalletController {
       id: w.id,
       userId: w.userId,
       balanceCents: w.balanceCents,
+      isDemo: w.isDemo,
       createdAt: w.createdAt,
       updatedAt: w.updatedAt,
     };

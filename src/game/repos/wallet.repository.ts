@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
+import { GAME } from '@/constants';
 import { ContextLogger } from '@/infra/logger/services/context-logger.service';
 import { Wallet } from '../entity/wallet.entity';
 
@@ -12,14 +13,19 @@ export class WalletRepository {
     protected readonly logger: ContextLogger,
   ) {}
 
-  findByUserId(userId: string): Promise<Wallet | null> {
-    return this.repo.findOneBy({ userId });
+  findByUserId(userId: string, isDemo = false): Promise<Wallet | null> {
+    return this.repo.findOneBy({ userId, isDemo });
   }
 
-  async getOrCreate(userId: string): Promise<Wallet> {
-    const existing = await this.findByUserId(userId);
+  async getOrCreate(userId: string, isDemo = false): Promise<Wallet> {
+    const existing = await this.findByUserId(userId, isDemo);
     if (existing) return existing;
-    const wallet = this.repo.create({ userId, balanceCents: 0 });
+    const wallet = this.repo.create({
+      userId,
+      isDemo,
+      // Demo wallets are seeded with play money; real wallets start at zero
+      balanceCents: isDemo ? GAME.DEMO_INITIAL_BALANCE_CENTS : 0,
+    });
     return this.repo.save(wallet);
   }
 
