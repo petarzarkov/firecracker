@@ -76,6 +76,8 @@ export const GAME = {
   MIN_BET_CENTS: 100,
   /** Starting virtual balance for demo/guest users in cents ($1,000) */
   DEMO_INITIAL_BALANCE_CENTS: 100_000,
-  /** Redis TTL for demo wallet keys (seconds) */
-  DEMO_WALLET_TTL_SECONDS: 7_200,
+  /** How often the stuck-round cleanup job runs (ms) */
+  CLEANUP_INTERVAL_MS: 20_000,
+  /** A round is considered stuck after this duration with no progression (ms) */
+  STUCK_ROUND_THRESHOLD_MS: 3 * 60 * 1000,
 } as const;

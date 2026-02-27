@@ -188,6 +188,62 @@ export class GameBetService {
   }
 
   /**
+   * Refunds all active bets in a round back to each player's wallet.
+   * Called within an existing DB transaction when a round is failed by the
+   * cleanup job. Returns per-user refund data for WS notification.
+   */
+  async refundBetsForRound(
+    roundId: string,
+    manager: EntityManager,
+  ): Promise<Array<{ userId: string; isDemo: boolean; balanceCents: number }>> {
+    const bets = await this.gameBetRepo.findActiveBetsByRound(roundId);
+    const results: Array<{
+      userId: string;
+      isDemo: boolean;
+      balanceCents: number;
+    }> = [];
+
+    for (const bet of bets) {
+      const wallet = await manager.findOneByOrFail(Wallet, {
+        userId: bet.userId,
+        isDemo: bet.isDemo,
+      });
+
+      await this.walletRepo.creditCents(wallet.id, bet.betAmountCents, manager);
+
+      const updatedWallet = await manager.findOneByOrFail(Wallet, {
+        id: wallet.id,
+      });
+
+      const txn = this.walletTxnRepo.create({
+        walletId: wallet.id,
+        type: WalletTransactionType.REFUND,
+        amountCents: bet.betAmountCents,
+        balanceAfterCents: updatedWallet.balanceCents,
+        gameBetId: bet.id,
+        description: `Refund for failed round ${roundId}`,
+      });
+      await this.walletTxnRepo.save(txn, manager);
+
+      bet.status = GameBetStatus.REFUNDED;
+      await this.gameBetRepo.save(bet, manager);
+
+      results.push({
+        userId: bet.userId,
+        isDemo: bet.isDemo,
+        balanceCents: updatedWallet.balanceCents,
+      });
+    }
+
+    this.logger.log('Bets refunded for failed round', {
+      roundId,
+      count: bets.length,
+    });
+
+    return results;
+  }
+
+  /**
    * Marks all active bets in a round as LOST (real and demo).
    * Called within an existing DB transaction during round crash settlement.
    */

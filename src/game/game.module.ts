@@ -8,6 +8,7 @@ import { Wallet } from './entity/wallet.entity';
 import { WalletTransaction } from './entity/wallet-transaction.entity';
 import { GameController } from './game.controller';
 import { GameGateway } from './game.gateway';
+import { GameCleanupHandler } from './handlers/game-cleanup.handler';
 import { GameLifecycleHandler } from './handlers/game-lifecycle.handler';
 import { GameBetRepository } from './repos/game-bet.repository';
 import { GameRoundRepository } from './repos/game-round.repository';
@@ -55,6 +56,7 @@ import { WalletController } from './wallet.controller';
     CrashEngineService,
     // Job handlers (auto-discovered by JobDispatcherService via DiscoveryService)
     GameLifecycleHandler,
+    GameCleanupHandler,
     // WebSocket gateway — calls CrashEngineService.registerTickEmitter on init
     GameGateway,
   ],

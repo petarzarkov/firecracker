@@ -59,7 +59,7 @@ export class GameTickPayload {
 }
 
 export class GamePhasePayload {
-  phase!: 'waiting' | 'running' | 'crashed';
+  phase!: 'waiting' | 'running' | 'crashed' | 'failed';
   roundId!: string;
   /** SHA256(serverSeed) — commitment published before round starts */
   seedHash!: string;
@@ -92,7 +92,7 @@ export class CrashedRoundSummary {
 }
 
 export class GameRoundStatePayload {
-  phase!: 'waiting' | 'running' | 'crashed';
+  phase!: 'waiting' | 'running' | 'crashed' | 'failed';
   roundId!: string | null;
   seedHash!: string | null;
   nonce?: number;

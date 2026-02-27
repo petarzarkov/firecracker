@@ -19,6 +19,7 @@ export const EVENTS = {
     GAME_ROUND_SCHEDULE: 'game.round.schedule',
     GAME_ROUND_START: 'game.round.start',
     GAME_ROUND_CRASH: 'game.round.crash',
+    GAME_ROUND_CLEANUP: 'game.round.cleanup',
   },
 } as const;
 
@@ -29,6 +30,7 @@ export interface EventMap {
   [EVENTS.ROUTING_KEYS.GAME_ROUND_SCHEDULE]: Record<never, never>;
   [EVENTS.ROUTING_KEYS.GAME_ROUND_START]: { roundId: string };
   [EVENTS.ROUTING_KEYS.GAME_ROUND_CRASH]: { roundId: string };
+  [EVENTS.ROUTING_KEYS.GAME_ROUND_CLEANUP]: Record<never, never>;
 }
 
 export type EventType = keyof EventMap;

@@ -437,6 +437,16 @@ export class GameGateway implements OnGatewayConnection, OnModuleInit {
     this.io.to(GAME_ROOM).emit('gameCrashed', data);
   }
 
+  emitWalletUpdated(
+    userId: string,
+    balanceCents: number,
+    isDemo: boolean,
+  ): void {
+    this.io
+      .to(ROOMS.user(userId))
+      .emit('walletUpdated', { balanceCents, isDemo });
+  }
+
   // ── Auto-cashout ──────────────────────────────────────────────────────────
 
   async #storeAutoCashOut(

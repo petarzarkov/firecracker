@@ -28,6 +28,18 @@ export class GameRoundRepository {
     });
   }
 
+  /**
+   * Returns ALL rounds currently in WAITING or RUNNING state.
+   * Ordered oldest-first so the cleanup handler can identify the newest
+   * RUNNING round to keep and fail the rest.
+   */
+  findAllActiveRounds(): Promise<GameRound[]> {
+    return this.repo.find({
+      where: { status: In([GameRoundStatus.WAITING, GameRoundStatus.RUNNING]) },
+      order: { startedAt: 'ASC' },
+    });
+  }
+
   findById(id: string): Promise<GameRound | null> {
     return this.repo.findOneBy({ id });
   }

@@ -210,6 +210,50 @@ export class GameRoundService {
     return round;
   }
 
+  /**
+   * Transitions a WAITING or RUNNING round to FAILED and refunds all active bets.
+   * Idempotent: already FAILED → returns immediately with empty refunds.
+   */
+  async transitionToFailed(roundId: string): Promise<{
+    round: GameRound;
+    refunds: Array<{ userId: string; isDemo: boolean; balanceCents: number }>;
+  }> {
+    const round = await this.gameRoundRepo.findById(roundId);
+    if (!round) throw new NotFoundException(`Round ${roundId} not found`);
+
+    if (round.status === GameRoundStatus.FAILED) {
+      return { round, refunds: [] };
+    }
+
+    if (
+      round.status !== GameRoundStatus.WAITING &&
+      round.status !== GameRoundStatus.RUNNING
+    ) {
+      throw new BadRequestException(
+        `Cannot fail round in status: ${round.status}`,
+      );
+    }
+
+    let refunds: Array<{
+      userId: string;
+      isDemo: boolean;
+      balanceCents: number;
+    }> = [];
+
+    await this.dataSource.transaction(async manager => {
+      round.status = GameRoundStatus.FAILED;
+      await manager.save(round);
+      refunds = await this.gameBetService.refundBetsForRound(roundId, manager);
+    });
+
+    this.logger.warn('Round transitioned to FAILED', {
+      roundId,
+      refundCount: refunds.length,
+    });
+
+    return { round, refunds };
+  }
+
   getCurrentRound(): Promise<GameRound | null> {
     return this.gameRoundRepo.findCurrentRound();
   }
