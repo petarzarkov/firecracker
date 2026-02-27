@@ -51,15 +51,15 @@ function CashOutButton({ onCashOut }: { onCashOut: () => void }) {
       bg="orange.500"
       color="white"
       fontWeight="black"
-      fontSize="lg"
-      px={6}
-      py={8}
+      fontSize="md"
+      px={5}
+      py={4}
       borderRadius="lg"
       _hover={{ bg: 'orange.400' }}
       _active={{ bg: 'orange.600' }}
       fontFamily="mono"
       letterSpacing="wide"
-      minW="160px"
+      minW="140px"
       boxShadow="0 0 20px #ff880060"
     >
       <span ref={labelRef}>CASH OUT 1.00x</span>
@@ -98,10 +98,10 @@ function BetStatusBar({
 
   return (
     <Box
-      mt={3}
-      p={2}
+      mt={2}
+      p={1.5}
       borderRadius="md"
-      minH="36px"
+      minH="28px"
       bg={show && myBet ? statusBg(myBet.status) : 'transparent'}
       visibility={show ? 'visible' : 'hidden'}
     >
@@ -151,16 +151,16 @@ function PlaceBetButton({
       bg={canBet ? 'green.600' : 'gray.700'}
       color={canBet ? 'white' : 'gray.500'}
       fontWeight="black"
-      fontSize="lg"
-      px={6}
-      py={8}
+      fontSize="md"
+      px={5}
+      py={4}
       borderRadius="lg"
       _hover={{ bg: canBet ? 'green.500' : 'gray.700' }}
       _active={{ bg: 'green.700' }}
       _disabled={{ cursor: 'not-allowed', opacity: 0.6 }}
       fontFamily="mono"
       letterSpacing="wide"
-      minW="160px"
+      minW="140px"
       boxShadow={canBet ? '0 0 20px rgba(255,107,0,0.38)' : 'none'}
     >
       {betButtonLabel(myBet)}
@@ -205,10 +205,10 @@ function BetAmountInput({
           borderColor="gray.500"
           color="white"
           fontFamily="mono"
-          fontSize="xl"
+          fontSize="lg"
           fontWeight="bold"
           px={3}
-          py={2}
+          py={1.5}
           borderRadius="md"
           disabled={disabled}
           _disabled={{ opacity: 0.5, cursor: 'not-allowed' }}
@@ -315,7 +315,7 @@ export function BetPanel() {
       borderRadius="lg"
       border="1px solid"
       borderColor="orange.400"
-      p={{ base: 3, lg: 4 }}
+      p={{ base: 2, lg: 3 }}
     >
       {/*
        * Tabs contain ONLY the config inputs so both tabs have the same height.
@@ -331,7 +331,7 @@ export function BetPanel() {
       >
         {/* Tab headers */}
         <Tabs.List
-          mb={3}
+          mb={2}
           borderBottom="1px solid"
           borderColor="gray.800"
           gap={0}
@@ -451,7 +451,7 @@ export function BetPanel() {
        * AUTO toggle is always rendered (visibility:hidden when on manual)
        * so this row never changes height either.
        */}
-      <Flex gap={3} align="flex-end" mt={1}>
+      <Flex gap={3} align="flex-end" mt={2}>
         <Box flex={1}>
           <Flex gap={2} flexWrap="wrap" align="center">
             <Text fontSize="xs" color="gray.600" alignSelf="center" mr={1}>

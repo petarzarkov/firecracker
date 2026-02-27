@@ -202,7 +202,7 @@ export function GlobalChat({ socket }: GlobalChatProps) {
           onClose={closeGlobalChat}
           onSendMessage={handleSendMessage}
           position="center"
-          themeColor="#2196F3"
+          themeColor="#e0521a"
           width="500px"
           height="500px"
           placeholder="Message all players..."

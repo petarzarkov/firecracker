@@ -53,7 +53,7 @@ function InlineChatPanel({ full = false }: { full?: boolean }) {
   return (
     <Flex
       direction="column"
-      w={full ? '100%' : { base: '190px', lg: '230px' }}
+      w={full ? '100%' : { base: '185px', lg: '205px' }}
       h={full ? '100%' : undefined}
       flex={full ? 1 : undefined}
       flexShrink={full ? undefined : 0}
@@ -94,7 +94,7 @@ function InlineChatPanel({ full = false }: { full?: boolean }) {
           onClick={openGlobalChat}
           title="Pop out"
         >
-          <FiExternalLink size={11} />
+          <FiExternalLink size={14} />
         </IconButton>
       </Flex>
 
@@ -131,7 +131,7 @@ function InlineChatPanel({ full = false }: { full?: boolean }) {
                 <Image
                   src={msg.senderPicture}
                   alt={msg.senderName}
-                  boxSize="14px"
+                  boxSize="18px"
                   borderRadius="full"
                   objectFit="cover"
                   flexShrink={0}
@@ -139,8 +139,8 @@ function InlineChatPanel({ full = false }: { full?: boolean }) {
                 />
               ) : (
                 <Flex
-                  w="14px"
-                  h="14px"
+                  w="18px"
+                  h="18px"
                   borderRadius="full"
                   bg="green.800"
                   align="center"
@@ -149,7 +149,7 @@ function InlineChatPanel({ full = false }: { full?: boolean }) {
                   mt="2px"
                 >
                   <Text
-                    fontSize="7px"
+                    fontSize="9px"
                     fontWeight="bold"
                     color="white"
                     lineHeight={1}
@@ -214,7 +214,7 @@ function InlineChatPanel({ full = false }: { full?: boolean }) {
               borderRadius="sm"
               flexShrink={0}
             >
-              <IoSend size={11} />
+              <IoSend size={14} />
             </IconButton>
           </Flex>
         </Box>
@@ -267,7 +267,7 @@ export function Game() {
           <img
             src="/png/android-chrome-192x192.png"
             alt="Firecracker"
-            style={{ width: 28, height: 28, objectFit: 'contain' }}
+            style={{ width: 36, height: 36, objectFit: 'contain' }}
           />
           <Text
             fontSize="lg"
@@ -412,7 +412,7 @@ export function Game() {
         {/* Left: player bet history (top half) + global chat (bottom half) */}
         <Flex
           direction="column"
-          w={{ base: '190px', lg: '230px' }}
+          w={{ base: '185px', lg: '205px' }}
           flexShrink={0}
           borderRight="1px solid"
           borderColor="gray.700"
@@ -423,7 +423,7 @@ export function Game() {
         </Flex>
 
         {/* Center: chart + bet panel */}
-        <Flex flex={1} direction="column" p={4} gap={3} overflow="hidden">
+        <Flex flex={1} direction="column" p={3} gap={2} overflow="hidden">
           <CrashChart />
           <BetPanel />
         </Flex>
@@ -431,7 +431,7 @@ export function Game() {
         {/* Right sidebar: history + players */}
         <Flex
           direction="column"
-          w={{ base: '200px', lg: '260px' }}
+          w={{ base: '185px', lg: '220px' }}
           flexShrink={0}
           p={3}
           gap={3}
