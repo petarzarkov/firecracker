@@ -252,9 +252,9 @@ export function LoginForm() {
   return (
     <Box
       width="100%"
-      height="100vh"
+      minHeight="100vh"
       position="relative"
-      overflow="hidden"
+      overflowX="hidden"
       style={{
         background:
           'linear-gradient(135deg, #0d0d0d 0%, #1a0a00 20%, #2a1000 40%, #1a0500 60%, #0d0d0d 80%, #1a0a00 100%)',
@@ -298,11 +298,10 @@ export function LoginForm() {
       {/* Scrollable inner layer — contains the card */}
       <Box
         width="100%"
-        height="100%"
+        minHeight="100vh"
         display="flex"
         alignItems="center"
         justifyContent="center"
-        overflow="auto"
         py="10"
         position="relative"
         zIndex={1}
