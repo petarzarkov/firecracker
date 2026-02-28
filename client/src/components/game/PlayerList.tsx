@@ -118,7 +118,7 @@ const BetRow = memo(function BetRow({
           </>
         )}
         <Text
-          fontSize="xs"
+          fontSize="10px"
           color={isCashedOut ? 'green.300' : isLost ? 'gray.500' : 'gray.200'}
           overflow="hidden"
           textOverflow="ellipsis"

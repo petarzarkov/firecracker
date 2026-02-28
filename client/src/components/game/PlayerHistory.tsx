@@ -1,5 +1,6 @@
 import { Box, Flex, Text } from '@chakra-ui/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Tooltip } from '@/components/Tooltip';
 import { Button } from '@/components/ui/Button';
 import { useAuthStore } from '@/store/authStore';
 import { useGameStore } from '@/store/gameStore';
@@ -20,11 +21,12 @@ function fmtCents(cents: number): string {
 function BetRow({ bet }: { bet: BetEntry }) {
   const isWon = bet.status === 'cashed_out';
   const isLost = bet.status === 'lost';
+  const isActive = bet.status === 'active';
   const dotColor = isWon
     ? '#4ade80'
     : isLost
       ? '#f87171'
-      : bet.status === 'active'
+      : isActive
         ? '#60a5fa'
         : '#666';
   const resultColor = isWon ? '#fbbf24' : isLost ? '#f87171' : '#888';
@@ -44,43 +46,98 @@ function BetRow({ bet }: { bet: BetEntry }) {
     ? `✓${bet.cashedOutAt?.toFixed(2)}x`
     : `×${(bet.crashPoint ?? 0).toFixed(2)}x`;
 
+  const tooltipContent = (
+    <Box fontFamily="mono" fontSize="xs" lineHeight={1.8}>
+      <Text color="gray.400" fontSize="9px" mb={1}>
+        #{bet.id.slice(0, 12)}…
+      </Text>
+      <Flex justify="space-between" gap={4}>
+        <Text color="gray.400">Bet</Text>
+        <Text color="gray.100">${fmtCents(bet.betAmountCents)}</Text>
+      </Flex>
+      <Flex justify="space-between" gap={4}>
+        <Text color="gray.400">Status</Text>
+        <Text color={dotColor} textTransform="capitalize">
+          {bet.status.replace('_', ' ')}
+        </Text>
+      </Flex>
+      {isWon && (
+        <>
+          <Flex justify="space-between" gap={4}>
+            <Text color="gray.400">Cashed at</Text>
+            <Text color="#fbbf24">{bet.cashedOutAt?.toFixed(2)}x</Text>
+          </Flex>
+          <Flex justify="space-between" gap={4}>
+            <Text color="gray.400">Payout</Text>
+            <Text color="gray.100">${fmtCents(bet.payoutCents ?? 0)}</Text>
+          </Flex>
+          <Flex justify="space-between" gap={4}>
+            <Text color="gray.400">Profit</Text>
+            <Text color={profitColor}>{profitLabel}</Text>
+          </Flex>
+        </>
+      )}
+      {isLost && (
+        <>
+          <Flex justify="space-between" gap={4}>
+            <Text color="gray.400">Crashed at</Text>
+            <Text color="#f87171">{(bet.crashPoint ?? 0).toFixed(2)}x</Text>
+          </Flex>
+          <Flex justify="space-between" gap={4}>
+            <Text color="gray.400">Loss</Text>
+            <Text color={profitColor}>{profitLabel}</Text>
+          </Flex>
+        </>
+      )}
+    </Box>
+  );
+
   return (
-    <Flex
-      py={1.5}
-      px={2}
-      borderBottom="1px solid"
-      borderColor="gray.800"
-      justify="space-between"
-      align="center"
-      _hover={{ bg: 'rgba(255,255,255,0.03)' }}
-    >
-      <Flex align="center" gap={1.5}>
-        <Box w="5px" h="5px" borderRadius="full" bg={dotColor} flexShrink={0} />
-        <Box>
-          <Text
-            fontSize="xs"
-            color="gray.100"
-            lineHeight={1.3}
-            fontFamily="mono"
-          >
-            ${fmtCents(bet.betAmountCents)}
-          </Text>
-          {profitLabel && (
+    <Tooltip content={tooltipContent} showArrow positioning={{ placement: 'left' }}>
+      <Flex
+        py={1.5}
+        px={2}
+        borderBottom="1px solid"
+        borderColor="gray.800"
+        justify="space-between"
+        align="center"
+        cursor="default"
+        _hover={{ bg: 'rgba(255,255,255,0.05)' }}
+      >
+        <Flex align="center" gap={1.5}>
+          <Box
+            w="5px"
+            h="5px"
+            borderRadius="full"
+            bg={dotColor}
+            flexShrink={0}
+          />
+          <Box>
             <Text
-              fontSize="9px"
-              color={profitColor}
-              lineHeight={1.2}
+              fontSize="xs"
+              color="gray.100"
+              lineHeight={1.3}
               fontFamily="mono"
             >
-              {profitLabel}
+              ${fmtCents(bet.betAmountCents)}
             </Text>
-          )}
-        </Box>
+            {profitLabel && (
+              <Text
+                fontSize="9px"
+                color={profitColor}
+                lineHeight={1.2}
+                fontFamily="mono"
+              >
+                {profitLabel}
+              </Text>
+            )}
+          </Box>
+        </Flex>
+        <Text fontSize="xs" color={resultColor} fontFamily="mono">
+          {resultLabel}
+        </Text>
       </Flex>
-      <Text fontSize="xs" color={resultColor} fontFamily="mono">
-        {resultLabel}
-      </Text>
-    </Flex>
+    </Tooltip>
   );
 }
 

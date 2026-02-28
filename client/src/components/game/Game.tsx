@@ -431,7 +431,7 @@ export function Game() {
         {/* Right sidebar: history + players */}
         <Flex
           direction="column"
-          w={{ base: '185px', lg: '220px' }}
+          w={{ base: '210px', lg: '265px' }}
           flexShrink={0}
           p={3}
           gap={3}
