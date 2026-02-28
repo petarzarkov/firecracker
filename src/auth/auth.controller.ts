@@ -230,14 +230,12 @@ export class AuthController {
   @ApiOperation({ summary: 'GitHub OAuth2 callback URL' })
   @ApiResponse({
     status: HttpStatus.FOUND,
-    description: 'Redirects to chat with JWT token',
+    description: 'Redirects to OAuth callback with JWT token',
   })
   @ApiExcludeEndpoint()
   async githubAuthCallback(@Req() req: Request & { res: Response }) {
     const authResponse = this.handleOAuthCallback(req);
-    const user = req.user as SanitizedUser;
-    // Redirect to chat with token and username
-    const redirectUrl = `/?token=${authResponse.accessToken}&username=${encodeURIComponent(user.email)}`;
+    const redirectUrl = `/oauth/callback?token=${authResponse.accessToken}&user=${encodeURIComponent(JSON.stringify(authResponse.user))}`;
     req.res.redirect(redirectUrl);
   }
 
@@ -258,13 +256,14 @@ export class AuthController {
   @Get('linkedin/callback')
   @ApiOperation({ summary: 'LinkedIn OAuth2 callback URL' })
   @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Returns JWT token after successful login',
-    type: AuthResponseDto,
+    status: HttpStatus.FOUND,
+    description: 'Redirects to OAuth callback with JWT token',
   })
   @ApiExcludeEndpoint()
-  async linkedInAuthCallback(@Req() req: Request) {
-    return this.handleOAuthCallback(req);
+  async linkedInAuthCallback(@Req() req: Request & { res: Response }) {
+    const authResponse = this.handleOAuthCallback(req);
+    const redirectUrl = `/oauth/callback?token=${authResponse.accessToken}&user=${encodeURIComponent(JSON.stringify(authResponse.user))}`;
+    req.res.redirect(redirectUrl);
   }
 
   @Get('avatars/trending')
