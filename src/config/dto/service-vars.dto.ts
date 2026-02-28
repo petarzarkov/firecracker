@@ -177,8 +177,7 @@ export class ServiceVars extends WsVars {
 
   @IsString()
   @IsOptional()
-  LOGO_URL: string =
-    'https://cdn.betterttv.net/emote/5590b223b344e2c42a9e28e3/1x.webp';
+  LOGO_URL: string = '/png/android-chrome-192x192.png';
 }
 
 export const getServiceConfig = (pkg: PackageJson, config: ServiceVars) => {

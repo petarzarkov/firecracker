@@ -93,7 +93,11 @@ function BetRow({ bet }: { bet: BetEntry }) {
   );
 
   return (
-    <Tooltip content={tooltipContent} showArrow positioning={{ placement: 'left' }}>
+    <Tooltip
+      content={tooltipContent}
+      showArrow
+      positioning={{ placement: 'left' }}
+    >
       <Flex
         py={1.5}
         px={2}

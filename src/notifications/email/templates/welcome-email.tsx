@@ -23,10 +23,10 @@ export const WelcomeEmailTemplate = ({
 }: WelcomeEmailProps) => (
   <Html>
     <Head />
-    <Preview>Welcome to NestJS Template!</Preview>
+    <Preview>Welcome to Firecracker!</Preview>
     <Body style={main}>
       <Container style={container}>
-        <Heading style={h1}>Welcome to NestJS Template, {name}!</Heading>
+        <Heading style={h1}>Welcome to Firecracker, {name}!</Heading>
         <Text style={text}>
           We're thrilled to have you on board. Our platform is designed to help.
         </Text>

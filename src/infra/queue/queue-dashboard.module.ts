@@ -18,7 +18,7 @@ import { EVENTS } from '@/notifications/events/events';
           adapter: ExpressAdapter,
           boardOptions: {
             uiConfig: {
-              boardTitle: 'Template Queues',
+              boardTitle: 'Firecracker Queues',
               boardLogo: {
                 path: logoUrl,
               },

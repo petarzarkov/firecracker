@@ -77,11 +77,11 @@ export function setupDocs(
   app.use(
     SCALAR_PATH,
     apiReference({
-      title: 'Template API',
-      slug: 'template-api',
+      title: 'Firecracker API',
+      slug: 'firecracker-api',
       tagsSorter: 'alpha',
       operationsSorter: 'method',
-      pageTitle: 'Template API',
+      pageTitle: 'Firecracker API',
       favicon: appConfig.logoUrl,
       content: document,
       hideModels: true,

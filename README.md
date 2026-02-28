@@ -1,6 +1,6 @@
-# NestJS Template
+# Firecracker
 
-A production-ready NestJS modular monolith template running on **Bun**, with TypeScript, TypeORM, PostgreSQL, Redis, and modern tooling.
+A production-ready NestJS modular monolith running on **Bun**, with TypeScript, TypeORM, PostgreSQL, Redis, and modern tooling.
 
 ## Tech Stack
 

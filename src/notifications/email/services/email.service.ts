@@ -90,7 +90,7 @@ export class EmailService {
     const result = await this.#sendEmail({
       from: this.sender,
       to: [email],
-      subject: `Welcome to nestjs-template, ${name}!`,
+      subject: `Welcome to Firecracker, ${name}!`,
       react: WelcomeEmailTemplate({ name, webAppUrl: this.baseAppUrl }),
     });
 
@@ -105,7 +105,7 @@ export class EmailService {
     const result = await this.#sendEmail({
       from: this.sender,
       to: [email],
-      subject: 'Nestjs-template Password Reset',
+      subject: 'Firecracker Password Reset',
       react: PasswordResetEmailTemplate({
         name,
         resetUrl: resetUrl.toString(),
@@ -128,7 +128,7 @@ export class EmailService {
     const result = await this.#sendEmail({
       from: this.sender,
       to: [email],
-      subject: `You have been invited to nestjs-template, ${email}!`,
+      subject: `You have been invited to Firecracker, ${email}!`,
       react: InviteEmailTemplate({
         invite,
         inviteUrl: inviteUrl.toString(),

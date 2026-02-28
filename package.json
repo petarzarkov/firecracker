@@ -1,8 +1,8 @@
 {
-  "name": "nestjs-template",
+  "name": "firecracker",
   "version": "0.1.0",
   "private": true,
-  "description": "A production-ready NestJS monolith template with TypeScript, TypeORM, and modern tooling.",
+  "description": "Firecracker - A production-ready NestJS monolith running on Bun with TypeScript, TypeORM, and modern tooling.",
   "author": {
     "name": "Petar Zarkov",
     "email": "pzarko1@gmail.com",
