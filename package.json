@@ -14,6 +14,7 @@
     "dev": "bun --watch src/main.ts",
     "dev:nest": "nest start --watch --exec bun",
     "start": "bun dist/main.js",
+    "start:pm2": "pm2 start --name \"chat-service\" --interpreter ~/.bun/bin/bun dist/main.js",
     "build": "nest build && tsc-alias -p tsconfig.alias.json",
     "gen:env:docs": "bun ./scripts/gen-env-docs.ts",
     "test": "bun test",

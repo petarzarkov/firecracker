@@ -1,4 +1,16 @@
 services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel run
+    env_file:
+      - .env
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+    networks:
+      - app
+      
   app-db:
     container_name: app-db
     image: public.ecr.aws/docker/library/postgres:17.5
