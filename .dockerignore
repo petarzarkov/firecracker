@@ -1,11 +1,23 @@
-# Dependencies
+# The build context is the workspace root, so this covers both apps.
+#
+# Note what is *not* excluded and must not be: `bunfig.toml` carries the
+# `@dunx/transform` preload, which is a runtime dependency rather than a build-time
+# one - without it the server boots and fails naming a provider it could not build.
+
+# Dependencies - reinstalled in the image from the lockfile
 node_modules
-.tmp
+apps/*/node_modules
 
-# Build output (will be created in container)
+# Build output, produced inside the image
 dist
+apps/*/dist
 
-# Development files
+# Local database and Docker volumes
+.tmp
+apps/be/data
+data
+
+# Git and environment
 .git
 .gitignore
 .env*
@@ -14,12 +26,14 @@ dist
 # IDE and editor
 .vscode
 .idea
+.cursor
+.claude
 *.swp
 *.swo
-.cursor
 
 # Testing
 e2e
+apps/be/e2e
 *.spec.ts
 *.test.ts
 coverage
@@ -35,10 +49,7 @@ logs
 .DS_Store
 Thumbs.db
 
-# Bun
-bun.lockb.backup
-
-# Docker
+# Docker itself
 Dockerfile*
 docker-compose*.yml
 .dockerignore

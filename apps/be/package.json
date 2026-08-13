@@ -1,0 +1,54 @@
+{
+  "name": "firecracker-be",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Firecracker crash game backend: dunx on Bun, SQLite via drizzle, BullMQ, Better Auth and a native WebSocket gateway.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/main.ts",
+    "start": "bun src/main.ts",
+    "worker": "bun src/worker.ts",
+    "dev:worker": "bun --watch src/worker.ts",
+    "start:dist": "bun dist/main.js",
+    "build": "bun ./scripts/build.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint --fix src scripts e2e",
+    "lint:check": "oxlint src scripts e2e",
+    "test": "bun test",
+    "test:unit": "bun test .test.ts",
+    "test:int": "bun test .spec.ts",
+    "test:cov": "bun test --coverage",
+    "test:e2e": "bun test --preload ./e2e/setup/preload.ts $(find ./e2e -name '*.e2e.ts')",
+    "mig:gen": "bun --env-file=.env drizzle-kit generate",
+    "mig:run": "bun --env-file=.env ./scripts/migrate.ts",
+    "db:studio": "bun --env-file=.env drizzle-kit studio",
+    "db:drop": "bun ./scripts/db-drop.ts",
+    "seed": "bun --env-file=.env ./scripts/seed.ts",
+    "gen:openapi": "bunx dunx-openapi ./src/openapi.config.ts",
+    "gen:env:docs": "bun ./scripts/gen-env-docs.ts"
+  },
+  "dependencies": {
+    "@arkv/rng": "^0.8.2",
+    "@dunx/auth": "^2.0.0",
+    "@dunx/core": "^2.0.0",
+    "@dunx/http": "^2.0.0",
+    "@dunx/infra": "^2.0.0",
+    "@dunx/openapi": "^2.0.0",
+    "@dunx/transform": "^2.0.0",
+    "better-auth": "^1.6.25",
+    "bullmq": "^6.0.5",
+    "drizzle-orm": "^0.45.2",
+    "ioredis": "^6.0.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@dunx/testing": "^2.0.0",
+    "@types/bun": "^1.3.14",
+    "drizzle-kit": "^0.31.10",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "bun": ">=1.3.0"
+  }
+}

@@ -1,43 +1,21 @@
+# Development. Redis and nothing else.
+#
+# The database is a SQLite file under `apps/be/data/`, opened directly by the web
+# process and the worker - there is no container for it and nothing to wait for.
+# Postgres left with the TypeORM migration.
+#
+# Redis is not optional the way a cache is: BullMQ drives every round transition,
+# the crash engine takes its commands over pub/sub, and the WebSocket relay fans
+# ticks across processes. With Redis down the app boots and serves, but no round
+# ever advances.
+#
+# The app itself is not here on purpose - `bun dev` and `bun run worker` are what
+# you want in development. See docker-compose.prod.yml for the deployed shape.
 services:
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: cloudflared
-    restart: unless-stopped
-    command: tunnel run
-    env_file:
-      - .env
-    environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
-    networks:
-      - app
-      
-  app-db:
-    container_name: app-db
-    image: public.ecr.aws/docker/library/postgres:17.5
-    env_file:
-      - .env
-    ports:
-      - ${POSTGRES_PORT}:${POSTGRES_PORT}
-    volumes:
-      - ${POSTGRES_DATA_DIR}:/var/lib/postgresql/data
-    networks:
-      - app
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      PGPASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_PORT: ${POSTGRES_PORT}
-      PGPORT: ${POSTGRES_PORT}
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB']
-      interval: 2s
-      timeout: 5s
-      retries: 10
-
   app-redis:
     image: public.ecr.aws/docker/library/redis:8.4.0
     container_name: app-redis
+    restart: unless-stopped
     env_file:
       - .env
     ports:
@@ -61,14 +39,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - app
 
 volumes:
-  postgres-data:
   redis-data:
-
-networks:
-  app:
-    name: app-network
-    driver: bridge
