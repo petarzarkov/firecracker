@@ -8,7 +8,6 @@ import { useAuthStore } from './store/authStore';
 
 function App() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const token = useAuthStore((state) => state.token);
   const user = useAuthStore((state) => state.user);
 
   useEffect(() => {
@@ -20,8 +19,10 @@ function App() {
     return <OAuthCallback />;
   }
 
-  // Guard against stale localStorage state (isAuthenticated=true but token/user missing)
-  if (!isAuthenticated || !token || !user) {
+  // Guards stale `localStorage` (isAuthenticated with no user). Deliberately does
+  // **not** check the token: a social sign-in has a cookie and no token, and that
+  // is a signed-in user. `AuthMiddleware` is what checks the session is still live.
+  if (!isAuthenticated || !user) {
     return <LoginForm />;
   }
 

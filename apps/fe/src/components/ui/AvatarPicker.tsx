@@ -3,6 +3,17 @@ import { useState } from 'react';
 import { Button } from './Button';
 import { InputField } from './InputField';
 
+/**
+ * Bundled with the app, so the picker works offline and on first paint. Replace
+ * with a real gallery by putting files in `public/png/avatars/` and listing them
+ * here - no server route needed for a static set.
+ */
+const AVATARS: readonly string[] = [
+  '/png/android-chrome-192x192.png',
+  '/png/apple-touch-icon.png',
+  '/png/favicon-32x32.png',
+];
+
 export const AvatarPicker = ({
   currentPicture,
   customUrl,
@@ -15,21 +26,21 @@ export const AvatarPicker = ({
   onCustomUrlChange: (val: string) => void;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [avatars, setAvatars] = useState<string[]>([]);
 
-  const togglePicker = async () => {
-    const newState = !isOpen;
-    setIsOpen(newState);
-    if (newState && avatars.length === 0) {
-      try {
-        const res = await fetch('/api/auth/avatars/trending');
-        const data = await res.json();
-        setAvatars(data.avatars || []);
-      } catch (e) {
-        console.error('Avatar fetch failed', e);
-      }
-    }
-  };
+  /**
+   * The suggestion grid used to come from `GET /api/auth/avatars/trending`, a
+   * route on the NestJS auth controller that proxied an avatar service. That
+   * controller is gone and Better Auth has no equivalent, so the grid is now a
+   * fixed local set.
+   *
+   * Deterministic rather than remote on purpose: a sign-up form that cannot finish
+   * because a third-party image host is slow is a worse trade than eight fewer
+   * choices. A custom URL still accepts anything, and OAuth sign-ins bring their
+   * provider's picture with them.
+   */
+  const avatars = AVATARS;
+
+  const togglePicker = () => setIsOpen((open) => !open);
 
   return (
     <Box>

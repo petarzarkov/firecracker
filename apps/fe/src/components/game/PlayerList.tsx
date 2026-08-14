@@ -2,6 +2,8 @@ import { Box, Flex, Text } from '@chakra-ui/react';
 import { memo, useEffect, useRef } from 'react';
 import type { BetEntry, GamePhase } from '@/store/gameStore';
 import { getLiveMultiplier, useGameStore } from '@/store/gameStore';
+import { useAuthStore } from '@/store/authStore';
+import { useSocket } from '@/SocketContext';
 
 function formatUSD(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
@@ -44,6 +46,45 @@ function betCashoutColor(status: BetEntry['status'], phase: GamePhase): string {
   return 'gray.600';
 }
 
+/**
+ * Opens a direct message with another player.
+ *
+ * The lobby is the only place one player sees another, so this is where a DM has
+ * to start. The old client had no entry point at all - conversations were opened
+ * from the 3D world that used to wrap this game, and when that went the receive
+ * and reply handlers were left with nothing to trigger them.
+ *
+ * The server derives the room id from the two user ids, so this sends who to talk
+ * to and nothing else - there is no room to create first.
+ */
+function MessageButton({ bet }: { bet: BetEntry }) {
+  const socket = useSocket();
+  const myUserId = useAuthStore((state) => state.user?.id);
+
+  // No socket, not signed in, or it is your own row.
+  if (!socket || myUserId === undefined || bet.userId === myUserId) return null;
+
+  return (
+    <Box
+      as="button"
+      aria-label={`Message ${bet.username}`}
+      title={`Message ${bet.username}`}
+      onClick={() =>
+        socket.emit('joinPlayerChat', { roomId: '', targetUserId: bet.userId })
+      }
+      fontSize="10px"
+      lineHeight={1}
+      px={1}
+      opacity={0.35}
+      flexShrink={0}
+      _hover={{ opacity: 1, color: 'green.300' }}
+      transition="opacity 0.15s, color 0.15s"
+    >
+      ✉
+    </Box>
+  );
+}
+
 // Memoized — only re-renders when this specific bet reference or phase changes
 const BetRow = memo(function BetRow({
   bet,
@@ -74,6 +115,7 @@ const BetRow = memo(function BetRow({
       transition="background 0.2s, opacity 0.3s"
     >
       <Flex flex={1} align="center" gap={2} minW={0}>
+        <MessageButton bet={bet} />
         {/* Status indicator */}
         {isCashedOut ? (
           <Text

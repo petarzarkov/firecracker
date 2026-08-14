@@ -126,6 +126,23 @@ export class GameBetRepository {
     });
   }
 
+  /**
+   * What to call a player, for anyone in this module that has only an id.
+   *
+   * Here rather than through `UsersRepository` because `UsersModule` exports
+   * nothing, deliberately - and this module already reads the `users` table for
+   * the lobby list, through the join above. Same table, same `displayName` rule,
+   * no new coupling between features.
+   */
+  playerNameFor(userId: string): string | undefined {
+    const row = this.db
+      .select({ id: users.id, name: users.name, email: users.email })
+      .from(users)
+      .where(eq(users.id, userId))
+      .get();
+    return row === undefined ? undefined : displayName(row);
+  }
+
   /** The player's most recent results, for the history panel. */
   recentByUser(userId: string, limit: number): GameBetRow[] {
     return this.db

@@ -1,11 +1,11 @@
 import { SQLiteError } from 'bun:sqlite';
 import { Logger } from '@dunx/core';
-import { SyncDatabase } from '@dunx/infra/db';
+import { SyncDatabase, transactionSync } from '@dunx/infra/db';
 import { HttpError, HttpStatusCode } from '@dunx/http';
 import type { Page, PageOptions } from '@dunx/infra/pagination';
 import { AppConfigService } from '../../config/app.config.service.js';
 import * as schema from '../../infra/db/schema.js';
-import { txSync, type DbHandle } from '../../infra/db/tx.js';
+import type { DbHandle } from '../../infra/db/tx.js';
 import { payoutCents } from '../game.math.js';
 import { GameBetStatus, type GameBetRow } from '../schema/game-bet.schema.js';
 import { WalletTransactionType } from '../schema/wallet.schema.js';
@@ -42,7 +42,7 @@ export class BetRejected extends HttpError {
  *
  * Three things together mean this code needs none of it:
  *
- *  1. **`txSync` cannot yield.** The callback's return type refuses a promise, so
+ *  1. **`transactionSync` cannot yield.** The callback's return type refuses a promise, so
  *     an `async` one is a type error rather than a transaction that commits
  *     before its first `await` resumes. Inside one process, read-check-write is
  *     atomic by construction - there is no point at which a second request can
@@ -87,7 +87,7 @@ export class GameBetService {
     }
 
     try {
-      return txSync(this.db, (tx) => {
+      return transactionSync(this.db, (tx) => {
         const betRepo = GameBetRepository.over(tx);
         const walletRepo = WalletRepository.over(tx);
 
@@ -163,7 +163,7 @@ export class GameBetService {
     multiplierX100: number,
     isDemo = false,
   ): GameBetRow {
-    return txSync(this.db, (tx) => {
+    return transactionSync(this.db, (tx) => {
       const betRepo = GameBetRepository.over(tx);
       const walletRepo = WalletRepository.over(tx);
 

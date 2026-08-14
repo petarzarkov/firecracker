@@ -48,7 +48,32 @@ export const GAME_CLIENT_EVENTS = Object.freeze({
   PLACE_BET: 'placeBet',
   CASH_OUT: 'cashOut',
   SUBMIT_CLIENT_SEED: 'submitClientSeed',
+  JOIN_PLAYER_CHAT: 'joinPlayerChat',
+  SEND_PLAYER_CHAT: 'sendPlayerChatMessage',
+  LEAVE_PLAYER_CHAT: 'leavePlayerChat',
 } as const);
+
+/**
+ * One-to-one chat. A topic per room rather than one topic filtered on the client,
+ * because a client that receives a message it then hides has still received it.
+ */
+export const playerChatTopic = (roomId: string): string =>
+  `player_chat_${roomId}`;
+
+export const PLAYER_CHAT_EVENTS = Object.freeze({
+  ROOM_CREATED: 'playerChatRoomCreated',
+  ROOM_JOINED: 'playerChatRoomJoined',
+  MESSAGE: 'playerChatMessage',
+  SYSTEM_MESSAGE: 'playerChatSystemMessage',
+} as const);
+
+export interface PlayerChatRoom {
+  readonly roomId: string;
+  readonly participants: readonly string[];
+  readonly participantNames: Readonly<Record<string, string>>;
+  readonly creatorId: string;
+  readonly creatorName: string;
+}
 
 // ── Job payloads ────────────────────────────────────────────────────────────
 
@@ -61,6 +86,12 @@ export interface RoundJob {
 export type GamePhase = 'waiting' | 'running' | 'crashed' | 'failed';
 
 export interface ActiveBetView {
+  /**
+   * Added for player chat: a DM needs somebody to address, and the lobby list is
+   * the only place a player sees another player. It also gives the client a real
+   * dedup key - it was using `username`, which two players can share.
+   */
+  readonly userId: string;
   readonly username: string;
   readonly betAmountCents: number;
   readonly isDemo: boolean;
@@ -113,6 +144,7 @@ export interface GameCrashedPayload {
 }
 
 export interface BetPlacedPayload {
+  readonly userId: string;
   readonly username: string;
   readonly betAmountCents: number;
   readonly isDemo: boolean;

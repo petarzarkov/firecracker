@@ -28,7 +28,8 @@ export type UserRole = (typeof UserRole)[keyof typeof UserRole];
  * to differ.
  *
  * `role`, `banned`, `banReason` and `banExpires` come from the `admin()` plugin,
- * and `role` is what `@Roles()` reads through `SessionGuard`.
+ * and `role` is what `@Roles()` reads through `SessionGuard`. `isAnonymous` comes
+ * from `anonymous()`, which is what "Try Demo" signs in through.
  */
 export const users = sqliteTable(
   'user',
@@ -44,6 +45,15 @@ export const users = sqliteTable(
       .notNull()
       .default(UserRole.USER),
     banned: integer('banned', { mode: 'boolean' }).notNull().default(false),
+    /**
+     * From the `anonymous()` plugin: a "Try Demo" player. The row is real and so
+     * is its wallet - what it lacks is a credential, so it cannot sign in again
+     * and is lost when the token is. Linking it to a real sign-up is the plugin's
+     * `onLinkAccount`, which this app does not implement yet.
+     */
+    isAnonymous: integer('is_anonymous', { mode: 'boolean' })
+      .notNull()
+      .default(false),
     banReason: text('ban_reason'),
     banExpires: timestampMs('ban_expires'),
     createdAt: createdAt(),

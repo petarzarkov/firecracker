@@ -1,3 +1,9 @@
+/* oxlint-disable max-lines -- This is the app's entire realtime surface, and dunx
+   mounts one gateway per path: the game, global chat and player DMs share a single
+   connection, so their handlers share a single class. Splitting it would mean a
+   second WebSocket, which is the thing the class comment explains we do not want.
+   The logic is already out - see game.messages.ts, game-state.service.ts,
+   auto-cashout.service.ts and player-chat.service.ts. What is left is transport. */
 import { Auth, rolesOf } from '@dunx/auth';
 import { Logger } from '@dunx/core';
 import {
@@ -20,6 +26,8 @@ import {
   GAME_CLIENT_EVENTS,
   GAME_EVENTS,
   GAME_TOPIC,
+  playerChatTopic,
+  PLAYER_CHAT_EVENTS,
   type BetAckPayload,
   type CashOutAckPayload,
   type SeedAckPayload,
@@ -32,11 +40,15 @@ import {
   GameRoundService,
 } from './services/game-round.service.js';
 import { AutoCashOutService } from './services/auto-cashout.service.js';
+import { PlayerChatService } from './services/player-chat.service.js';
 import { GameStateService } from './services/game-state.service.js';
 import { WalletService } from './services/wallet.service.js';
 import {
   parseBet,
   parseChat,
+  parseJoinChat,
+  parsePlayerMessage,
+  parseRoomId,
   parseSeed,
   playerFacing,
 } from './game.messages.js';
@@ -86,6 +98,7 @@ export class GameGateway {
     private readonly wallets: WalletService,
     private readonly autoCashOut: AutoCashOutService,
     private readonly state: GameStateService,
+    private readonly playerChat: PlayerChatService,
     private readonly redis: RedisConnection,
     private readonly events: EventsPublisher,
     private readonly pubsub: PubSub,
@@ -311,6 +324,7 @@ export class GameGateway {
         { balanceCents: wallet.balanceCents, isDemo },
       );
       this.events.publish(GAME_TOPIC, GAME_EVENTS.BET_PLACED, {
+        userId: player.userId,
         username: player.username,
         betAmountCents: bet.betAmountCents,
         isDemo,
@@ -442,6 +456,89 @@ export class GameGateway {
     );
 
     return { success: true };
+  }
+
+  /**
+   * Open a one-to-one room with another player and subscribe this socket to it.
+   *
+   * Idempotent by construction: the room id is a hash of the two user ids sorted,
+   * so both sides compute the same one and "create" and "join" are the same
+   * operation. `roomId` is accepted for a client re-joining a room it already
+   * knows about - a reconnect - and `targetUserId` for opening a new one.
+   */
+  @OnMessage(GAME_CLIENT_EVENTS.JOIN_PLAYER_CHAT)
+  async joinPlayerChat(
+    data: unknown,
+    socket: Socket<GameSocketContext>,
+  ): Promise<void> {
+    const { player } = socket.data.context;
+    if (player === null) return;
+
+    const request = parseJoinChat(data);
+    if (request === null) return;
+
+    const room =
+      request.roomId !== undefined
+        ? await this.playerChat.find(request.roomId, player.userId)
+        : request.targetUserId !== undefined
+          ? await this.playerChat.open(player.userId, request.targetUserId)
+          : null;
+
+    if (room === null) {
+      this.#reply(socket, PLAYER_CHAT_EVENTS.SYSTEM_MESSAGE, {
+        roomId: request.roomId ?? '',
+        message: 'That conversation is not available.',
+        timestamp: new Date().toISOString(),
+        type: 'leave',
+      });
+      return;
+    }
+
+    // Subscribing is per-socket, which is why this lives in the gateway and not
+    // in the service: the service owns the room, the gateway owns the connection.
+    socket.subscribe(playerChatTopic(room.roomId));
+
+    // To this socket: the room it now belongs to. To the other participant's own
+    // topic: the same room, so their client opens a window without polling.
+    this.#reply(socket, PLAYER_CHAT_EVENTS.ROOM_JOINED, room);
+    for (const participant of room.participants) {
+      if (participant === player.userId) continue;
+      this.events.publish(
+        userTopic(participant),
+        PLAYER_CHAT_EVENTS.ROOM_CREATED,
+        room,
+      );
+    }
+    this.playerChat.announce(room.roomId, player.username, 'join');
+  }
+
+  @OnMessage(GAME_CLIENT_EVENTS.SEND_PLAYER_CHAT)
+  async sendPlayerChat(
+    data: unknown,
+    socket: Socket<GameSocketContext>,
+  ): Promise<void> {
+    const { player } = socket.data.context;
+    if (player === null) return;
+
+    const request = parsePlayerMessage(data);
+    if (request === null) return;
+
+    // `send` re-checks membership against Redis rather than trusting that this
+    // socket subscribed - the subscription is a client-side fact, and a room id
+    // is a hash of two user ids rather than a secret.
+    await this.playerChat.send(request.roomId, player.userId, request.message);
+  }
+
+  @OnMessage(GAME_CLIENT_EVENTS.LEAVE_PLAYER_CHAT)
+  leavePlayerChat(data: unknown, socket: Socket<GameSocketContext>): void {
+    const { player } = socket.data.context;
+    if (player === null) return;
+
+    const roomId = parseRoomId(data);
+    if (roomId === null) return;
+
+    socket.unsubscribe(playerChatTopic(roomId));
+    this.playerChat.announce(roomId, player.username, 'leave');
   }
 
   /** Global chat, folded in from the template's `EventsGateway`. */

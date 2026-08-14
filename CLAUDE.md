@@ -26,7 +26,7 @@ firecracker/
 - **Framework:** dunx (`@dunx/core`, `@dunx/http`, `@dunx/infra`, `@dunx/auth`, `@dunx/openapi`)
 - **Database:** SQLite via **drizzle** over `bun:sqlite`, in **synchronous** mode
 - **Queue:** BullMQ over Redis, through `@dunx/infra/queue`
-- **Auth:** Better Auth through `@dunx/auth` (email/password, Google, GitHub, LinkedIn)
+- **Auth:** Better Auth through `@dunx/auth` (email/password, Google, GitHub, LinkedIn, anonymous)
 - **RNG:** `@arkv/rng` for the crash-point draw, `crypto.getRandomValues` for the server seed
 - **Lint/format:** oxlint + oxfmt (`bun run lint`, `bun run format`)
 - **Tests:** `bun test`
@@ -104,7 +104,7 @@ src/
 │   ├── bots/                  cosmetic lobby activity (opt-in)
 │   ├── schema/                drizzle tables
 │   ├── repos/                 drizzle queries
-│   ├── services/              round, bet, wallet, auto-cashout, state
+│   ├── services/              round, bet, wallet, auto-cashout, state, player-chat
 │   └── dto/                   zod schemas + route schemas
 ├── notifications/             email, the events publisher, chat topics
 └── infra/                     db, redis, queue, health
@@ -148,11 +148,22 @@ Drawing earlier would mean the players could not have influenced it. Drawing lat
 
 The Postgres version wrapped bets in `pg_try_advisory_xact_lock`. Three things replace it:
 
-1. **`txSync` cannot yield** — an async callback is a type error, so read-check-write is atomic within a process.
+1. **`transactionSync` cannot yield** — an async callback is a type error, so read-check-write is atomic within a process.
 2. **The debit is guarded in SQL** — `WHERE balance_cents >= ?`, so an overdraft is impossible even across processes.
 3. **`game_bet_round_user_demo_index` is unique** — which catches the cross-process double bet.
 
 Never "simplify" the debit into a JavaScript balance check followed by an update.
+
+### Auth is cookie-first, and dev is same-origin
+
+The client goes through Vite's proxy (`ws: true`), so development has one origin
+like production does. That is not a convenience: better-auth's cookie is
+`SameSite=Lax` and would not ride a cross-origin WebSocket upgrade, and a social
+sign-in's callback never hands the client a bearer token at all. `authStore.token`
+is therefore **optional** — branch on `isAuthenticated`, never on `token`.
+
+`http://localhost:5173` must stay in `AUTH_TRUSTED_ORIGINS`: better-auth checks the
+`Origin` header, which the browser still sets to Vite's port through a proxy.
 
 ### Bots are cosmetic and must stay that way
 
@@ -180,9 +191,11 @@ Migrations also run at boot, in `DatabaseBootstrap`.
 
 ## WebSockets
 
-**One gateway, one connection**: `@Gateway('/ws')` in `game.gateway.ts`, carrying the game, chat and notifications. socket.io let NestJS merge two gateway classes onto one server; dunx mounts a gateway as a route, so two classes would mean two connections. Two gateways on one path is a boot error.
+**One gateway, one connection**: `@Gateway('/ws')` in `game.gateway.ts`, carrying the game, global chat, player DMs and notifications. socket.io let NestJS merge two gateway classes onto one server; dunx mounts a gateway as a route, so two classes would mean two connections. Two gateways on one path is a boot error.
 
 - The upgrade **admits anonymous callers** — watching is public. `context.player` is `null` for a spectator, and every handler spending money checks it.
+- It also accepts `?token=`, because a browser cannot set a header on a WebSocket. **Percent-encode it** — better-auth issues base64, which contains `/`, `+` and `=`.
+- Handlers **send** their acks (`betAck`, `cashOutAck`, `seedAck`) rather than returning them. dunx replies to `@OnMessage('x')` under the name `x`, and a request and its acknowledgement are not the same event.
 - The wire is `{ event, data }`. The client's `apps/fe/src/systems/network/socket.ts` is a socket.io-shaped shim over it, which is why the React components never changed.
 - Broadcasting goes through `EventsPublisher`, never `socket.publish` — the latter does not cross processes.
 

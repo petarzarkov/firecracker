@@ -1,6 +1,6 @@
 import { bunPassword } from '@dunx/auth';
 import type { BetterAuthOptions } from 'better-auth';
-import { admin, bearer, openAPI } from 'better-auth/plugins';
+import { admin, anonymous, bearer, openAPI } from 'better-auth/plugins';
 import type { AppConfig } from '../config/env.validation.js';
 
 /**
@@ -68,6 +68,23 @@ export const baseAuthOptions = (config: AppConfig) => {
       // `role` on the user, which `@Roles()` reads through `SessionGuard`, plus
       // ban and impersonation.
       admin(),
+      /**
+       * "Try Demo" - a real user row with no credential behind it.
+       *
+       * The NestJS version had a hand-written `POST /api/auth/demo` that minted a
+       * guest and signed a JWT for it. This is that, owned by the library.
+       *
+       * It is not a nicety for a crash game. A demo wallet is per-user, so
+       * `wallet.user_id` needs a row to point at - "play without signing up" is
+       * therefore an *account* that happens to be anonymous, not the absence of
+       * one. A spectator with no session can watch, and that is a different thing:
+       * watching needs no wallet.
+       *
+       * `emailDomainName` is what a linked account is given when an anonymous
+       * player later signs up properly, so it must be a domain we own rather than
+       * the default `example.com`.
+       */
+      anonymous({ emailDomainName: 'demo.firecracker.local' }),
       // `Authorization: Bearer <token>` instead of a cookie, which is what a
       // non-browser client and the e2e suite use.
       bearer(),

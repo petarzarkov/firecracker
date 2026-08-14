@@ -6,6 +6,7 @@ import { type BetEntry, type GamePhase, useGameStore } from '@/store/gameStore';
 // ── Server payload shapes (matching src/notifications/events/events.dto.ts) ──
 
 interface ServerBetSummary {
+  userId: string;
   username: string;
   betAmountCents: number;
   isDemo: boolean;
@@ -43,6 +44,7 @@ interface ServerGameCrashedPayload {
 }
 
 interface ServerBetPlacedPayload {
+  userId: string;
   username: string;
   betAmountCents: number;
   isDemo: boolean;
@@ -156,7 +158,7 @@ export function useGameSocket() {
       startTransition(() => {
         addBet(
           {
-            userId: data.username,
+            userId: data.userId,
             username: data.username,
             betAmountCents: data.betAmountCents,
             status: 'ACTIVE',

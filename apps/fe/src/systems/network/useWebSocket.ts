@@ -29,11 +29,9 @@ export function useWebSocket() {
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: we need to update the user when the socket is connected
   useEffect(() => {
-    if (!token || !user) {
-      console.log('[WebSocket] No token or user, skipping socket connection', {
-        token,
-        user,
-      });
+    // The token is optional - see `authStore`. A cookie-authenticated session
+    // upgrades fine because the app is same-origin.
+    if (!user) {
       setSocket((prev) => {
         prev?.disconnect();
         return null;
@@ -64,7 +62,7 @@ export function useWebSocket() {
       // production sends the session cookie and this is redundant there.
       // `transports` is gone - there is one transport now.
       const newSocket = io(apiUrl, {
-        token,
+        token: token ?? undefined,
         path: '/ws',
         reconnection: true,
         reconnectionAttempts: 5,
@@ -233,7 +231,7 @@ export function useWebSocket() {
     };
   }, [
     token,
-    user?.id,
+    user,
     clearAuth,
     updateUser,
     createPlayerChat,

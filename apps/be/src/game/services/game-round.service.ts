@@ -1,11 +1,10 @@
 import { Rng } from '@arkv/rng';
 import { Logger } from '@dunx/core';
-import { SyncDatabase } from '@dunx/infra/db';
+import { SyncDatabase, transactionSync } from '@dunx/infra/db';
 import { RedisConnection } from '@dunx/infra/redis';
 import type { Page, PageOptions } from '@dunx/infra/pagination';
 import { AppConfigService } from '../../config/app.config.service.js';
 import * as schema from '../../infra/db/schema.js';
-import { txSync } from '../../infra/db/tx.js';
 import {
   crashPointX100,
   DEFAULT_RNG_ALGORITHM,
@@ -202,7 +201,7 @@ export class GameRoundService {
    * concurrent request can observe the half-settled state.
    */
   settleCrash(roundId: string): GameRoundRow | undefined {
-    return txSync(this.db, (tx) => {
+    return transactionSync(this.db, (tx) => {
       const crashed = GameRoundRepository.over(tx).transition(
         roundId,
         GameRoundStatus.RUNNING,
@@ -223,7 +222,7 @@ export class GameRoundService {
     refunds: readonly RefundedBet[];
     round: GameRoundRow | undefined;
   } {
-    return txSync(this.db, (tx) => {
+    return transactionSync(this.db, (tx) => {
       const rounds = GameRoundRepository.over(tx);
       const round = rounds.findById(roundId);
       if (round === undefined) return { refunds: [], round: undefined };

@@ -1,8 +1,14 @@
+/* oxlint-disable max-lines -- One component covering four flows: sign in, sign up,
+   request a reset and apply one. It crossed the limit when the Better Auth port
+   added the social and anonymous paths. Worth splitting per mode, and not inside a
+   migration that would then be reviewing two changes at once. */
 import { Box, Icon, Image, Link, Stack, Text } from '@chakra-ui/react';
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
 import { FaGamepad, FaGithub, FaLinkedin } from 'react-icons/fa';
 import { useAuthStore } from '../../store/authStore';
 import { useGameStore } from '../../store/gameStore';
+import * as authApi from '../../systems/auth/auth-api';
+import type { SocialProvider } from '../../systems/auth/auth-api';
 import { AvatarPicker } from '../ui/AvatarPicker';
 import { Button } from '../ui/Button';
 import { GradientDivider } from '../ui/GradientDivider';
@@ -63,17 +69,17 @@ const MODE_CONFIG: Record<
 const SocialButtons = ({
   isLoading,
   onDemoLogin,
+  onSocial,
 }: {
   isLoading: boolean;
   onDemoLogin: () => void;
+  onSocial: (provider: SocialProvider) => void;
 }) => (
   <>
     <GradientDivider />
     <Stack gap={3}>
       <Button
-        onClick={() => {
-          window.location.href = `/api/auth/github`;
-        }}
+        onClick={() => onSocial('github')}
         disabled={isLoading}
         variant="glass"
         width="full"
@@ -82,9 +88,7 @@ const SocialButtons = ({
         Continue with GitHub
       </Button>
       <Button
-        onClick={() => {
-          window.location.href = `/api/auth/linkedin`;
-        }}
+        onClick={() => onSocial('linkedin')}
         disabled={isLoading}
         variant="glass"
         width="full"
@@ -142,10 +146,10 @@ export function LoginForm() {
   const handleDemoLogin = async () => {
     setStatus({ isLoading: true, error: '', success: '' });
     try {
-      const response = await fetch('/api/auth/demo', { method: 'POST' });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Demo login failed');
-      setAuth(data.accessToken, data.user);
+      // A real user row with a demo wallet and no credential - better-auth's
+      // `anonymous()` plugin. The old `/api/auth/demo` did the same by hand.
+      const { token, user } = await authApi.signInAnonymous();
+      setAuth(token, user);
       setIsDemoMode(true);
     } catch (err) {
       setStatus((prev) => ({
@@ -154,6 +158,18 @@ export function LoginForm() {
         error: err instanceof Error ? err.message : 'Demo login failed',
       }));
     }
+  };
+
+  const handleSocial = (provider: SocialProvider) => {
+    setStatus({ isLoading: true, error: '', success: '' });
+    // Navigates on success, so there is no success branch to write.
+    void authApi.signInSocial(provider, window.location.origin).catch((err) => {
+      setStatus({
+        isLoading: false,
+        error: err instanceof Error ? err.message : 'Sign-in failed',
+        success: '',
+      });
+    });
   };
 
   useEffect(() => {
@@ -178,42 +194,33 @@ export function LoginForm() {
     }
   };
 
-  const handleApiCall = async (endpoint: string, body: object) => {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.message || 'Request failed');
-    return data;
-  };
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setStatus({ isLoading: true, error: '', success: '' });
 
     try {
       if (mode === 'login') {
-        const data = await handleApiCall('/api/auth/login', {
-          email: formData.email,
-          password: formData.password,
-        });
-        setAuth(data.accessToken, data.user);
+        const { token, user } = await authApi.signIn(
+          formData.email,
+          formData.password,
+        );
+        setAuth(token, user);
       } else if (mode === 'register') {
-        const data = await handleApiCall('/api/auth/register', {
+        const { token, user } = await authApi.signUp({
           email: formData.email,
           password: formData.password,
-          displayName: formData.displayName || formData.email.split('@')[0],
-          picture:
+          name: formData.displayName || formData.email.split('@')[0] || '',
+          image:
             formData.customPictureUrl.trim() || formData.picture || undefined,
         });
-        setAuth(data.accessToken, data.user);
+        setAuth(token, user);
       } else if (mode === 'requestReset') {
-        await handleApiCall('/api/auth/forgotten-password', {
-          email: formData.email,
-        });
+        // `redirectTo` is where the emailed link lands. It carries `?token=`,
+        // which the effect above reads to switch this form into reset mode.
+        await authApi.requestPasswordReset(
+          formData.email,
+          window.location.origin,
+        );
         setStatus((prev) => ({
           ...prev,
           isLoading: false,
@@ -226,10 +233,7 @@ export function LoginForm() {
         if (formData.newPassword.length < 8)
           throw new Error('Password must be at least 8 characters');
 
-        await handleApiCall('/api/auth/password-reset', {
-          resetToken,
-          newPassword: formData.newPassword,
-        });
+        await authApi.resetPassword(resetToken, formData.newPassword);
         setStatus((prev) => ({
           ...prev,
           isLoading: false,
@@ -497,6 +501,7 @@ export function LoginForm() {
                   <SocialButtons
                     isLoading={status.isLoading}
                     onDemoLogin={handleDemoLogin}
+                    onSocial={handleSocial}
                   />
                   <Box mt={4}>
                     <Link

@@ -14,6 +14,7 @@ export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
 export const JOBS = Object.freeze({
   USER_REGISTERED: 'user.registered',
   USER_BANNED: 'user.banned',
+  PASSWORD_RESET: 'user.password-reset',
   FILE_THUMBNAIL: 'file.thumbnail',
 } as const);
 export type JobName = (typeof JOBS)[keyof typeof JOBS];
@@ -53,6 +54,14 @@ export interface UserBannedJob {
   readonly userId: string;
   readonly email: string;
   readonly reason: string;
+}
+
+export interface PasswordResetJob {
+  readonly userId: string;
+  readonly email: string;
+  readonly name: string;
+  /** better-auth's one-time link, already carrying the token and `redirectTo`. */
+  readonly url: string;
 }
 
 export interface FileThumbnailJob {

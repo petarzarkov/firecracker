@@ -29,6 +29,7 @@ export class GameStateService {
       round === undefined
         ? []
         : this.bets.findByRoundWithPlayers(round.id).map((bet) => ({
+            userId: bet.userId,
             username: bet.playerName,
             betAmountCents: bet.betAmountCents,
             isDemo: bet.isDemo,

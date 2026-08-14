@@ -128,6 +128,10 @@ apps/fe     the React + Vite client
 
 **One socket.** dunx mounts a gateway as a route, so two gateway classes would mean two connections where socket.io gave one. The client keeps its `socket.on(…)` / `socket.emit(…)` code through a small shim over the `{ event, data }` envelope.
 
+**Play without signing up.** "Try Demo" is better-auth's `anonymous()` plugin — a real user row with a funded demo wallet and no credential, because a wallet needs somebody to belong to. Watching needs no account at all: the socket upgrade admits spectators.
+
+**Direct messages are derived, not allocated.** A room id is a hash of the two user ids _sorted_, so both players compute the same one and "create" and "join" are the same call. Membership lives in Redis and is re-checked on every message — the id is a hash of two user ids, not a secret.
+
 **Bots are cosmetic.** `GAME_BOTS_ENABLED=true` populates an empty lobby. `GameBotsService` has no repository, by design — a bot placing real bets would contribute entropy to the crash point, which is the house influencing its own outcome.
 
 ---
@@ -138,7 +142,7 @@ apps/fe     the React + Vite client
 | --------------------------------------- | ----------------------------- |
 | `bun dev`                               | both apps                     |
 | `bun run worker`                        | the queue consumer            |
-| `bun test`                              | 102 tests across both apps    |
+| `bun test`                              | 102 unit/integration + 26 e2e |
 | `bun run lint` · `format` · `typecheck` | oxlint · oxfmt · tsc          |
 | `bun run mig:gen` · `mig:run`           | drizzle migrations            |
 | `bun run build`                         | production build of both apps |

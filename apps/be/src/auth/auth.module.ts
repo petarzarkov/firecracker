@@ -10,6 +10,7 @@ import { users } from '../users/schema/user.schema.js';
 import { accounts } from './schema/account.schema.js';
 import { sessions } from './schema/session.schema.js';
 import { verifications } from './schema/verification.schema.js';
+import { JOBS, QUEUES } from '../notifications/events/events.js';
 import { registrationHooks } from './auth.hooks.js';
 import { AUTH_MOUNT, baseAuthOptions } from './auth.options.js';
 import { ProfileController } from './profile.controller.js';
@@ -46,6 +47,39 @@ const auth = AuthModule.forRootAsync(
 
       return {
         ...base,
+        emailAndPassword: {
+          ...base.emailAndPassword,
+          /**
+           * Without this, `POST /api/auth/request-password-reset` answers 400
+           * with "Reset password isn't enabled" - the endpoint exists but
+           * refuses. So the client's "Forgot password?" flow is only real
+           * because this is here.
+           *
+           * `url` is better-auth's own one-time link, already carrying the token
+           * and the `redirectTo` the client asked for. It is enqueued rather than
+           * sent inline: this runs inside the HTTP request, and a slow provider
+           * would hold the response open while a failing one would turn "check
+           * your inbox" into a 500 that confirms the address exists.
+           */
+          sendResetPassword: async ({ user, url }) => {
+            await publisher
+              .publish(QUEUES.NOTIFICATIONS, JOBS.PASSWORD_RESET, {
+                userId: user.id,
+                email: user.email,
+                name: user.name,
+                url,
+              })
+              .catch((error: unknown) => {
+                // With no Redis there is no queue. Log the link rather than
+                // failing the request - in development that is how you get it.
+                logger.warn('password reset could not be queued', {
+                  email: user.email,
+                  url,
+                  reason: (error as Error).message,
+                });
+              });
+          },
+        },
         // The mapping is not optional here, despite `drizzleDatabase`'s
         // documentation saying "the better-auth tables being in the app's
         // schema object is the whole requirement". The adapter looks the

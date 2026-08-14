@@ -8,6 +8,7 @@ import {
   QUEUES,
   TOPICS,
   userTopic,
+  type PasswordResetJob,
   type UserBannedJob,
   type UserRegisteredJob,
 } from '../events/events.js';
@@ -54,6 +55,31 @@ export class NotificationJobs {
 
     this.logger.info('handled user.registered', { userId });
     return { notified: userId };
+  }
+
+  /**
+   * The password-reset link, sent off the request thread.
+   *
+   * On the queue rather than inline in better-auth's `sendResetPassword` because
+   * that runs inside the HTTP request: a slow mail provider would otherwise hold
+   * the response open, and a failing one would turn "we sent you an email" into a
+   * 500 telling an attacker the address exists.
+   *
+   * No socket frame goes with it, unlike the jobs either side. A reset is
+   * requested by someone who cannot sign in, so there is no session to notify.
+   */
+  @JobHandler({ queue: QUEUES.NOTIFICATIONS, name: JOBS.PASSWORD_RESET })
+  async passwordReset(job: Job<PasswordResetJob>): Promise<{ sent: string }> {
+    const { userId, email, name, url } = job.data;
+
+    await this.email.send({
+      to: email,
+      subject: 'Reset your Firecracker password',
+      body: `Hello ${name}, use this link within the hour to choose a new password: ${url}`,
+    });
+
+    this.logger.info('handled user.password-reset', { userId });
+    return { sent: email };
   }
 
   @JobHandler({ queue: QUEUES.NOTIFICATIONS, name: JOBS.USER_BANNED })

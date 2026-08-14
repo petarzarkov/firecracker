@@ -11,6 +11,7 @@ import { WalletRepository } from './repos/wallet.repository.js';
 import { AutoCashOutService } from './services/auto-cashout.service.js';
 import { GameBetService } from './services/game-bet.service.js';
 import { GameStateService } from './services/game-state.service.js';
+import { PlayerChatService } from './services/player-chat.service.js';
 import { GameRoundService } from './services/game-round.service.js';
 import { WalletService } from './services/wallet.service.js';
 import { WalletController } from './wallet.controller.js';
@@ -90,6 +91,7 @@ export class GameModule {
               CrashEngineService,
               AutoCashOutService,
               GameStateService,
+              PlayerChatService,
               GameGateway,
               GameBotsService,
             ]

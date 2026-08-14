@@ -1,68 +1,84 @@
 import { useAuthStore } from '../store/authStore';
+import * as authApi from '../systems/auth/auth-api';
 
+/** How often a live session is re-checked against the server. */
+const CHECK_INTERVAL_MS = 5 * 60 * 1000;
+
+/**
+ * Keeps the client's idea of "signed in" honest.
+ *
+ * ## What this used to do, and why it was a bug waiting for the migration
+ *
+ * It decoded the stored token as a JWT - `JSON.parse(atob(token.split('.')[1]))` -
+ * read `exp`, and signed the user out five minutes before it. That worked against
+ * the NestJS app, which issued JWTs.
+ *
+ * better-auth does not. Its session token is `<id>.<hmac>`, where the second
+ * segment is a signature and not base64 JSON, so `JSON.parse` throws - and the old
+ * `catch` treated a throw as expiry. Left alone, **every signed-in user would have
+ * been logged out within a minute of loading the page**, forever, with the reason
+ * buried in a `console.error`.
+ *
+ * The replacement does not guess. Sessions live on the server; the server is the
+ * thing that knows whether one is still valid, so this asks it. That also covers
+ * the cases the old code could not see at all: a session revoked elsewhere, a
+ * banned user, a token deleted on sign-out from another tab.
+ */
 export class AuthMiddleware {
-  /**
-   * `ReturnType<typeof setInterval>` rather than `NodeJS.Timeout`: in a browser
-   * this is a number, and typing it against Node was only possible because a
-   * transitive `@types/node` happened to be in scope via socket.io-client.
-   */
-  private static checkInterval: ReturnType<typeof setInterval> | null = null;
+  static #timer: ReturnType<typeof setInterval> | null = null;
 
-  static initialize() {
-    // Check token expiration every minute
-    AuthMiddleware.checkInterval = setInterval(() => {
-      AuthMiddleware.checkTokenExpiration();
-    }, 60000);
+  static initialize(): void {
+    AuthMiddleware.#timer = setInterval(() => {
+      void AuthMiddleware.#verify();
+    }, CHECK_INTERVAL_MS);
 
-    // Initial check
-    AuthMiddleware.checkTokenExpiration();
+    // On load as well as on the interval: a persisted `localStorage` state is the
+    // one most likely to be stale, because it survived a browser restart.
+    void AuthMiddleware.#verify();
   }
 
-  static cleanup() {
-    if (AuthMiddleware.checkInterval) {
-      clearInterval(AuthMiddleware.checkInterval);
-      AuthMiddleware.checkInterval = null;
-    }
+  static cleanup(): void {
+    if (AuthMiddleware.#timer !== null) clearInterval(AuthMiddleware.#timer);
+    AuthMiddleware.#timer = null;
   }
 
-  private static checkTokenExpiration() {
-    const token = useAuthStore.getState().token;
+  static async #verify(): Promise<void> {
+    const { token, user, setAuth, clearAuth } = useAuthStore.getState();
+    if (user === null) return;
 
-    if (!token) return;
-
+    let session: Awaited<ReturnType<typeof authApi.currentSession>>;
     try {
-      // Decode JWT (simple base64 decode of payload)
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      const expiresAt = payload.exp * 1000; // Convert to milliseconds
-
-      // If expired or expiring in next 5 minutes, logout
-      if (Date.now() >= expiresAt - 5 * 60 * 1000) {
-        AuthMiddleware.handleExpiration();
-      }
-    } catch (error) {
-      console.error('Failed to check token expiration:', error);
-      AuthMiddleware.handleExpiration();
+      session = await authApi.currentSession(token);
+    } catch {
+      // The network is down, or the API is restarting. **Not** a signed-out user:
+      // clearing here would log someone out because their wifi blinked.
+      return;
     }
+
+    if (session === null) {
+      clearAuth();
+      return;
+    }
+
+    // Refresh what the server says - a role change or a new token from a rolled
+    // session lands here rather than waiting for a reload.
+    setAuth(session.token, session.user);
   }
 
-  private static handleExpiration() {
-    // Clear auth state
-    useAuthStore.getState().clearAuth();
+  /**
+   * Called when the socket refuses. Only clears on an authentication failure -
+   * a transport drop is what the shim's reconnect is for.
+   */
+  static handleWebSocketError(error: unknown): void {
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === 'object' && error !== null && 'message' in error
+          ? String((error as { message: unknown }).message)
+          : '';
 
-    // Show notification (can add toast later)
-    console.warn('Session expired. Please log in again.');
-  }
-
-  // Add to WebSocket connection handler
-  static handleWebSocketError(error: unknown) {
-    if (
-      error &&
-      typeof error === 'object' &&
-      'message' in error &&
-      typeof error.message === 'string' &&
-      (error.message.includes('jwt') || error.message.includes('token'))
-    ) {
-      AuthMiddleware.handleExpiration();
+    if (/unauthor|forbidden|session/i.test(message)) {
+      void AuthMiddleware.#verify();
     }
   }
 }

@@ -77,6 +77,7 @@ CREATE TABLE `user` (
 	`image` text,
 	`role` text DEFAULT 'user' NOT NULL,
 	`banned` integer DEFAULT false NOT NULL,
+	`is_anonymous` integer DEFAULT false NOT NULL,
 	`ban_reason` text,
 	`ban_expires` integer,
 	`created_at` integer NOT NULL,

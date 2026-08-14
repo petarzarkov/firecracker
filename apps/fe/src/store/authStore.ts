@@ -12,9 +12,19 @@ export interface User {
 }
 
 interface AuthState {
+  /**
+   * The bearer token, when there is one.
+   *
+   * `null` after a social sign-in, and that is not a broken state: the session
+   * lives in an `HttpOnly` cookie and the app is same-origin, so every request and
+   * the WebSocket upgrade authenticate without it. What the token buys is the
+   * socket's `?token=` fallback, which only a cross-origin client needs.
+   *
+   * `isAuthenticated` is therefore the flag to branch on, never `token`.
+   */
   token: string | null;
   user: User | null;
-  setAuth: (token: string, user: User) => void;
+  setAuth: (token: string | null, user: User) => void;
   updateUser: (updates: Partial<User>) => void;
   clearAuth: () => void;
   isAuthenticated: boolean;
