@@ -36,6 +36,8 @@ export const EVENTS = Object.freeze({
   CONNECTED: 'connected',
   NOTIFICATION: 'notification',
   MESSAGE: 'message',
+  /** The chat scrollback, sent once per connection. */
+  CHAT_HISTORY: 'chatHistory',
   USER_COUNT: 'userCount',
 } as const);
 

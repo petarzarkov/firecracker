@@ -12,6 +12,16 @@ interface ServerChatMessage {
   picture?: string | null;
 }
 
+/**
+ * One line of scrollback.
+ *
+ * The **same shape** as a live `message` frame, because it is the same thing
+ * replayed - `ChatService` stores exactly what it broadcasts. Keeping the two in
+ * step is the point: they diverged once, and the history mapped to a `senderName`
+ * the server had stopped sending, which crashed the chat panel on render.
+ */
+type ServerChatLine = ServerChatMessage;
+
 export function useWebSocket() {
   // useState (not useRef) so that setting the socket triggers a re-render and
   // the SocketContext.Provider picks up the new value.
@@ -32,6 +42,9 @@ export function useWebSocket() {
   );
   const addGlobalChatMessage = useChatStore(
     (state) => state.addGlobalChatMessage,
+  );
+  const setGlobalChatMessages = useChatStore(
+    (state) => state.setGlobalChatMessages,
   );
   const setConnectedPlayers = useChatStore(
     (state) => state.setConnectedPlayers,
@@ -198,8 +211,27 @@ export function useWebSocket() {
         },
       );
 
-      // ── Global chat — server emits 'message' (EventsGateway.handleChatMessage) ──
-      // Server shape: { username, message, timestamp, picture }
+      /**
+       * The scrollback, sent once when the socket opens.
+       *
+       * Chat is persisted server-side, so a reload does not start an empty room -
+       * it did before this handler existed, which read as the feature being
+       * broken rather than reset. See `ChatService` on the server.
+       */
+      newSocket.on('chatHistory', (lines: ServerChatLine[]) => {
+        setGlobalChatMessages(
+          (lines ?? []).map((line) => ({
+            senderId: line.username,
+            senderName: line.username,
+            senderPicture: line.picture ?? undefined,
+            message: line.message,
+            timestamp: new Date(line.timestamp),
+          })),
+        );
+      });
+
+      // ── Chat — the server emits 'message' for each new line ──
+      // Server shape: { username, message, timestamp }
       newSocket.on('message', (data: ServerChatMessage) => {
         addGlobalChatMessage({
           senderId: data.username,
@@ -232,6 +264,7 @@ export function useWebSocket() {
         activeSocket.off('playerChatRoomJoined');
         activeSocket.off('playerChatMessage');
         activeSocket.off('playerChatSystemMessage');
+        activeSocket.off('chatHistory');
         activeSocket.off('message');
         activeSocket.off('userCount');
         activeSocket.io.off('reconnect_failed');
@@ -257,6 +290,7 @@ export function useWebSocket() {
     createPlayerChat,
     addPlayerChatMessage,
     addGlobalChatMessage,
+    setGlobalChatMessages,
     setConnectedPlayers,
   ]);
 

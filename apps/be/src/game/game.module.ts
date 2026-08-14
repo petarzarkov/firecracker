@@ -1,5 +1,6 @@
 import type { DynamicModule } from '@dunx/core';
 import { AccountsModule } from '../auth/auth.module.js';
+import { ChatModule } from '../chat/chat.module.js';
 import { GameBotsService } from './bots/game-bots.service.js';
 import { CrashEngineService } from './engine/crash-engine.service.js';
 import { GameController } from './game.controller.js';
@@ -66,7 +67,9 @@ export class GameModule {
 
     return {
       module: GameModule,
-      imports: withEngine ? [AccountsModule] : [],
+      // `ChatModule` alongside auth, and for the same reason: both are only
+      // needed where there is a gateway to serve them.
+      imports: withEngine ? [AccountsModule, ChatModule] : [],
       ...(withControllers
         ? { controllers: [GameController, WalletController] }
         : {}),

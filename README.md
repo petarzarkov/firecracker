@@ -22,8 +22,15 @@ docker compose up -d          # Redis. Without it, rounds never advance.
 cp .env.example .env                  # compose settings
 cp apps/be/.env.example apps/be/.env  # the app's own settings
 
-bun run dev:be       # API + socket gateway on :3999
-bun run worker       # the round lifecycle (a second terminal)
+bun dev              # API + worker + client
+```
+
+Or one at a time:
+
+```bash
+bun run dev:be       # API and worker together
+bun run dev:web      # the API alone (rounds will not advance)
+bun run worker       # the worker alone
 bun run dev:fe       # the client on :5173
 ```
 
@@ -140,8 +147,8 @@ apps/fe     the React + Vite client
 
 | Command                                 | Does                          |
 | --------------------------------------- | ----------------------------- |
-| `bun dev`                               | both apps                     |
-| `bun run worker`                        | the queue consumer            |
+| `bun dev`                               | API, worker and client        |
+| `bun run worker`                        | the queue consumer alone      |
 | `bun test`                              | 102 unit/integration + 26 e2e |
 | `bun run lint` · `format` · `typecheck` | oxlint · oxfmt · tsc          |
 | `bun run mig:gen` · `mig:run`           | drizzle migrations            |

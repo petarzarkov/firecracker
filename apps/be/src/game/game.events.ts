@@ -159,6 +159,15 @@ export interface BetCashedOutPayload {
 
 export interface BetAckPayload {
   readonly success: boolean;
+  /**
+   * The caller's own id, so the ack is self-contained.
+   *
+   * Without it the client keyed its confirmation row on the *username*, which no
+   * longer matches the id `betPlaced` carries - so a single bet rendered as two
+   * players. An ack that cannot be matched to the thing it acknowledges is not an
+   * ack.
+   */
+  readonly userId?: string;
   readonly username?: string;
   readonly betAmountCents?: number;
   readonly error?: string;

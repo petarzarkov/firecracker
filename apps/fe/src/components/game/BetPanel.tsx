@@ -234,6 +234,7 @@ export function BetPanel() {
   const isDemoMode = useGameStore((state) => state.isDemoMode);
   const addBet = useGameStore((state) => state.addBet);
   const updateBet = useGameStore((state) => state.updateBet);
+  const myUserId = useAuthStore((state) => state.user?.id);
   const myUsername = useAuthStore(
     (state) => state.user?.displayName ?? state.user?.email?.split('@')[0],
   );
@@ -252,16 +253,16 @@ export function BetPanel() {
   const inputDisabled = phase !== 'WAITING' || myBet !== null;
 
   const handlePlaceBet = useCallback(() => {
-    if (!socket || !canBet || !myUsername) return;
+    if (!socket || !canBet || !myUsername || myUserId === undefined) return;
     clearBetError();
     addBet(
       {
-        userId: myUsername,
+        userId: myUserId,
         username: myUsername,
         betAmountCents: amountCents,
         status: 'ACTIVE',
       },
-      myUsername,
+      myUserId,
     );
     socket.emit('placeBet', {
       betAmountCents: amountCents,

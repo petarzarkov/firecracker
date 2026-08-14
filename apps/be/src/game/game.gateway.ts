@@ -39,6 +39,7 @@ import {
   clientSeedsKey,
   GameRoundService,
 } from './services/game-round.service.js';
+import { ChatService } from '../chat/services/chat.service.js';
 import { AutoCashOutService } from './services/auto-cashout.service.js';
 import { PlayerChatService } from './services/player-chat.service.js';
 import { GameStateService } from './services/game-state.service.js';
@@ -99,6 +100,7 @@ export class GameGateway {
     private readonly autoCashOut: AutoCashOutService,
     private readonly state: GameStateService,
     private readonly playerChat: PlayerChatService,
+    private readonly chat: ChatService,
     private readonly redis: RedisConnection,
     private readonly events: EventsPublisher,
     private readonly pubsub: PubSub,
@@ -176,7 +178,7 @@ export class GameGateway {
   }
 
   @OnOpen()
-  opened(socket: Socket<GameSocketContext>): void {
+  async opened(socket: Socket<GameSocketContext>): Promise<void> {
     const { player } = socket.data.context;
 
     socket.subscribe(GAME_TOPIC);
@@ -195,6 +197,16 @@ export class GameGateway {
       JSON.stringify({
         event: GAME_EVENTS.ROUND_STATE,
         data: this.state.snapshot(),
+      }),
+    );
+
+    // The chat scrollback, for the same reason. A player who reloads mid-round
+    // should not find an empty chat window - see `ChatService`, which keeps it in
+    // Redis rather than in the database the bet path is writing to.
+    socket.send(
+      JSON.stringify({
+        event: EVENTS.CHAT_HISTORY,
+        data: await this.chat.history(),
       }),
     );
 
@@ -332,6 +344,7 @@ export class GameGateway {
 
       return {
         success: true,
+        userId: player.userId,
         username: player.username,
         betAmountCents: bet.betAmountCents,
       };
@@ -564,7 +577,7 @@ export class GameGateway {
 
   /** Global chat, folded in from the template's `EventsGateway`. */
   @OnMessage('chatMessage')
-  chat(
+  globalChat(
     data: unknown,
     socket: Socket<GameSocketContext>,
   ): { delivered: number } | { error: string } {
@@ -576,11 +589,19 @@ export class GameGateway {
       return { error: 'a chat message is a string of 1 to 1000 characters' };
     }
 
-    this.events.publish(TOPICS.CHAT, EVENTS.MESSAGE, {
+    // Recorded before it is published, so a client that reloads immediately after
+    // sending still sees its own line. The write is synchronous, so "before" is
+    // real rather than a race that usually wins.
+    const line = {
       username: player.username,
       message: text,
       timestamp: new Date().toISOString(),
-    });
+    };
+
+    this.events.publish(TOPICS.CHAT, EVENTS.MESSAGE, line);
+    // After the broadcast: everyone watching has it, and a failed write costs the
+    // scrollback rather than the message.
+    this.chat.record(line);
     return { delivered: 1 };
   }
 

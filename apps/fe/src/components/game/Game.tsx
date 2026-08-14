@@ -78,7 +78,7 @@ function InlineChatPanel({ full = false }: { full?: boolean }) {
           color="gray.400"
           letterSpacing="widest"
         >
-          GLOBAL CHAT
+          CHAT
           {connectedPlayers > 0 && (
             <Text as="span" color="green.500" fontWeight="normal" ml={1}>
               ({connectedPlayers})
@@ -458,7 +458,7 @@ export function Game() {
       {/* ── Floating pop-out chat ───────────────────────────────────────── */}
       {globalChat.isOpen && (
         <ChatWindow
-          title="Global Chat"
+          title="Chat"
           messages={globalChat.messages}
           isOpen={globalChat.isOpen}
           onClose={closeGlobalChat}

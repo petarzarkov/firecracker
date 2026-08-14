@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Tooltip } from '@/components/Tooltip';
 import { Button } from '@/components/ui/Button';
 import { useAuthStore } from '@/store/authStore';
+import { apiFetch } from '@/systems/network/api';
 import { useGameStore } from '@/store/gameStore';
 
 interface BetEntry {
@@ -146,7 +147,7 @@ function BetRow({ bet }: { bet: BetEntry }) {
 }
 
 export function PlayerHistory() {
-  const token = useAuthStore((state) => state.token);
+  const userId = useAuthStore((state) => state.user?.id);
   const phase = useGameStore((state) => state.phase);
   const [bets, setBets] = useState<BetEntry[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -156,14 +157,14 @@ export function PlayerHistory() {
 
   const fetchBets = useCallback(
     async (cursor?: string) => {
-      if (!token) return;
+      // Gated on the user, not the token: the session lives in a cookie and the
+      // token is absent after a reload by design. See `authStore`.
+      if (!userId) return;
       setIsLoading(true);
       try {
         const params = new URLSearchParams({ take: '20' });
         if (cursor) params.set('cursor', cursor);
-        const res = await fetch(`/api/game/my-bets?${params}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await apiFetch(`/api/game/my-bets?${params}`);
         const data = await res.json();
         if (cursor) {
           setBets((prev) => [...prev, ...(data.data ?? [])]);
@@ -177,7 +178,7 @@ export function PlayerHistory() {
         loadedOnce.current = true;
       }
     },
-    [token],
+    [userId],
   );
 
   // Initial load

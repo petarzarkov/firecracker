@@ -99,6 +99,27 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'auth-storage',
+      /**
+       * The user is persisted. **The token is not.**
+       *
+       * The session's real carrier is better-auth's `HttpOnly` cookie, which the
+       * browser stores itself and JavaScript cannot read. Keeping a second copy of
+       * the same session in `localStorage` bought nothing once the app became
+       * same-origin - every request and the WebSocket upgrade already authenticate
+       * by cookie - and cost something real: `localStorage` is readable by any
+       * script that gets onto the page, which is precisely what `HttpOnly` exists
+       * to prevent.
+       *
+       * So the token now lives in memory for the life of the tab, where the socket
+       * shim's `?token=` fallback can still use it, and a reload rehydrates the
+       * session from the cookie through `AuthMiddleware`. The persisted `user` is
+       * only there to render a signed-in shell on first paint without a flash of
+       * the login form; `AuthMiddleware` is what confirms it.
+       */
+      partialize: (state) => ({
+        user: state.user,
+        isAuthenticated: state.isAuthenticated,
+      }),
     },
   ),
 );

@@ -63,7 +63,7 @@ function CollapsedChatOverlay() {
           color="gray.200"
           fontFamily="monospace"
         >
-          Global Chat
+          Chat
         </Text>
         <IconButton
           aria-label="Expand chat"
@@ -196,7 +196,7 @@ export function GlobalChat({ socket }: GlobalChatProps) {
       <CollapsedChatOverlay />
       {globalChat.isOpen && (
         <ChatWindow
-          title="Global Chat"
+          title="Chat"
           messages={globalChat.messages}
           isOpen={globalChat.isOpen}
           onClose={closeGlobalChat}

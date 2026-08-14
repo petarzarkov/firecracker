@@ -116,7 +116,9 @@ src/
 
 ### Two processes, one engine
 
-`bun dev` runs the web process; `bun run worker` runs the consumer. They share only `app.module.ts`.
+**`bun dev` runs both.** It used to start the web process alone, which gives an app that boots, serves and authenticates - and then sits on `Starting...` forever, because the round it scheduled is a job with nobody to consume it. `apps/be/scripts/dev.ts` runs the pair and takes both down if either dies. `bun run dev:web` is the web process alone.
+
+They share only `app.module.ts`.
 
 - The **web process** owns the clock (`CrashEngineService`), the sockets and the HTTP routes.
 - The **worker** owns every database transition, as BullMQ jobs.
@@ -193,6 +195,7 @@ Migrations also run at boot, in `DatabaseBootstrap`.
 
 **One gateway, one connection**: `@Gateway('/ws')` in `game.gateway.ts`, carrying the game, global chat, player DMs and notifications. socket.io let NestJS merge two gateway classes onto one server; dunx mounts a gateway as a route, so two classes would mean two connections. Two gateways on one path is a boot error.
 
+- Chat scrollback lives in **Redis**, not the database: a capped list at `chat:global:history`, `rpush` + `ltrim` to the last 50. That is where the NestJS version kept it, and the key is deliberately unchanged so a deploy does not silently empty every lobby. Chat is not a record - a round is, and that is what SQLite holds.
 - The upgrade **admits anonymous callers** — watching is public. `context.player` is `null` for a spectator, and every handler spending money checks it.
 - It also accepts `?token=`, because a browser cannot set a header on a WebSocket. **Percent-encode it** — better-auth issues base64, which contains `/`, `+` and `=`.
 - Handlers **send** their acks (`betAck`, `cashOutAck`, `seedAck`) rather than returning them. dunx replies to `@OnMessage('x')` under the name `x`, and a request and its acknowledgement are not the same event.
@@ -220,7 +223,7 @@ A bug fix comes with the test that would have caught it.
 
 | Command                       | Does                        |
 | ----------------------------- | --------------------------- |
-| `bun dev`                     | both apps                   |
+| `bun dev`                     | both apps, and the worker   |
 | `bun run dev:be` / `dev:fe`   | one of them                 |
 | `bun run worker`              | the queue consumer          |
 | `bun test`                    | every test in the workspace |
@@ -229,6 +232,8 @@ A bug fix comes with the test that would have caught it.
 | `bun run mig:gen` / `mig:run` | drizzle migrations          |
 
 Redis must be up for rounds to advance: `docker compose up -d`.
+
+`QUEUE_PREFIX`, `THROTTLE_PREFIX` and `WS_RELAY_CHANNEL` must name **this** app. They arrived from the template saying `dunx-template`, which put two applications on one queue namespace in a shared Redis - each consuming the other's jobs.
 
 ---
 

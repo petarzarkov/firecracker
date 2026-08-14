@@ -6,7 +6,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "dev": "bun --watch src/main.ts",
+    "dev": "bun ./scripts/dev.ts",
     "start": "bun src/main.ts",
     "worker": "bun src/worker.ts",
     "dev:worker": "bun --watch src/worker.ts",
@@ -26,7 +26,8 @@
     "db:drop": "bun ./scripts/db-drop.ts",
     "seed": "bun --env-file=.env ./scripts/seed.ts",
     "gen:openapi": "bunx dunx-openapi ./src/openapi.config.ts",
-    "gen:env:docs": "bun ./scripts/gen-env-docs.ts"
+    "gen:env:docs": "bun ./scripts/gen-env-docs.ts",
+    "dev:web": "bun --watch src/main.ts"
   },
   "dependencies": {
     "@arkv/rng": "^0.8.2",

@@ -60,6 +60,8 @@ interface ServerBetCashedOutPayload {
 interface BetAckPayload {
   success: boolean;
   error?: string;
+  /** The caller's own id. See the note where this is consumed. */
+  userId?: string;
   username?: string;
   betAmountCents?: number;
 }
@@ -87,11 +89,16 @@ function mapServerBet(b: ServerBetSummary): BetEntry {
 
 export function useGameSocket() {
   const socket = useSocket();
-  // Match the formula the gateway uses when broadcasting bet usernames:
-  // user.displayName ?? user.email.split('@')[0]
-  const myUsername = useAuthStore(
-    (state) => state.user?.displayName ?? state.user?.email?.split('@')[0],
-  );
+  /**
+   * The caller's real id.
+   *
+   * This used to be the username, matching the gateway's broadcast formula,
+   * because the server sent no `userId` on a bet. It does now - so identity is an
+   * id on both sides, and two players sharing a display name no longer collapse
+   * into one row. `BetPanel`'s optimistic entry uses the same value, which is what
+   * lets the server's `betPlaced` replace it instead of appearing beside it.
+   */
+  const myUserId = useAuthStore((state) => state.user?.id);
   const {
     setRoundState,
     setPhase,
@@ -127,7 +134,7 @@ export function useGameSocket() {
               crashPoint: r.crashPoint,
             })),
           },
-          myUsername,
+          myUserId,
         );
       });
     });
@@ -163,7 +170,7 @@ export function useGameSocket() {
             betAmountCents: data.betAmountCents,
             status: 'ACTIVE',
           },
-          myUsername,
+          myUserId,
         );
       });
     });
@@ -182,20 +189,31 @@ export function useGameSocket() {
             cashedOutAt: data.multiplier,
             payoutCents: data.payoutCents,
           },
-          myUsername,
+          myUserId,
         );
       });
     });
 
     socket.on('betAck', (data: BetAckPayload) => {
-      if (data.success && data.username && data.betAmountCents != null) {
-        // Confirm the optimistic bet with server-provided values (typically a no-op)
-        const username = data.username;
-        const betAmountCents = data.betAmountCents;
+      if (
+        data.success &&
+        data.userId &&
+        data.username &&
+        data.betAmountCents != null
+      ) {
+        /**
+         * Confirm the optimistic entry with the server's own values - normally a
+         * no-op, because `addBet` dedups on `userId`.
+         *
+         * It keyed this on the **username** until the server started sending an
+         * id, which meant the confirmation did not match the optimistic row or
+         * the `betPlaced` broadcast, and one bet rendered as two players.
+         */
+        const { userId, username, betAmountCents } = data;
         startTransition(() => {
           addBet(
-            { userId: username, username, betAmountCents, status: 'ACTIVE' },
-            username,
+            { userId, username, betAmountCents, status: 'ACTIVE' },
+            userId,
           );
         });
       } else if (!data.success && data.error) {
@@ -235,7 +253,7 @@ export function useGameSocket() {
     };
   }, [
     socket,
-    myUsername,
+    myUserId,
     setRoundState,
     setPhase,
     addTick,
