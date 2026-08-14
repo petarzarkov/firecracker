@@ -17,21 +17,31 @@ export function useWebSocket() {
   // the SocketContext.Provider picks up the new value.
   const [socket, setSocket] = useState<Socket | null>(null);
 
+  /**
+   * One selector per value. `useAuthStore((state) => state)` returns a fresh
+   * snapshot on **every** store write, so this component re-rendered whenever
+   * anything in the store changed - including changes it caused itself.
+   */
   const token = useAuthStore((state) => state.token);
-  const { user, updateUser } = useAuthStore((state) => state);
+  const userId = useAuthStore((state) => state.user?.id);
+  const updateUser = useAuthStore((state) => state.updateUser);
   const clearAuth = useAuthStore((state) => state.clearAuth);
-  const {
-    createPlayerChat,
-    addPlayerChatMessage,
-    addGlobalChatMessage,
-    setConnectedPlayers,
-  } = useChatStore();
+  const createPlayerChat = useChatStore((state) => state.createPlayerChat);
+  const addPlayerChatMessage = useChatStore(
+    (state) => state.addPlayerChatMessage,
+  );
+  const addGlobalChatMessage = useChatStore(
+    (state) => state.addGlobalChatMessage,
+  );
+  const setConnectedPlayers = useChatStore(
+    (state) => state.setConnectedPlayers,
+  );
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: we need to update the user when the socket is connected
   useEffect(() => {
     // The token is optional - see `authStore`. A cookie-authenticated session
     // upgrades fine because the app is same-origin.
-    if (!user) {
+    if (userId === undefined) {
       setSocket((prev) => {
         prev?.disconnect();
         return null;
@@ -39,9 +49,9 @@ export function useWebSocket() {
       return;
     }
 
-    // In dev, VITE_API_URL points straight at the backend rather than through
-    // Vite's proxy, which drops WS upgrade handshakes. In production builds it is
-    // '' → the current origin, which is also where the session cookie is valid.
+    // Empty in both modes: development goes through Vite's proxy, which forwards
+    // the upgrade (`ws: true`), so the origin is the same one the session cookie
+    // was issued for. See vite.config.ts.
     const apiUrl = import.meta.env.VITE_API_URL ?? '';
 
     // Track whether this effect run was cleaned up before the socket connected.
@@ -229,9 +239,19 @@ export function useWebSocket() {
         setSocket(null);
       }
     };
+    /**
+     * `userId`, a string - **never the `user` object**.
+     *
+     * This effect closes over a socket and disconnects it on cleanup, so any
+     * dependency whose identity changes rebuilds the connection. `user` was that
+     * dependency, the `connected` handler below writes to the store, and the
+     * result was a connect/disconnect loop twice a second. `authStore` now also
+     * refuses to mint a new user object for an unchanged user, so this is belt
+     * and braces - both halves are worth having.
+     */
   }, [
     token,
-    user,
+    userId,
     clearAuth,
     updateUser,
     createPlayerChat,

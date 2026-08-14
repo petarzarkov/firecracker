@@ -160,6 +160,26 @@ describe('cashing out', () => {
     expect(() => bets.cashOut(userId, roundId, 200, true)).toThrow(BetRejected);
   });
 
+  /**
+   * The regression. `BetPanel` sends a bare `socket.emit('cashOut')` with no
+   * payload, so the gateway has to work out which wallet the bet was against.
+   * Defaulting to real money made every demo cash-out fail silently - the bet
+   * stayed open, the balance never moved, and the ack was a rejection nobody
+   * surfaced. Only a browser found it.
+   */
+  test('the open bet decides the wallet, not the caller', async () => {
+    const roundId = await openRound();
+    bets.placeBet(userId, roundId, 300, true);
+    launch(roundId, 400);
+
+    const open = bets.findActiveByRoundAndUserAnyMode(roundId, userId);
+    expect(open?.isDemo).toBe(true);
+
+    // Which is what lets the gateway cash out a demo bet without being told.
+    const settled = bets.cashOut(userId, roundId, 200, open!.isDemo);
+    expect(settled.payoutCents).toBe(600);
+  });
+
   test('cashing out with no bet is refused', async () => {
     const roundId = await openRound();
     launch(roundId, 500);

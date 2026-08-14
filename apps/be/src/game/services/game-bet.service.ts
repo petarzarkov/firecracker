@@ -266,6 +266,14 @@ export class GameBetService {
     return this.bets.findActiveByRoundAndUser(roundId, userId, isDemo);
   }
 
+  /** The player's open bet in this round, whichever wallet it is against. */
+  findActiveByRoundAndUserAnyMode(
+    roundId: string,
+    userId: string,
+  ): GameBetRow | undefined {
+    return this.bets.findActiveByRoundAndUserAnyMode(roundId, userId);
+  }
+
   findByRoundWithPlayers(roundId: string): BetWithPlayer[] {
     return this.bets.findByRoundWithPlayers(roundId);
   }

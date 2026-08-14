@@ -374,10 +374,31 @@ export class GameGateway {
       return { success: false, error: 'Round is not currently running' };
     }
 
-    const isDemo =
+    /**
+     * Which wallet, decided by the **bet**, not by the client.
+     *
+     * `BetPanel` sends a bare `socket.emit('cashOut')` with no payload, so
+     * defaulting to real money here meant looking for a bet that did not exist
+     * and rejecting every demo cash-out - silently, because a rejection is an ack
+     * rather than an error. That shipped, and only a browser caught it.
+     *
+     * The old gateway kept `client.data.isDemo` on the socket. Reading the bet row
+     * is better than that was: it survives a reconnect, it cannot drift from the
+     * database, and it is right when a player has bets in both modes.
+     */
+    const requested =
       typeof data === 'object' && data !== null && 'isDemo' in data
         ? Boolean((data as { isDemo?: unknown }).isDemo)
-        : false;
+        : undefined;
+
+    const open = this.bets.findActiveByRoundAndUserAnyMode(
+      roundId,
+      player.userId,
+    );
+    if (open === undefined) {
+      return { success: false, error: 'No active bet found for this round' };
+    }
+    const isDemo = requested ?? open.isDemo;
 
     try {
       const bet = this.bets.cashOut(

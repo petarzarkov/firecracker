@@ -47,6 +47,36 @@ export class GameBetRepository {
       .get();
   }
 
+  /**
+   * The player's open bet in this round, whichever wallet it is against.
+   *
+   * A cash-out should not need the client to say which mode it is in. The old
+   * gateway kept `client.data.isDemo` on the socket and read it back, which broke
+   * across a reconnect and disagreed with the database whenever the two drifted;
+   * the bet row already knows, so this asks it.
+   *
+   * A player *can* hold one bet per mode in a round - the unique index is per
+   * mode - so this returns the newest, and the caller may still pass an explicit
+   * mode to disambiguate.
+   */
+  findActiveByRoundAndUserAnyMode(
+    roundId: string,
+    userId: string,
+  ): GameBetRow | undefined {
+    return this.db
+      .select()
+      .from(gameBets)
+      .where(
+        and(
+          eq(gameBets.roundId, roundId),
+          eq(gameBets.userId, userId),
+          eq(gameBets.status, GameBetStatus.ACTIVE),
+        ),
+      )
+      .orderBy(desc(gameBets.createdAt))
+      .get();
+  }
+
   findActiveByRound(roundId: string): GameBetRow[] {
     return this.db
       .select()

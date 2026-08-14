@@ -30,20 +30,69 @@ interface AuthState {
   isAuthenticated: boolean;
 }
 
+/**
+ * Whether two users are the same as far as this app is concerned.
+ *
+ * ## Why identity is worth this much care
+ *
+ * `user` is a dependency of the effect in `useWebSocket`, so **a new object with
+ * identical contents tears the socket down and opens another one**. That is not
+ * hypothetical - it shipped, and the loop was:
+ *
+ *   socket opens → server sends `connected` → `updateUser(payload)` → `set()`
+ *   spreads a fresh object → `user` identity changes → the effect's cleanup runs
+ *   → `disconnect()` → a new socket opens → …
+ *
+ * Twice a second, forever, visible as an endless run of `socket closed` at code
+ * 1000 in the server log. `AuthMiddleware` re-writing the session every few
+ * minutes did the same thing more slowly.
+ *
+ * Fixing it in the *store* rather than in each consumer's dependency array is
+ * deliberate: a dependency list is a thing every future caller has to get right,
+ * and this is one place that makes the whole class of bug impossible.
+ */
+const sameUser = (a: User | null, b: User | null): boolean => {
+  if (a === b) return true;
+  if (a === null || b === null) return false;
+  return (
+    a.id === b.id &&
+    a.email === b.email &&
+    a.displayName === b.displayName &&
+    a.picture === b.picture &&
+    a.isDemo === b.isDemo &&
+    a.roles.length === b.roles.length &&
+    a.roles.every((role, i) => role === b.roles[i])
+  );
+};
+
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, _get) => ({
+    (set) => ({
       token: null,
       user: null,
       isAuthenticated: false,
+
+      /**
+       * Keeps the existing `user` object when the new one is equal, so a repeated
+       * sign-in check does not invalidate every consumer that depends on it.
+       */
       setAuth: (token, user) => {
-        set({ token, user, isAuthenticated: true });
-      },
-      updateUser: (updates: Partial<User>) => {
         set((state) => ({
-          user: state.user ? { ...state.user, ...updates } : null,
+          token,
+          user: sameUser(state.user, user) ? state.user : user,
+          isAuthenticated: true,
         }));
       },
+
+      updateUser: (updates: Partial<User>) => {
+        set((state) => {
+          if (state.user === null) return {};
+          const next = { ...state.user, ...updates };
+          // No change, no new object - see `sameUser`.
+          return sameUser(state.user, next) ? {} : { user: next };
+        });
+      },
+
       clearAuth: () => {
         set({ token: null, user: null, isAuthenticated: false });
       },

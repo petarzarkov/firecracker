@@ -65,13 +65,21 @@ export class DatabaseBootstrap {
  * Three of these four pragmas are what make that safe, and they replace what
  * `pg_try_advisory_xact_lock` was doing:
  *
+ *  - **`busy_timeout` is first, and the order is not cosmetic.** SQLite allows a
+ *    single writer, and without a timeout the loser of a race gets `SQLITE_BUSY`
+ *    immediately - which in a bet path is a player told "please try again"
+ *    because a cleanup job happened to be writing. It has to be set **before**
+ *    `journal_mode`, because switching journal mode itself takes a lock: with
+ *    this pragma third, starting the web process and the worker together against
+ *    a fresh database crashed whichever lost, at boot:
+ *
+ *        SQLiteError: database is locked  (SQLITE_BUSY)
+ *          at openDriver (@dunx/infra/src/db/sqlite/options.ts)
+ *
+ *    Every pragma after the failing one is also never applied, so the process
+ *    that *did* start could be left without WAL. Timeout first.
  *  - `journal_mode = WAL` lets the web process read while the worker writes.
  *    Without it a settling round blocks every `SELECT` in the tick loop.
- *  - `busy_timeout = 5000` is the one that matters most. SQLite allows a single
- *    writer, and without a timeout the loser of a race gets `SQLITE_BUSY`
- *    immediately - which, in a bet path, is a player told "please try again"
- *    because a cleanup job happened to be writing. Five seconds is far beyond any
- *    honest write here and well under the queue's job timeout.
  *  - `synchronous = NORMAL` is the documented WAL pairing: durable across a process
  *    crash, which is the failure this app actually has, and not across a power cut,
  *    which for round history is an acceptable trade for the fsync.
@@ -90,10 +98,11 @@ export class DatabaseModule {
         return new SyncSqliteOptions({
           schema,
           filename: settings.sqlitePath,
+          // Order matters - see the note above. `busy_timeout` first.
           pragmas: [
+            `busy_timeout = ${settings.busyTimeoutMs}`,
             'journal_mode = WAL',
             'foreign_keys = ON',
-            `busy_timeout = ${settings.busyTimeoutMs}`,
             'synchronous = NORMAL',
           ],
         });
