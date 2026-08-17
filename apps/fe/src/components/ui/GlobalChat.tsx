@@ -1,3 +1,4 @@
+import { SOCKET_CLIENT_EVENTS } from '@firecracker/contracts';
 import { Box, Flex, IconButton, Image, Stack, Text } from '@chakra-ui/react';
 import { useMemo } from 'react';
 import { MdExpandMore } from 'react-icons/md';
@@ -188,8 +189,7 @@ export function GlobalChat({ socket }: GlobalChatProps) {
 
   const handleSendMessage = (message: string) => {
     if (!socket) return;
-    // Server listens on 'chatMessage' (EventsGateway.handleChatMessage)
-    socket.emit('chatMessage', { message });
+    socket.emit(SOCKET_CLIENT_EVENTS.CHAT_MESSAGE, { message });
   };
 
   return (

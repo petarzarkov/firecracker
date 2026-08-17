@@ -7,25 +7,14 @@ import {
 } from 'drizzle-orm/sqlite-core';
 import { users } from '../../users/schema/user.schema.js';
 import { createdAt, updatedAt, uuidPk } from '../../infra/db/columns.js';
+import { TRANSACTION_TYPES } from '@firecracker/contracts';
 import { gameBets } from './game-bet.schema.js';
 
-export const WalletTransactionType = Object.freeze({
-  DEPOSIT: 'deposit',
-  WITHDRAWAL: 'withdrawal',
-  BET_DEBIT: 'bet_debit',
-  WIN_CREDIT: 'win_credit',
-  REFUND: 'refund',
-} as const);
-export type WalletTransactionType =
-  (typeof WalletTransactionType)[keyof typeof WalletTransactionType];
-
-const TRANSACTION_TYPES = [
-  WalletTransactionType.DEPOSIT,
-  WalletTransactionType.WITHDRAWAL,
-  WalletTransactionType.BET_DEBIT,
-  WalletTransactionType.WIN_CREDIT,
-  WalletTransactionType.REFUND,
-] as const;
+/** The transaction kinds, from `@firecracker/contracts`. */
+export {
+  TRANSACTION_TYPES,
+  WalletTransactionType,
+} from '@firecracker/contracts';
 
 /**
  * Two wallets per user: `isDemo=false` is real money, `isDemo=true` is the demo

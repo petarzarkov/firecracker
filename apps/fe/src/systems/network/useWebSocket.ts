@@ -1,26 +1,28 @@
+import {
+  type ChatLine,
+  GAME_CLIENT_EVENTS,
+  type ConnectedPayload,
+  PLAYER_CHAT_EVENTS,
+  type PlayerChatMessagePayload,
+  type PlayerChatRoom,
+  type PlayerChatSystemPayload,
+  SOCKET_EVENTS,
+} from '@firecracker/contracts';
 import { useEffect, useState } from 'react';
 import { io, type Socket } from './socket';
-import { type User, useAuthStore } from '@/store/authStore';
+import { useAuthStore } from '@/store/authStore';
 import { useChatStore } from '@/store/chatStore';
-import type { ChatMessage } from '@/types';
-
-// Raw shape the server emits on the 'message' event (EventsGateway.handleChatMessage)
-interface ServerChatMessage {
-  username: string;
-  message: string;
-  timestamp: Date;
-  picture?: string | null;
-}
 
 /**
- * One line of scrollback.
+ * A line of chat is one type, `ChatLine`, for both the live `message` frame and the
+ * `chatHistory` replay - `ChatService` stores exactly what it broadcasts.
  *
- * The **same shape** as a live `message` frame, because it is the same thing
- * replayed - `ChatService` stores exactly what it broadcasts. Keeping the two in
- * step is the point: they diverged once, and the history mapped to a `senderName`
- * the server had stopped sending, which crashed the chat panel on render.
+ * It used to be declared here as well as on the server, and the two diverged: the
+ * history arrived as `username` while this file mapped a `senderName` the server
+ * had stopped sending, and the chat panel crashed on render. It also had
+ * `timestamp: Date`, which no JSON frame has ever carried - the server sends an
+ * ISO string, and `new Date(...)` below is what turns it into one.
  */
-type ServerChatLine = ServerChatMessage;
 
 export function useWebSocket() {
   // useState (not useRef) so that setting the socket triggers a re-render and
@@ -118,7 +120,7 @@ export function useWebSocket() {
         console.warn('[WebSocket] Reconnection failed after max attempts');
       });
 
-      newSocket.on('connected', (data: { payload: User }) => {
+      newSocket.on(SOCKET_EVENTS.CONNECTED, (data: ConnectedPayload) => {
         updateUser(data.payload);
       });
 
@@ -138,74 +140,54 @@ export function useWebSocket() {
 
       // ── Player chat events ──────────────────────────────────────────────
 
-      newSocket.on(
-        'playerChatRoomCreated',
-        (data: {
-          roomId: string;
-          participants: string[];
-          participantNames: Record<string, string>;
-          creatorId: string;
-          creatorName: string;
-        }) => {
-          newSocket.emit('joinPlayerChat', {
-            roomId: data.roomId,
-            targetUserId: '',
-          });
-          createPlayerChat(
-            data.roomId,
-            data.participants,
-            data.participantNames,
-            data.creatorId,
-            data.creatorName,
-          );
-        },
-      );
+      newSocket.on(PLAYER_CHAT_EVENTS.ROOM_CREATED, (data: PlayerChatRoom) => {
+        newSocket.emit(GAME_CLIENT_EVENTS.JOIN_PLAYER_CHAT, {
+          roomId: data.roomId,
+          targetUserId: '',
+        });
+        createPlayerChat(
+          data.roomId,
+          data.participants,
+          data.participantNames,
+          data.creatorId,
+          data.creatorName,
+        );
+      });
+
+      newSocket.on(PLAYER_CHAT_EVENTS.ROOM_JOINED, (data: PlayerChatRoom) => {
+        createPlayerChat(
+          data.roomId,
+          data.participants,
+          data.participantNames,
+          data.creatorId,
+          data.creatorName,
+        );
+      });
 
       newSocket.on(
-        'playerChatRoomJoined',
-        (data: {
-          roomId: string;
-          participants: string[];
-          participantNames: Record<string, string>;
-          creatorId: string;
-          creatorName: string;
-        }) => {
-          createPlayerChat(
-            data.roomId,
-            data.participants,
-            data.participantNames,
-            data.creatorId,
-            data.creatorName,
-          );
-        },
-      );
-
-      newSocket.on(
-        'playerChatMessage',
-        (data: ChatMessage & { roomId: string }) => {
+        PLAYER_CHAT_EVENTS.MESSAGE,
+        (data: PlayerChatMessagePayload) => {
           addPlayerChatMessage(data.roomId, {
             senderId: data.senderId,
             senderName: data.senderName,
-            senderPicture: data.senderPicture,
             message: data.message,
-            timestamp: data.timestamp,
+            // The frame carries an ISO string; `ChatMessage.timestamp` is a
+            // `Date`, and the panel calls `toLocaleTimeString` on it. This
+            // handler was passing the string straight through under a `Date`
+            // annotation, which the shared type no longer permits.
+            timestamp: new Date(data.timestamp),
           });
         },
       );
 
       newSocket.on(
-        'playerChatSystemMessage',
-        (data: {
-          roomId: string;
-          message: string;
-          timestamp: Date;
-          type: 'join' | 'leave';
-        }) => {
+        PLAYER_CHAT_EVENTS.SYSTEM_MESSAGE,
+        (data: PlayerChatSystemPayload) => {
           addPlayerChatMessage(data.roomId, {
             senderId: 'system',
             senderName: 'System',
             message: data.message,
-            timestamp: data.timestamp,
+            timestamp: new Date(data.timestamp),
             isSystem: true,
           });
         },
@@ -218,7 +200,7 @@ export function useWebSocket() {
        * it did before this handler existed, which read as the feature being
        * broken rather than reset. See `ChatService` on the server.
        */
-      newSocket.on('chatHistory', (lines: ServerChatLine[]) => {
+      newSocket.on(SOCKET_EVENTS.CHAT_HISTORY, (lines: ChatLine[]) => {
         setGlobalChatMessages(
           (lines ?? []).map((line) => ({
             senderId: line.username,
@@ -232,7 +214,7 @@ export function useWebSocket() {
 
       // ── Chat — the server emits 'message' for each new line ──
       // Server shape: { username, message, timestamp }
-      newSocket.on('message', (data: ServerChatMessage) => {
+      newSocket.on(SOCKET_EVENTS.MESSAGE, (data: ChatLine) => {
         addGlobalChatMessage({
           senderId: data.username,
           senderName: data.username,
@@ -243,7 +225,7 @@ export function useWebSocket() {
       });
 
       // ── Connected player count ──────────────────────────────────────────
-      newSocket.on('userCount', (count: number) => {
+      newSocket.on(SOCKET_EVENTS.USER_COUNT, (count: number) => {
         setConnectedPlayers(count);
       });
 
@@ -258,15 +240,13 @@ export function useWebSocket() {
       if (activeSocket) {
         activeSocket.off('disconnect');
         activeSocket.off('connect_error');
-        activeSocket.off('connected');
+        activeSocket.off(SOCKET_EVENTS.CONNECTED);
         activeSocket.off('error');
-        activeSocket.off('playerChatRoomCreated');
-        activeSocket.off('playerChatRoomJoined');
-        activeSocket.off('playerChatMessage');
-        activeSocket.off('playerChatSystemMessage');
-        activeSocket.off('chatHistory');
-        activeSocket.off('message');
-        activeSocket.off('userCount');
+        for (const event of Object.values(PLAYER_CHAT_EVENTS))
+          activeSocket.off(event);
+        activeSocket.off(SOCKET_EVENTS.CHAT_HISTORY);
+        activeSocket.off(SOCKET_EVENTS.MESSAGE);
+        activeSocket.off(SOCKET_EVENTS.USER_COUNT);
         activeSocket.io.off('reconnect_failed');
         activeSocket.disconnect();
         setSocket(null);

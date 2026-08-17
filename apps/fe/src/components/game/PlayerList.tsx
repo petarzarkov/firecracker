@@ -1,3 +1,4 @@
+import { GAME_CLIENT_EVENTS } from '@firecracker/contracts';
 import { Box, Flex, Text } from '@chakra-ui/react';
 import { memo, useEffect, useRef } from 'react';
 import type { BetEntry, GamePhase } from '@/store/gameStore';
@@ -77,7 +78,10 @@ function MessageButton({ bet }: { bet: BetEntry }) {
       aria-label={`Message ${bet.username}`}
       title={`Message ${bet.username}`}
       onClick={() =>
-        socket.emit('joinPlayerChat', { roomId: '', targetUserId: bet.userId })
+        socket.emit(GAME_CLIENT_EVENTS.JOIN_PLAYER_CHAT, {
+          roomId: '',
+          targetUserId: bet.userId,
+        })
       }
       fontSize="10px"
       lineHeight={1}

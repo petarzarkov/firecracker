@@ -1,5 +1,6 @@
 import { Logger } from '@dunx/core';
 import { RedisConnection } from '@dunx/infra/redis';
+import type { ChatLine } from '@firecracker/contracts';
 
 /**
  * The key the NestJS version used, kept deliberately.
@@ -13,14 +14,12 @@ const HISTORY_KEY = 'chat:global:history';
 /** How many messages are kept, and therefore how much a joining client gets. */
 export const CHAT_HISTORY_MAX = 50;
 
-/** One line of chat, on the wire and in Redis. */
-export interface ChatLine {
-  readonly username: string;
-  readonly message: string;
-  readonly timestamp: string;
-  /** The sender's avatar at the time they sent it. `null` if they had none. */
-  readonly picture: string | null;
-}
+/**
+ * One line of chat, on the wire and in Redis - the *same* type, from
+ * `@firecracker/contracts`, because what is stored here is replayed verbatim as
+ * `chatHistory` and the client reads both with one handler.
+ */
+export type { ChatLine };
 
 /**
  * The lobby's chat scrollback, in Redis.

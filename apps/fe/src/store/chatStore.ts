@@ -11,7 +11,7 @@ interface ChatState {
   // Player chat actions
   createPlayerChat: (
     roomId: string,
-    participants: string[],
+    participants: readonly string[],
     participantNames: Record<string, string>,
     creatorId: string,
     creatorName: string,
@@ -59,7 +59,9 @@ export const useChatStore = create<ChatState>()(
         if (!state.playerChats[roomId]) {
           state.playerChats[roomId] = {
             roomId,
-            participants,
+            // Copied: the wire's list is readonly, and what the store holds is
+            // its own to edit.
+            participants: [...participants],
             participantNames,
             creatorId,
             creatorName,

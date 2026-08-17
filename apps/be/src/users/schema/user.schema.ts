@@ -10,12 +10,13 @@ import {
   updatedAt,
   uuidPk,
 } from '../../infra/db/columns.js';
+import { UserRole } from '@firecracker/contracts';
 
-export const UserRole = Object.freeze({
-  ADMIN: 'admin',
-  USER: 'user',
-} as const);
-export type UserRole = (typeof UserRole)[keyof typeof UserRole];
+/**
+ * The roles, from `@firecracker/contracts` - the client gates admin UI on the
+ * same values `@Roles()` reads here.
+ */
+export { UserRole } from '@firecracker/contracts';
 
 /**
  * Better Auth's `user` model, and the app's users table - one table, not two.

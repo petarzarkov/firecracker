@@ -1,4 +1,5 @@
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { GameRoundStatus, ROUND_STATUSES } from '@firecracker/contracts';
 import {
   createdAt,
   timestampMs,
@@ -6,21 +7,8 @@ import {
   uuidPk,
 } from '../../infra/db/columns.js';
 
-export const GameRoundStatus = Object.freeze({
-  WAITING: 'waiting',
-  RUNNING: 'running',
-  CRASHED: 'crashed',
-  FAILED: 'failed',
-} as const);
-export type GameRoundStatus =
-  (typeof GameRoundStatus)[keyof typeof GameRoundStatus];
-
-const ROUND_STATUSES = [
-  GameRoundStatus.WAITING,
-  GameRoundStatus.RUNNING,
-  GameRoundStatus.CRASHED,
-  GameRoundStatus.FAILED,
-] as const;
+/** The status values, from `@firecracker/contracts`. See the bet schema. */
+export { GameRoundStatus, ROUND_STATUSES } from '@firecracker/contracts';
 
 /**
  * One round of the crash game, and the provably-fair record for it.

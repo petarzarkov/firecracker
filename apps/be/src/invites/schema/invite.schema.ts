@@ -1,4 +1,5 @@
 import { index, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { INVITE_STATUSES, InviteStatus } from '@firecracker/contracts';
 import { UserRole } from '../../users/schema/user.schema.js';
 import {
   createdAt,
@@ -7,18 +8,8 @@ import {
   uuidPk,
 } from '../../infra/db/columns.js';
 
-export const InviteStatus = Object.freeze({
-  PENDING: 'pending',
-  ACCEPTED: 'accepted',
-  EXPIRED: 'expired',
-} as const);
-export type InviteStatus = (typeof InviteStatus)[keyof typeof InviteStatus];
-
-const STATUSES = [
-  InviteStatus.PENDING,
-  InviteStatus.ACCEPTED,
-  InviteStatus.EXPIRED,
-] as const;
+/** The invite states, from `@firecracker/contracts`. */
+export { InviteStatus } from '@firecracker/contracts';
 
 /**
  * An invitation to join, and the role it grants.
@@ -44,7 +35,7 @@ export const invites = sqliteTable(
     role: text('role', { enum: [UserRole.ADMIN, UserRole.USER] })
       .notNull()
       .default(UserRole.USER),
-    status: text('status', { enum: STATUSES })
+    status: text('status', { enum: INVITE_STATUSES })
       .notNull()
       .default(InviteStatus.PENDING),
     expiresAt: timestampMs('expires_at').notNull(),

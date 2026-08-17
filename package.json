@@ -10,7 +10,8 @@
     "url": "https://github.com/petarzarkov/"
   },
   "workspaces": [
-    "apps/*"
+    "apps/*",
+    "libs/*"
   ],
   "type": "module",
   "scripts": {
@@ -24,8 +25,8 @@
     "test": "bun run --filter '*' test",
     "test:e2e": "bun run --filter 'firecracker-be' test:e2e",
     "typecheck": "bun run --filter '*' typecheck",
-    "lint": "oxlint --fix apps",
-    "lint:check": "oxlint apps",
+    "lint": "oxlint --fix apps libs",
+    "lint:check": "oxlint apps libs",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "mig:gen": "bun run --filter 'firecracker-be' mig:gen",

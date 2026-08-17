@@ -15,6 +15,8 @@ firecracker/
 ├── apps/
 │   ├── be/          firecracker-be — the dunx API, the worker, the socket gateway
 │   └── fe/          firecracker-fe — the React + Vite client
+├── libs/
+│   └── contracts/   @firecracker/contracts — the wire both apps agree on
 ├── bunfig.toml      the @dunx/transform preload (load-bearing, see below)
 ├── docker-compose.yml       development: Redis and nothing else
 └── docker-compose.prod.yml  deployed: cloudflared + Redis + API + worker
@@ -202,14 +204,30 @@ Migrations also run at boot, in `DatabaseBootstrap`.
 - The wire is `{ event, data }`. The client's `apps/fe/src/systems/network/socket.ts` is a socket.io-shaped shim over it, which is why the React components never changed.
 - Broadcasting goes through `EventsPublisher`, never `socket.publish` — the latter does not cross processes.
 
+### The wire is declared once, in `libs/contracts`
+
+Every socket event name, the payload it carries, and the enums both sides read live in `@firecracker/contracts`. Both apps depend on it; neither restates it.
+
+They used to. The server declared the payloads in `game.events.ts` and the client hand-wrote its own beside its handlers, and the copies drifted **four times** — three of them a `userId` the server sent and the client did not read, the fourth a `username` the client read as `senderName`, which crashed the chat panel. Every one shipped, and every one was found by a person looking at a screen.
+
+- **In the lib:** event names, payloads, `GameRoundStatus`, `GameBetStatus`, `UserRole`, `InviteStatus`, `WalletTransactionType`.
+- **Not in the lib:** queue names, job names, job payloads, topic helpers. That is the server talking to itself, and a name a browser can read is a name somebody will send.
+- **No zod in there.** Sharing schemas would put zod in the browser bundle, and validating a frame is a separate decision from agreeing on its shape. The payloads are `interface`s and erase at build time.
+- Publish through `publishGame`, not `EventsPublisher.publish` — the latter takes `unknown`, which is the hole all four bugs came through.
+
 ---
 
 ## Testing
 
 ```bash
-bun test                 # everything
+bun run test             # every workspace
 bun run test:e2e         # e2e, from apps/be
 ```
+
+`bun run test`, not a bare `bun test` at the root: the root `bunfig.toml` preloads
+`@dunx/transform`, which resolves from `apps/be` and not from the root, so a
+root-level run fails naming a provider it could not build. Each workspace runs its
+own.
 
 - `*.test.ts` — unit, no container
 - `*.spec.ts` — integration: the real graph, a real `Bun.serve` on port 0, in-memory SQLite
@@ -226,9 +244,9 @@ A bug fix comes with the test that would have caught it.
 | `bun dev`                     | both apps, and the worker   |
 | `bun run dev:be` / `dev:fe`   | one of them                 |
 | `bun run worker`              | the queue consumer          |
-| `bun test`                    | every test in the workspace |
+| `bun run test`                | every test in the workspace |
 | `bun run lint` / `format`     | oxlint / oxfmt              |
-| `bun run typecheck`           | both apps                   |
+| `bun run typecheck`           | every workspace             |
 | `bun run mig:gen` / `mig:run` | drizzle migrations          |
 
 Redis must be up for rounds to advance: `docker compose up -d`.

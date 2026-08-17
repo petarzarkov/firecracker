@@ -1,8 +1,19 @@
 /**
- * Every queue name, job name, socket topic and socket event in one file, because
- * three processes have to agree on all of them: the web app publishes, the worker
- * consumes, and a browser subscribes.
+ * The names the notification side uses.
+ *
+ * The socket half - `EVENTS`, `CLIENT_EVENTS` and the payloads behind them - is
+ * re-exported from `@firecracker/contracts`, which is where a name the browser
+ * also has to know belongs. Queues, jobs and their payloads stay here: they are
+ * how the web process talks to the worker, and nothing outside this app sends one.
  */
+export {
+  /** What the server sends. The envelope on the wire is `{"event":..,"data":..}`. */
+  SOCKET_EVENTS as EVENTS,
+  /** What a client sends. */
+  SOCKET_CLIENT_EVENTS as CLIENT_EVENTS,
+} from '@firecracker/contracts';
+export type { ChatLine } from '@firecracker/contracts';
+
 export const QUEUES = Object.freeze({
   /** User-facing side effects: emails, socket notifications. */
   NOTIFICATIONS: 'notifications',
@@ -31,21 +42,6 @@ export const TOPICS = Object.freeze({
 } as const);
 
 export const userTopic = (userId: string): string => `user_${userId}`;
-
-/** What the server sends. The envelope on the wire is `{"event":..,"data":..}`. */
-export const EVENTS = Object.freeze({
-  CONNECTED: 'connected',
-  NOTIFICATION: 'notification',
-  MESSAGE: 'message',
-  /** The chat scrollback, sent once per connection. */
-  CHAT_HISTORY: 'chatHistory',
-  USER_COUNT: 'userCount',
-} as const);
-
-/** What a client sends. */
-export const CLIENT_EVENTS = Object.freeze({
-  CHAT_MESSAGE: 'chatMessage',
-} as const);
 
 export interface UserRegisteredJob {
   readonly userId: string;

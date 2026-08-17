@@ -7,22 +7,15 @@ import {
 } from 'drizzle-orm/sqlite-core';
 import { users } from '../../users/schema/user.schema.js';
 import { createdAt, updatedAt, uuidPk } from '../../infra/db/columns.js';
+import { BET_STATUSES, GameBetStatus } from '@firecracker/contracts';
 import { gameRounds } from './game-round.schema.js';
 
-export const GameBetStatus = Object.freeze({
-  ACTIVE: 'active',
-  CASHED_OUT: 'cashed_out',
-  LOST: 'lost',
-  REFUNDED: 'refunded',
-} as const);
-export type GameBetStatus = (typeof GameBetStatus)[keyof typeof GameBetStatus];
-
-const BET_STATUSES = [
-  GameBetStatus.ACTIVE,
-  GameBetStatus.CASHED_OUT,
-  GameBetStatus.LOST,
-  GameBetStatus.REFUNDED,
-] as const;
+/**
+ * The status values, from `@firecracker/contracts` - the same declaration the
+ * client renders from, so a status the database can hold is a status the browser
+ * has a branch for.
+ */
+export { BET_STATUSES, GameBetStatus } from '@firecracker/contracts';
 
 /**
  * One player's stake in one round.

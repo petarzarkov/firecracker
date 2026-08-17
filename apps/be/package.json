@@ -36,6 +36,7 @@
     "@dunx/infra": "^2.0.1",
     "@dunx/openapi": "^2.0.1",
     "@dunx/transform": "^2.0.1",
+    "@firecracker/contracts": "workspace:*",
     "@google/genai": "^2.17.1",
     "better-auth": "^1.6.25",
     "bullmq": "^6.0.5",

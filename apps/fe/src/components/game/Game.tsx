@@ -1,3 +1,4 @@
+import { SOCKET_CLIENT_EVENTS } from '@firecracker/contracts';
 import {
   Box,
   Flex,
@@ -47,7 +48,7 @@ function InlineChatPanel({ full = false }: { full?: boolean }) {
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || !socket) return;
-    socket.emit('chatMessage', { message: input.trim() });
+    socket.emit(SOCKET_CLIENT_EVENTS.CHAT_MESSAGE, { message: input.trim() });
     setInput('');
   };
 
@@ -241,7 +242,7 @@ export function Game() {
   );
 
   const handleSendGlobal = (message: string) => {
-    socket?.emit('chatMessage', { message });
+    socket?.emit(SOCKET_CLIENT_EVENTS.CHAT_MESSAGE, { message });
   };
 
   return (

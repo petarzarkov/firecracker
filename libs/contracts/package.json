@@ -1,0 +1,22 @@
+{
+  "name": "@firecracker/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The wire between apps/be and apps/fe: socket event names, payload shapes and the enums both sides read.",
+  "license": "MIT",
+  "files": [
+    "src"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "typescript": "^7.0.2"
+  }
+}

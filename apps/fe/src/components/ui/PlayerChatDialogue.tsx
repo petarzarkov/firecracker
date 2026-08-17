@@ -1,3 +1,4 @@
+import { GAME_CLIENT_EVENTS } from '@firecracker/contracts';
 import type { Socket } from '@/systems/network/socket';
 import { CHAT_THEME } from '@/theme/chat';
 import { useChatStore } from '../../store/chatStore';
@@ -22,7 +23,7 @@ export function PlayerChatDialogue({
   const handleSendMessage = (message: string) => {
     if (!socket) return;
 
-    socket.emit('sendPlayerChatMessage', {
+    socket.emit(GAME_CLIENT_EVENTS.SEND_PLAYER_CHAT, {
       roomId,
       message,
     });
@@ -30,7 +31,7 @@ export function PlayerChatDialogue({
 
   const handleClose = () => {
     if (socket) {
-      socket.emit('leavePlayerChat', { roomId });
+      socket.emit(GAME_CLIENT_EVENTS.LEAVE_PLAYER_CHAT, { roomId });
     }
     closePlayerChat(roomId);
   };

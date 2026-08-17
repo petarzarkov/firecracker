@@ -1,3 +1,4 @@
+import { GAME_CLIENT_EVENTS } from '@firecracker/contracts';
 /* oxlint-disable max-lines -- Pre-existing: 508 lines, untouched by the dunx
    migration. The transport underneath it changed and this component did not, which
    was the point of the socket shim. Worth splitting on its own, not inside a
@@ -264,7 +265,7 @@ export function BetPanel() {
       },
       myUserId,
     );
-    socket.emit('placeBet', {
+    socket.emit(GAME_CLIENT_EVENTS.PLACE_BET, {
       betAmountCents: amountCents,
       isDemo: isDemoMode,
       ...(hasAutoCashOut ? { autoCashOutAt: autoCashOutTarget } : {}),
@@ -293,7 +294,7 @@ export function BetPanel() {
       payoutCents: Math.floor(myBet.betAmountCents * mult),
       isOptimistic: true,
     });
-    socket.emit('cashOut');
+    socket.emit(GAME_CLIENT_EVENTS.CASH_OUT);
   }
 
   // Auto-play requires auto exit — turn off if exit target is removed

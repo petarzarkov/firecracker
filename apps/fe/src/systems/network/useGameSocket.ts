@@ -1,92 +1,59 @@
+import {
+  type ActiveBetView,
+  type BetAckPayload,
+  type BetCashedOutPayload,
+  type BetPlacedPayload,
+  type CashOutAckPayload,
+  GAME_EVENTS,
+  type GameCrashedPayload,
+  type GamePhase as WirePhase,
+  type GamePhasePayload,
+  type GameRoundStatePayload,
+  type GameTickPayload,
+  type WalletUpdatedPayload,
+} from '@firecracker/contracts';
 import { startTransition, useEffect } from 'react';
 import { useSocket } from '@/SocketContext';
 import { useAuthStore } from '@/store/authStore';
 import { type BetEntry, type GamePhase, useGameStore } from '@/store/gameStore';
 
-// ── Server payload shapes (matching src/notifications/events/events.dto.ts) ──
-
-interface ServerBetSummary {
-  userId: string;
-  username: string;
-  betAmountCents: number;
-  isDemo: boolean;
-  cashedOutAt?: number;
-  payoutCents?: number;
-}
-
-interface ServerCrashedRoundSummary {
-  roundId: string;
-  crashPoint: number;
-}
-
-interface ServerGameRoundStatePayload {
-  roundId: string | null;
-  phase: 'waiting' | 'running' | 'crashed';
-  seedHash: string | null;
-  multiplier?: number;
-  elapsed?: number;
-  activeBets: ServerBetSummary[];
-  waitingEndsAt?: string;
-  recentCrashes?: ServerCrashedRoundSummary[];
-}
-
-interface ServerGamePhasePayload {
-  roundId: string;
-  phase: 'waiting' | 'running' | 'crashed';
-  seedHash: string;
-  waitingEndsAt?: string;
-}
-
-interface ServerGameCrashedPayload {
-  roundId: string;
-  crashPoint: number;
-  seed: string;
-  crashedAt: string;
-}
-
-interface ServerBetPlacedPayload {
-  userId: string;
-  username: string;
-  betAmountCents: number;
-  isDemo: boolean;
-}
-
-interface ServerBetCashedOutPayload {
-  userId: string;
-  username: string;
-  multiplier: number;
-  payoutCents: number;
-  isDemo: boolean;
-}
-
-interface BetAckPayload {
-  success: boolean;
-  error?: string;
-  /** The caller's own id. See the note where this is consumed. */
-  userId?: string;
-  username?: string;
-  betAmountCents?: number;
-}
-
-interface CashOutAckPayload {
-  success: boolean;
-  multiplier?: number;
-  payoutCents?: number;
-  error?: string;
-}
+/**
+ * The wire's phase, mapped to the store's.
+ *
+ * A `Record` rather than `.toUpperCase() as GamePhase`, which is what this did:
+ * the cast asserted the two vocabularies matched, and they did not. The server has
+ * a `failed` phase - a round that errored and refunded - and uppercasing it
+ * produced `'FAILED'`, a value nothing in the store or the UI has a branch for.
+ * Written this way, adding a phase server-side is a compile error here.
+ *
+ * `failed` maps to `IDLE`, not `CRASHED`: nothing is running, and drawing a crash
+ * that never happened would be a lie about a round the player was refunded for.
+ */
+const CLIENT_PHASE: Record<WirePhase, GamePhase> = {
+  waiting: 'WAITING',
+  running: 'RUNNING',
+  crashed: 'CRASHED',
+  failed: 'IDLE',
+};
 
 /**
- * Map a server BetSummary to the client BetEntry shape.
- * The server doesn't expose userId — username is used as the dedup key.
+ * A server bet, as the store holds it.
+ *
+ * `userId` is the server's id. It used to be the **username** here, with a comment
+ * claiming the server did not send one - true when it was written, false since
+ * `ActiveBetView` gained the field. The result was that the snapshot sent on
+ * connect keyed every row on a name while every later frame keyed on an id, so a
+ * player who reloaded mid-round got a second row for their own bet and no
+ * cash-out. Sharing the type is what surfaced it.
  */
-function mapServerBet(b: ServerBetSummary): BetEntry {
+export function mapServerBet(bet: ActiveBetView): BetEntry {
   return {
-    userId: b.username,
-    username: b.username,
-    betAmountCents: b.betAmountCents,
-    status: b.cashedOutAt != null ? 'CASHED_OUT' : 'ACTIVE',
-    cashedOutAt: b.cashedOutAt,
-    payoutCents: b.payoutCents,
+    userId: bet.userId,
+    username: bet.username,
+    betAmountCents: bet.betAmountCents,
+    status: bet.cashedOutAt != null ? 'CASHED_OUT' : 'ACTIVE',
+    cashedOutAt: bet.cashedOutAt,
+    payoutCents: bet.payoutCents,
   };
 }
 
@@ -120,12 +87,12 @@ export function useGameSocket() {
     if (!socket) return;
 
     // Initial state sync on connect — deferred, large payload
-    socket.on('gameRoundState', (data: ServerGameRoundStatePayload) => {
+    socket.on(GAME_EVENTS.ROUND_STATE, (data: GameRoundStatePayload) => {
       startTransition(() => {
         setRoundState(
           {
             roundId: data.roundId,
-            phase: data.phase.toUpperCase() as GamePhase,
+            phase: CLIENT_PHASE[data.phase],
             multiplier: data.multiplier ?? 1.0,
             elapsed: data.elapsed ?? 0,
             activeBets: data.activeBets.map(mapServerBet),
@@ -143,10 +110,10 @@ export function useGameSocket() {
     });
 
     // Phase changes are urgent — drive chart/button state immediately
-    socket.on('gamePhaseChange', (data: ServerGamePhasePayload) => {
+    socket.on(GAME_EVENTS.PHASE_CHANGE, (data: GamePhasePayload) => {
       setPhase({
         roundId: data.roundId,
-        phase: data.phase.toUpperCase() as GamePhase,
+        phase: CLIENT_PHASE[data.phase],
         waitingEndsAt: data.waitingEndsAt
           ? new Date(data.waitingEndsAt)
           : undefined,
@@ -154,17 +121,17 @@ export function useGameSocket() {
     });
 
     // Ticks only mutate liveRef — no React state, always immediate
-    socket.on('gameTick', (data: { multiplier: number; elapsed: number }) => {
+    socket.on(GAME_EVENTS.TICK, (data: GameTickPayload) => {
       addTick(data.multiplier, data.elapsed);
     });
 
     // Crash is urgent — updates phase + marks losing bets
-    socket.on('gameCrashed', (data: ServerGameCrashedPayload) => {
+    socket.on(GAME_EVENTS.CRASHED, (data: GameCrashedPayload) => {
       setCrashed(data.roundId, data.crashPoint);
     });
 
     // Player list updates — deferred so they don't block RAF/setInterval
-    socket.on('betPlaced', (data: ServerBetPlacedPayload) => {
+    socket.on(GAME_EVENTS.BET_PLACED, (data: BetPlacedPayload) => {
       startTransition(() => {
         addBet(
           {
@@ -178,7 +145,7 @@ export function useGameSocket() {
       });
     });
 
-    socket.on('betCashedOut', (data: ServerBetCashedOutPayload) => {
+    socket.on(GAME_EVENTS.BET_CASHED_OUT, (data: BetCashedOutPayload) => {
       startTransition(() => {
         /**
          * Keyed on the id, not the username.
@@ -206,7 +173,7 @@ export function useGameSocket() {
       });
     });
 
-    socket.on('betAck', (data: BetAckPayload) => {
+    socket.on(GAME_EVENTS.BET_ACK, (data: BetAckPayload) => {
       if (
         data.success &&
         data.userId &&
@@ -234,14 +201,14 @@ export function useGameSocket() {
       }
     });
 
-    socket.on('cashOutAck', (data: CashOutAckPayload) => {
+    socket.on(GAME_EVENTS.CASH_OUT_ACK, (data: CashOutAckPayload) => {
       if (!data.success) {
         rollbackCashOut(); // undo optimistic cashout; phase-aware (LOST if crashed)
       }
     });
 
     // Balance update is low-priority display info
-    socket.on('walletUpdated', (data: { balanceCents: number }) => {
+    socket.on(GAME_EVENTS.WALLET_UPDATED, (data: WalletUpdatedPayload) => {
       startTransition(() => {
         const { isDemoMode } = useGameStore.getState();
         if (isDemoMode) {
@@ -253,15 +220,7 @@ export function useGameSocket() {
     });
 
     return () => {
-      socket.off('gameRoundState');
-      socket.off('gamePhaseChange');
-      socket.off('gameTick');
-      socket.off('gameCrashed');
-      socket.off('betPlaced');
-      socket.off('betCashedOut');
-      socket.off('betAck');
-      socket.off('cashOutAck');
-      socket.off('walletUpdated');
+      for (const event of Object.values(GAME_EVENTS)) socket.off(event);
     };
   }, [
     socket,
