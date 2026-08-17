@@ -187,15 +187,33 @@ const BetRow = memo(function BetRow({
         {formatUSD(bet.betAmountCents)}
       </Text>
 
-      <Box w="70px" textAlign="right">
+      <Box w="82px" textAlign="right">
         {isCashedOut && (
-          <Text
-            fontSize="xs"
-            fontFamily="mono"
-            color={betCashoutColor(bet.status, phase)}
-          >
-            {bet.cashedOutAt?.toFixed(2)}x
-          </Text>
+          <>
+            {/*
+              The amount, with the multiplier under it. The column used to show
+              only the multiplier, which is a rate - what a player scanning the
+              lobby wants to know is how much somebody walked away with.
+            */}
+            <Text
+              fontSize="xs"
+              fontFamily="mono"
+              lineHeight="1.1"
+              color={betCashoutColor(bet.status, phase)}
+            >
+              {bet.payoutCents === undefined
+                ? '—'
+                : `+${formatUSD(bet.payoutCents)}`}
+            </Text>
+            <Text
+              fontSize="9px"
+              fontFamily="mono"
+              color="gray.500"
+              lineHeight="1.1"
+            >
+              {bet.cashedOutAt?.toFixed(2)}x
+            </Text>
+          </>
         )}
         {isLost && (
           <Text
@@ -268,8 +286,8 @@ export function PlayerList() {
         <Text fontSize="2xs" color="gray.600" w="60px" textAlign="right">
           BET
         </Text>
-        <Text fontSize="2xs" color="gray.600" w="70px" textAlign="right">
-          CASHOUT
+        <Text fontSize="2xs" color="gray.600" w="82px" textAlign="right">
+          WON
         </Text>
       </Flex>
 

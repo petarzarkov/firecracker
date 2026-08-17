@@ -33,9 +33,12 @@ export class GameStateService {
             username: bet.playerName,
             betAmountCents: bet.betAmountCents,
             isDemo: bet.isDemo,
-            ...(bet.cashedOutAtX100 !== null
-              ? { cashedOutAt: toMultiplier(bet.cashedOutAtX100) }
-              : {}),
+            ...(bet.cashedOutAtX100 === null
+              ? {}
+              : { cashedOutAt: toMultiplier(bet.cashedOutAtX100) }),
+            ...(bet.payoutCents === null
+              ? {}
+              : { payoutCents: bet.payoutCents }),
           }));
 
     const multiplierX100 = this.engine.currentMultiplierX100();

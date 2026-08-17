@@ -149,11 +149,14 @@ function BetRow({ bet }: { bet: BetEntry }) {
 export function PlayerHistory() {
   const userId = useAuthStore((state) => state.user?.id);
   const phase = useGameStore((state) => state.phase);
+  const myBet = useGameStore((state) => state.myBet);
   const [bets, setBets] = useState<BetEntry[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasNextPage, setHasNextPage] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const loadedOnce = useRef(false);
+  /** The settlement already reflected here, so one event refetches once. */
+  const settledKey = useRef<string | null>(null);
 
   const fetchBets = useCallback(
     async (cursor?: string) => {
@@ -186,7 +189,39 @@ export function PlayerHistory() {
     fetchBets();
   }, [fetchBets]);
 
-  // Auto-refresh at the start of each new WAITING phase (previous round resolved)
+  /**
+   * Refresh the moment **my** bet settles, rather than at the next round.
+   *
+   * This list used to refresh only when a new WAITING phase began, so cashing out
+   * - by hand or automatically - left "MY BETS" showing the bet as still open for
+   * the rest of the round. For an auto-cashout that is the whole feature going
+   * unacknowledged: the player is not watching the button, so this list is where
+   * they find out it worked.
+   *
+   * Keyed so one settlement triggers one fetch. The server writes the row before
+   * it publishes the frame that moves `myBet`, so by the time this runs the
+   * refetch sees the settled bet.
+   */
+  useEffect(() => {
+    if (myBet === null || myBet.status === 'ACTIVE') {
+      // A new round cleared it - let the next settlement through.
+      settledKey.current = null;
+      return;
+    }
+
+    const key = `${myBet.userId}:${myBet.status}:${myBet.cashedOutAt ?? ''}`;
+    if (settledKey.current === key) return;
+    settledKey.current = key;
+    fetchBets();
+  }, [myBet, fetchBets]);
+
+  /**
+   * The backstop, at the start of each WAITING phase.
+   *
+   * Still here because not every settlement moves `myBet`: a refunded round is
+   * resolved server-side without a per-bet frame, so without this such a bet would
+   * sit stale until the page reloaded.
+   */
   useEffect(() => {
     if (phase === 'WAITING' && loadedOnce.current) {
       fetchBets();

@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import { FiExternalLink } from 'react-icons/fi';
 import { IoSend } from 'react-icons/io5';
 import { ChatWindow } from '@/components/ui/ChatWindow';
+import { CHAT_THEME } from '@/theme/chat';
 import { PlayerChatDialogue } from '@/components/ui/PlayerChatDialogue';
 import { useSocket } from '@/SocketContext';
 import { useAuthStore } from '@/store/authStore';
@@ -464,7 +465,7 @@ export function Game() {
           onClose={closeGlobalChat}
           onSendMessage={handleSendGlobal}
           position="center"
-          themeColor="#2196F3"
+          themeColor={CHAT_THEME.lobby}
           width="500px"
           height="500px"
           placeholder="Message all players..."

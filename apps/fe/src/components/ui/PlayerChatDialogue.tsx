@@ -1,4 +1,5 @@
 import type { Socket } from '@/systems/network/socket';
+import { CHAT_THEME } from '@/theme/chat';
 import { useChatStore } from '../../store/chatStore';
 import { ChatWindow } from './ChatWindow';
 
@@ -42,7 +43,7 @@ export function PlayerChatDialogue({
       onClose={handleClose}
       onSendMessage={handleSendMessage}
       position="center"
-      themeColor="#4CAF50"
+      themeColor={CHAT_THEME.direct}
       width="500px"
       height="400px"
       placeholder="Type your message..."

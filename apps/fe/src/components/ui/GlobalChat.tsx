@@ -4,6 +4,7 @@ import { MdExpandMore } from 'react-icons/md';
 import type { Socket } from '@/systems/network/socket';
 import { useMobile } from '../../hooks/useMobile';
 import { useChatStore } from '../../store/chatStore';
+import { CHAT_THEME } from '@/theme/chat';
 import { ChatWindow } from './ChatWindow';
 
 interface GlobalChatProps {
@@ -202,7 +203,7 @@ export function GlobalChat({ socket }: GlobalChatProps) {
           onClose={closeGlobalChat}
           onSendMessage={handleSendMessage}
           position="center"
-          themeColor="#e0521a"
+          themeColor={CHAT_THEME.lobby}
           width="500px"
           height="500px"
           placeholder="Message all players..."

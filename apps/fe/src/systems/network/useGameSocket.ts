@@ -11,6 +11,7 @@ interface ServerBetSummary {
   betAmountCents: number;
   isDemo: boolean;
   cashedOutAt?: number;
+  payoutCents?: number;
 }
 
 interface ServerCrashedRoundSummary {
@@ -85,6 +86,7 @@ function mapServerBet(b: ServerBetSummary): BetEntry {
     betAmountCents: b.betAmountCents,
     status: b.cashedOutAt != null ? 'CASHED_OUT' : 'ACTIVE',
     cashedOutAt: b.cashedOutAt,
+    payoutCents: b.payoutCents,
   };
 }
 

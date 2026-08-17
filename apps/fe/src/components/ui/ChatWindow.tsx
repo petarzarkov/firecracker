@@ -136,11 +136,12 @@ export function ChatWindow({
       height={height}
       maxH="90vh"
       // Modern Glass Effect
-      bg="rgba(18, 20, 24, 0.95)"
+      // Matches the panels behind it: near-black, hairline border, small radius.
+      bg="rgba(12, 12, 14, 0.97)"
       backdropFilter="blur(10px)"
       border="1px solid"
-      borderColor={`${themeColor}60`}
-      borderRadius="xl"
+      borderColor={`${themeColor}55`}
+      borderRadius="md"
       display="flex"
       flexDirection="column"
       zIndex="1000"
@@ -156,16 +157,18 @@ export function ChatWindow({
         justifyContent="space-between"
         alignItems="center"
         bg="blackAlpha.300"
-        borderTopRadius="xl"
+        borderTopRadius="md"
       >
         <Stack direction="row" align="center" gap="4">
           <Text
             color={themeColor}
-            // Use system font for UI elements, cleaner than monospace
-            fontFamily="body"
-            fontSize="lg"
+            // Monospace, like every other heading in this app - the window is a
+            // panel of a terminal-styled UI, not a separate product.
+            fontFamily="monospace"
+            fontSize="md"
             fontWeight="bold"
             letterSpacing="wide"
+            textTransform="uppercase"
           >
             {title}
           </Text>
@@ -273,7 +276,7 @@ export function ChatWindow({
         bg="blackAlpha.300"
         borderTop="1px solid"
         borderColor="whiteAlpha.100"
-        borderBottomRadius="xl"
+        borderBottomRadius="md"
         display="flex"
         gap="3"
       >
@@ -295,7 +298,9 @@ export function ChatWindow({
             boxShadow: `0 0 0 1px ${themeColor}`,
           }}
           color="white"
-          borderRadius="md"
+          fontFamily="monospace"
+          fontSize="sm"
+          borderRadius="4px"
           size="md"
           autoComplete="off"
         />
@@ -306,12 +311,18 @@ export function ChatWindow({
         <Button
           type="submit"
           disabled={!input.trim() || isStreaming}
+          // `variant="plain"` because the app's button recipe would otherwise
+          // impose its own `solid` background and ignore this one.
+          variant="plain"
           bg={themeColor}
-          color="white"
+          color="black"
+          fontFamily="monospace"
+          borderRadius="4px"
           size="md"
           px={6}
-          _hover={{ filter: 'brightness(1.1)' }}
+          _hover={{ filter: 'brightness(1.15)' }}
           _active={{ filter: 'brightness(0.9)' }}
+          _disabled={{ opacity: 0.4, cursor: 'not-allowed' }}
         >
           <IoSend />
         </Button>

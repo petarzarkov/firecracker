@@ -96,6 +96,11 @@ export interface ActiveBetView {
   readonly betAmountCents: number;
   readonly isDemo: boolean;
   readonly cashedOutAt?: number;
+  /**
+   * What they won, once they have. The lobby shows the amount rather than only
+   * the multiplier - a multiplier is a rate, and the interesting number is money.
+   */
+  readonly payoutCents?: number;
 }
 
 export interface CrashedRoundSummary {
