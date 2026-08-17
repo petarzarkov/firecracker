@@ -1,231 +1,171 @@
-# Firecracker
+<div align="center">
 
-A production-ready NestJS modular monolith running on **Bun**, with TypeScript, TypeORM, PostgreSQL, Redis, and modern tooling.
+# 🚀 Firecracker
 
-## Tech Stack
+**A provably-fair crash game on Bun.**
 
-| Layer | Technology |
-|-------|-----------|
-| Runtime | [Bun](https://bun.sh) |
-| Framework | [NestJS 11](https://nestjs.com) |
-| Language | TypeScript 5.9 (strict, ESNext) |
-| Database | PostgreSQL 17 + [TypeORM](https://typeorm.io) |
-| Cache & Queues | Redis 8 + [BullMQ](https://bullmq.io) |
-| Auth | Passport.js (JWT, Google, GitHub, LinkedIn) |
-| WebSockets | Socket.io with Redis adapter |
-| Email | [Resend](https://resend.com) + [React Email](https://react.email) |
-| AI | [Vercel AI SDK](https://sdk.vercel.ai) (Gemini, Groq, OpenRouter) |
-| File Storage | AWS S3 |
-| API Docs | Swagger + [Scalar](https://scalar.com) |
-| Linting | [Biome](https://biomejs.dev) |
-| Testing | Bun test runner |
+Bet during the window, watch the rocket climb, cash out before it explodes.
+Every round can be independently verified after the fact.
 
-## Prerequisites
+Built on [dunx](https://github.com/petarzarkov/dunx) · SQLite via drizzle · BullMQ · Better Auth · native WebSockets
 
-- [Bun](https://bun.sh) >= 1.0.0
-- [Docker](https://www.docker.com/) (for PostgreSQL and Redis)
+</div>
 
-## Quick Start
+---
+
+## Quick start
 
 ```bash
-# Install dependencies
 bun install
+docker compose up -d          # Redis. Without it, rounds never advance.
 
-# Start infrastructure (PostgreSQL + Redis)
-docker compose up -d
+cp .env.example .env                  # compose settings
+cp apps/be/.env.example apps/be/.env  # the app's own settings
 
-# Configure environment
-cp .env.example .env
-# Edit .env with your configuration (see env-vars.md for details)
-
-# Run database migrations
-bun run mig:run
-
-# Start development server
-bun dev
+bun dev              # API + worker + client
 ```
 
-## Features
-
-### Authentication & Authorization
-- JWT-based authentication with configurable expiration
-- OAuth2 providers: Google, GitHub, LinkedIn
-- OAuth account linking (multiple providers per user)
-- Role-based access control (RBAC) with `admin` and `user` roles
-- Password reset flow with email tokens
-- Invite-based registration
-
-### Database & ORM
-- TypeORM with PostgreSQL and automatic snake_case naming
-- Migration system with generate, run, and revert commands
-- PostgreSQL advisory locks for distributed coordination
-- Automatic audit logging via `@Auditable()` entity decorator
-- Explicit naming for all DB constraints (FKs, indexes, enums) — enforced via Biome GritQL plugins
-
-### Job Queue System
-- BullMQ queues backed by Redis for reliable async processing
-- Declarative `@JobHandler()` decorator for job routing
-- Auto-discovery of handlers via NestJS `DiscoveryService`
-- Bull Board dashboard at `/api/queues`
-- Configurable retries with exponential backoff
-
-### Real-time Communication
-- Socket.io WebSocket gateway with JWT authentication
-- Redis adapter for multi-instance broadcast support
-- Room-based messaging: chat (all users), private (per user), admin-only
-- AI response streaming over WebSocket
-
-### Email Notifications
-- Resend API integration
-- React Email templates with local preview server
-- Event-driven: welcome, invite, and password reset emails
-
-### AI Integration
-- Unified interface via Vercel AI SDK
-- Providers: Google Gemini, Groq, OpenRouter
-- REST endpoint for queries + WebSocket streaming
-- Dynamic model discovery from provider APIs
-
-### File Management
-- AWS S3 upload, download, delete with presigned URLs
-- File metadata persistence (name, size, MIME type, image dimensions)
-- Validation: size limits (1KB–10MB), name length, file count
-
-### Observability
-- Structured JSON logging with `AsyncLocalStorage`-based context
-- Request ID propagation (`X-Request-Id` header)
-- Sensitive field masking in logs (password, jwt, token, secret)
-- Health check endpoints (DB, Redis, memory)
-- HTTP request/response logging with timing
-
-### Cursor-based Pagination
-- Keyset (cursor) pagination on all list endpoints — no offset/page numbers
-- Opaque Base64url-encoded cursors for stable, index-friendly paging
-- Bidirectional navigation (`forward` / `backward`)
-- `take+1` sentinel strategy (no COUNT queries)
-- Automatic sort key detection (`updatedAt` → `createdAt` → `id`)
-- PostgreSQL `date_trunc` precision alignment with JavaScript Date
-
-### Caching & Rate Limiting
-- Redis-backed HTTP cache with configurable TTL
-- Three-tier throttling: short (10/1s), medium (50/10s), long (300/60s)
-
-### Developer Experience
-- Biome for linting and formatting with GritQL plugins for TypeORM constraint naming
-- Husky + lint-staged for pre-commit hooks
-- Swagger + Scalar API documentation with optional basic auth
-- `bun dev` with hot reload via `bun --watch`
-
-### Integrations
-- **Slack**: Bot notifications with rich message formatting
-- **AWS S3**: File storage with presigned URL support
-
-## Scripts
+Or one at a time:
 
 ```bash
-# Development
-bun dev                                   # Dev server with hot reload
-bun run build                             # Build for production
-bun start                                 # Start production build
-
-# Testing
-bun test                                  # Run unit tests
-bun test --watch                          # Watch mode
-bun test --coverage                       # Coverage report
-bun run test:e2e                          # Run E2E tests
-bun run test:e2e:single ./e2e/path.ts     # Run single E2E test
-
-# Database
-bun run mig:gen MyMigration               # Generate migration
-bun run mig:run                           # Run migrations
-bun run mig:revert                        # Revert last migration
-bun run db:drop                           # Drop schema
-
-# Code Quality
-bun run lint                              # Lint and fix with Biome
-bun run format                            # Format with Biome
-
-# Utilities
-bun run create:admin                      # Create admin user
-bun run email                             # Email template preview (port 3035)
-bun run email:export                      # Export email templates as HTML
-bun run gen:env:docs                      # Generate env vars documentation
+bun run dev:be       # API and worker together
+bun run dev:web      # the API alone (rounds will not advance)
+bun run worker       # the worker alone
+bun run dev:fe       # the client on :5173
 ```
 
-## Project Structure
+|        |                                            |
+| ------ | ------------------------------------------ |
+| API    | http://localhost:3999/api                  |
+| Docs   | http://localhost:3999/api/docs             |
+| Health | http://localhost:3999/api/service/health   |
+| Queues | http://localhost:3999/api/queues _(admin)_ |
+| Socket | ws://localhost:3999/ws                     |
+
+---
+
+## How a round works
 
 ```
-src/
-├── main.ts               # Application bootstrap
-├── app.module.ts          # Root module
-├── constants.ts           # Global constants
-├── config/                # Type-safe environment configuration
-├── core/                  # Shared utilities (decorators, filters, interceptors, pagination, pipes)
-├── infra/                 # Infrastructure (database, redis, queue, logger, health)
-├── auth/                  # Authentication (JWT, OAuth strategies, guards)
-├── users/                 # User management + invites submodule
-├── audit/                 # Automatic entity audit logging
-├── file/                  # File upload + S3 storage
-├── notifications/         # Email, WebSocket, Slack, queue handlers
-└── ai/                    # Multi-provider AI integration
-
-e2e/                       # End-to-end tests
-public/                    # Static files (demo chat UI - testing only)
-scripts/                   # CLI utilities (migration, admin creation, env docs)
+     ┌─ web process ──────────────┐        ┌─ worker ─────────────────┐
+     │  CrashEngineService        │        │  GameJobs                │
+     │  · the clock               │        │  · every DB transition   │
+     │  · ticks the multiplier    │        │  · schedule/start/crash  │
+     │  · broadcasts to sockets   │        │  · the stuck-round sweep │
+     └────────────┬───────────────┘        └────────────┬─────────────┘
+                  │       Redis pub/sub + BullMQ        │
+                  └─────────────────────────────────────┘
+                                    │
+                              one SQLite file
 ```
 
-## API Endpoints
+1. **Waiting** — a round is created. A server seed is drawn and its `SHA256` published as a commitment. The crash point does not exist yet. Players bet and contribute client seeds.
+2. **Running** — the window closes, the client seeds are combined, and _only then_ is the crash point drawn. The multiplier climbs `e^(elapsed/10000)`.
+3. **Crashed** — everyone still in loses. The server seed, client seed, nonce and algorithm are published.
 
-| Route | Description |
-|-------|-------------|
-| `POST /api/auth/login` | Email/password login |
-| `POST /api/auth/register` | User registration |
-| `POST /api/auth/forgotten-password` | Request password reset |
-| `POST /api/auth/password-reset` | Reset password |
-| `GET /api/auth/{google,github,linkedin}` | OAuth login |
-| `GET /api/users` | List users (cursor paginated) |
-| `GET /api/users/invites` | Manage invites |
-| `POST /api/ai/query` | AI query |
-| `GET /api/ai/models` | List AI models |
-| `POST /api/files` | Upload file |
-| `GET /api/files` | List files (cursor paginated) |
-| `GET /api/audit` | Query audit logs (cursor paginated) |
-| `GET /api/service/health` | Health check (DB, Redis, memory) |
-| `GET /api/service/up` | Uptime check |
-| `GET /api/service/config` | Service configuration |
-| `GET /api/queues` | Bull Board queue dashboard |
+Drawing the crash point any earlier would mean the players could not have influenced it. Any later would mean the house chose it knowing the bets.
 
-## Health Endpoints
+## Verifying a round yourself
 
-- `GET /api/service/health` — Full health check (DB, memory, Redis)
-- `GET /api/service/up` — Simple uptime check
-- `GET /api/service/config` — Service configuration and feature status
-
-## Documentation
-
-- **API Docs**: Swagger UI at `/api/docs` + Scalar at `/api/docs/scalar` (when running)
-- **Environment Variables**: See [env-vars.md](./env-vars.md) for full configuration reference
-
-## Docker
-
-### Development (infrastructure only)
 ```bash
-docker compose up -d                      # PostgreSQL + Redis
+curl localhost:3999/api/game/rounds/<id>/verify
 ```
 
-### Production (full stack)
-```bash
-cp .env.example .env.full                 # Setup env
-docker compose -f docker-compose.full.yml --env-file .env.full up -d    # Start all
-docker compose -f docker-compose.full.yml --env-file .env.full down     # Stop all
+```jsonc
+{
+  "serverSeed": "2948f84a…",
+  "serverSeedHash": "d7d3c762…", // published before the round started
+  "clientSeed": "firecracker",
+  "nonce": 3,
+  "algorithm": "pcg64",
+  "rngSeed": "2948f84a…:firecracker:3",
+  "crashPoint": 1.29,
+  "howToVerify": [/* the four steps below */],
+}
 ```
 
-To rebuild the backend only:
-```bash
-docker compose -f docker-compose.full.yml --env-file .env.full build --no-cache app-backend-full
-docker compose -f docker-compose.full.yml --env-file .env.full up -d app-backend-full
+```ts
+import { Rng } from '@arkv/rng';
+
+// 1. the commitment held
+const h = new Bun.CryptoHasher('sha256');
+h.update(serverSeed);
+h.digest('hex') === serverSeedHash;
+
+// 2-4. redraw the number
+const rng = new Rng(rngSeed, algorithm);
+const u = rng.float();
+rng.free();
+
+const crashPoint =
+  (u < 0.03 ? 100 : Math.max(100, Math.floor(99 / (1 - u)))) / 100;
+// → 1.29
 ```
+
+The distribution: **~3%** instant crash (the house edge), **~50%** below 2x, and `P(crash ≥ x) ≈ 0.99 / x` above that.
+
+---
+
+## Layout
+
+```
+apps/be     the dunx API, the worker and the socket gateway
+apps/fe     the React + Vite client
+```
+
+`apps/be/src/game/` is the application; everything else is scaffolding.
+
+| Path                         | What                                                      |
+| ---------------------------- | --------------------------------------------------------- |
+| `game/engine/`               | the clock — ticks, crash detection, restart recovery      |
+| `game/handlers/game.jobs.ts` | the round lifecycle as four BullMQ jobs                   |
+| `game/game.gateway.ts`       | the only WebSocket: game, chat and notifications          |
+| `game/game.math.ts`          | the curve, the payout, the crash-point draw               |
+| `game/services/`             | rounds, bets, wallets, auto-cashout, the lobby read model |
+
+---
+
+## Notable decisions
+
+**Multipliers are integer hundredths.** `1.07x` is `107`, in the database and in the engine. `Math.floor(bet * multiplier)` against a float loses a cent when the float is `1.9999999999999998`; integer arithmetic cannot.
+
+**Two RNGs, on purpose.** The _server seed_ comes from `crypto.getRandomValues`, because it is published after every round and a non-cryptographic PRNG's state is recoverable from a handful of outputs — a player collecting seeds could otherwise predict every future crash. The _crash point_ is drawn with [`@arkv/rng`](https://www.npmjs.com/package/@arkv/rng), seeded deterministically, which is what makes it reproducible by anyone.
+
+**No advisory lock.** SQLite has none, and none is needed: a synchronous transaction cannot yield, the debit is guarded in SQL (`WHERE balance_cents >= ?`), and a unique index catches the cross-process double bet. A lost race now answers _"you already have an active bet"_ rather than _"please try again"_.
+
+**One socket.** dunx mounts a gateway as a route, so two gateway classes would mean two connections where socket.io gave one. The client keeps its `socket.on(…)` / `socket.emit(…)` code through a small shim over the `{ event, data }` envelope.
+
+**Play without signing up.** "Try Demo" is better-auth's `anonymous()` plugin — a real user row with a funded demo wallet and no credential, because a wallet needs somebody to belong to. Watching needs no account at all: the socket upgrade admits spectators.
+
+**Direct messages are derived, not allocated.** A room id is a hash of the two user ids _sorted_, so both players compute the same one and "create" and "join" are the same call. Membership lives in Redis and is re-checked on every message — the id is a hash of two user ids, not a secret.
+
+**Bots are cosmetic.** `GAME_BOTS_ENABLED=true` populates an empty lobby. `GameBotsService` has no repository, by design — a bot placing real bets would contribute entropy to the crash point, which is the house influencing its own outcome.
+
+---
+
+## Commands
+
+| Command                                 | Does                          |
+| --------------------------------------- | ----------------------------- |
+| `bun dev`                               | API, worker and client        |
+| `bun run worker`                        | the queue consumer alone      |
+| `bun test`                              | 102 unit/integration + 26 e2e |
+| `bun run lint` · `format` · `typecheck` | oxlint · oxfmt · tsc          |
+| `bun run mig:gen` · `mig:run`           | drizzle migrations            |
+| `bun run build`                         | production build of both apps |
+
+## Deploying
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+cloudflared, Redis, the API (which also serves the built client) and the worker. Both app containers are the same image with a different command, and both mount the same SQLite volume — WAL plus a busy timeout is what makes one file with two writers safe, which is also why they must stay on one host.
+
+`APP_ENV=prod` makes `BETTER_AUTH_SECRET` mandatory; the image refuses to boot without one.
+
+> **The `app` service cannot be scaled past one replica.** The tick loop must run in exactly one process — see `GameModule.forRoot({ engine })`.
 
 ## License
 
-MIT
+[MIT](LICENSE.md)

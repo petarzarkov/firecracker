@@ -8,6 +8,14 @@ dist/
 build/
 *.tsbuildinfo
 
+# The SQLite database and its WAL/SHM sidecars. One file per environment, created
+# on boot by DatabaseBootstrap - never committed.
+apps/be/data/
+apps/be/.tmp/
+*.db
+*.db-shm
+*.db-wal
+
 # Environment files
 .env*
 !.env.example

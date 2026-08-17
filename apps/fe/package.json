@@ -1,0 +1,33 @@
+{
+  "name": "firecracker-fe",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@chakra-ui/react": "3.30.0",
+    "@firecracker/contracts": "workspace:*",
+    "immer": "11.1.3",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-icons": "5.5.0",
+    "react-markdown": "10.1.0",
+    "react-syntax-highlighter": "16.1.0",
+    "zustand": "5.0.9"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.3",
+    "@types/react-syntax-highlighter": "15.5.13",
+    "@vitejs/plugin-react": "5.1.2",
+    "typescript": "5.9.3",
+    "vite": "7.3.0"
+  }
+}

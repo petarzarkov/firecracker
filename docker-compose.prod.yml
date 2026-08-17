@@ -1,0 +1,130 @@
+# The deployed shape: the tunnel, Redis, the API (which also serves the built
+# client) and the queue worker.
+#
+# `docker compose -f docker-compose.prod.yml up -d --build`
+#
+# ## Two app containers, one image
+#
+# `app` and `app-worker` are the same image with a different command, which is the
+# split `src/main.ts` and `src/worker.ts` already describe. It is not an
+# optimisation - the crash engine's tick loop must run in exactly one process, and
+# `WorkerModule` is built with `engine: false` for precisely that reason. Scaling
+# `app` to more than one replica is therefore **not** safe today: see the note in
+# `app.module.ts`.
+#
+# ## One SQLite file, two writers
+#
+# Both mount `app-data` and open the same database. WAL plus a busy timeout is
+# what makes that work, and both are set in `infra/db/database.module.ts`. This is
+# also the reason the two containers must stay on the same host: a SQLite file
+# over a network filesystem is a corrupted database waiting to happen.
+#
+# pm2 is gone. Docker restarts these, and running a process manager inside a
+# container that already has one is two supervisors disagreeing about who owns the
+# process.
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel run
+    env_file:
+      - .env
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - app
+
+  app-redis:
+    image: public.ecr.aws/docker/library/redis:8.4.0
+    container_name: app-redis
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - redis-data:/data
+    command: >
+      sh -c "
+      if [ -n \"$REDIS_PASSWORD\" ]; then
+        redis-server --requirepass $REDIS_PASSWORD
+      else
+        redis-server
+      fi
+      "
+    healthcheck:
+      test:
+        - CMD
+        - sh
+        - -c
+        - 'if [ -n "$REDIS_PASSWORD" ]; then redis-cli -a $REDIS_PASSWORD ping; else redis-cli ping; fi'
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app
+
+  app:
+    container_name: app
+    restart: unless-stopped
+    build:
+      # The workspace root, because the lockfile and the workspace list are there.
+      context: .
+      dockerfile: apps/be/Dockerfile
+      args:
+        COMMIT_SHA: ${COMMIT_SHA:-}
+        COMMIT_MESSAGE: ${COMMIT_MESSAGE:-}
+    env_file:
+      - .env
+    environment:
+      # The worker is its own container here, so the API must not also consume -
+      # see `WORKER_MODE` in apps/be/.env.example.
+      WORKER_MODE: separate
+    ports:
+      - '${API_PORT:-3001}:3001'
+    volumes:
+      - app-data:/app/data
+    depends_on:
+      app-redis:
+        condition: service_healthy
+    networks:
+      - app
+
+  app-worker:
+    container_name: app-worker
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: apps/be/Dockerfile
+      args:
+        COMMIT_SHA: ${COMMIT_SHA:-}
+        COMMIT_MESSAGE: ${COMMIT_MESSAGE:-}
+    command: ['bun', 'src/worker.ts']
+    env_file:
+      - .env
+    volumes:
+      - app-data:/app/data
+    depends_on:
+      app-redis:
+        condition: service_healthy
+      # Not `service_healthy`: the web container runs the migrations at boot, and
+      # a worker that opened the file first would see no tables. Waiting for
+      # "started" is not strictly enough either, which is why the worker's own
+      # DatabaseBootstrap runs `migrate()` too - it is idempotent.
+      app:
+        condition: service_started
+    # No healthcheck: a worker serves no HTTP. Its liveness is whether it is
+    # consuming, which the queue's own depth reports better than a probe here.
+    networks:
+      - app
+
+volumes:
+  redis-data:
+  app-data:
+
+networks:
+  app:
+    name: app-network
+    driver: bridge

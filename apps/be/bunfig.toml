@@ -1,0 +1,15 @@
+# The one line that makes constructor injection work. @dunx/transform records each
+# class's constructor parameter types at load time so the container can resolve
+# them. Without it, boot fails naming the provider it could not build.
+preload = ["@dunx/transform/preload"]
+
+[test]
+root = "./src"
+preload = ["@dunx/transform/preload"]
+coverageDir = "coverage"
+coverageReporter = ["text", "lcov"]
+coverageSkipTestFiles = true
+
+# The JUnit reporter was here and wrote into `coverage/`, which Bun only creates
+# when coverage runs - so every plain `bun test` ended with an ENOENT warning for a
+# file nothing consumed. Re-add it alongside a CI step that actually uploads it.

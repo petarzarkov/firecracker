@@ -1,494 +1,264 @@
----
-alwaysApply: true
----
-
-You are a **senior TypeScript programmer** with extensive experience in the **NestJS framework** and **Bun runtime**, strongly favoring **clean programming** and **design patterns**.
+You are a **senior TypeScript programmer** with extensive experience in the **dunx framework** and the **Bun runtime**, strongly favoring **clean programming** and **design patterns**.
 
 Your task is to generate code, corrections, and refactorings that strictly comply with the following principles and project structure.
 
 ---
 
-## **Project Overview**
+## Project Overview
 
-This is a **NestJS monolith template** running on **Bun** as the runtime and package manager.
+**Firecracker** is a provably-fair **crash game**: players bet during a betting window, a rocket climbs an exponential multiplier, and everyone who has not cashed out when it explodes loses their stake.
 
-### Runtime & Tooling
-- **Runtime:** Bun (not Node.js)
-- **Package Manager:** Bun (`bun install`, `bun add`)
-- **Test Runner:** Bun test (`bun test`)
-- **TypeScript:** Native Bun execution (no ts-node/tsx), TypeScript 5.9, target ESNext, module NodeNext
-- **Password Hashing:** `Bun.password` API (not bcrypt) — see `src/core/utils/password.util.ts`
-- **Linting & Formatting:** Biome 2.x (`bun run lint`, `bun run format`) — single quotes, trailing commas, 80-char lines, GritQL plugins in `plugins/` for TypeORM constraint naming enforcement
-- **Build:** `nest build` + `tsc-alias` for path alias resolution in dist
+It is a **Bun workspace monorepo** running on [dunx](https://github.com/petarzarkov/dunx) — NestJS-style structure at Bun speed, with no `reflect-metadata`, no `forwardRef`, and no JavaScript router.
 
-### Path Aliases
-Configured in `tsconfig.json`:
-- `@/*` → `src/*`
+```
+firecracker/
+├── apps/
+│   ├── be/          firecracker-be — the dunx API, the worker, the socket gateway
+│   └── fe/          firecracker-fe — the React + Vite client
+├── libs/
+│   └── contracts/   @firecracker/contracts — the wire both apps agree on
+├── bunfig.toml      the @dunx/transform preload (load-bearing, see below)
+├── docker-compose.yml       development: Redis and nothing else
+└── docker-compose.prod.yml  deployed: cloudflared + Redis + API + worker
+```
+
+### Runtime & tooling
+
+- **Runtime and package manager:** Bun. Never `npm`, `npx`, `yarn` or `pnpm`.
+- **Framework:** dunx (`@dunx/core`, `@dunx/http`, `@dunx/infra`, `@dunx/auth`, `@dunx/openapi`)
+- **Database:** SQLite via **drizzle** over `bun:sqlite`, in **synchronous** mode
+- **Queue:** BullMQ over Redis, through `@dunx/infra/queue`
+- **Auth:** Better Auth through `@dunx/auth` (email/password, Google, GitHub, LinkedIn, anonymous)
+- **RNG:** `@arkv/rng` for the crash-point draw, `crypto.getRandomValues` for the server seed
+- **Lint/format:** oxlint + oxfmt (`bun run lint`, `bun run format`)
+- **Tests:** `bun test`
+
+### The one line that makes DI work
+
+```toml
+# bunfig.toml
+preload = ["@dunx/transform/preload"]
+```
+
+`@dunx/transform` reads each class's constructor parameter types at load time and records them. Without it the app boots and fails naming the provider it could not build. It is a **runtime** dependency, not a build-time one — do not let a `--production` install or a `.dockerignore` drop it or `bunfig.toml`.
 
 ---
 
-## **Project Structure**
+## Writing dunx code
+
+Coming from NestJS, delete more than you add:
+
+| NestJS                               | dunx                                                         |
+| ------------------------------------ | ------------------------------------------------------------ |
+| `@Injectable()`                      | delete it — every class is injectable                        |
+| `@Inject(TOKEN) private x: T`        | declare the parameter as the token's type                    |
+| `@Global()`                          | `global: true` on the same options object                    |
+| `forwardRef()`                       | **not needed** — deps are a thunk, cycles resolve themselves |
+| `OnModuleInit` / `OnModuleDestroy`   | `OnInit` / `OnShutdown`                                      |
+| `NestFactory.create`                 | `HttpFactory.create`                                         |
+| Guards, interceptors, pipes, filters | one `Middleware` interface                                   |
+| `@Body()` / `@Query()` / `@Param()`  | schemas on the route decorator, read from `input`            |
+| relative imports                     | **add the `.js` extension**                                  |
+
+Hard rules:
+
+- **Every relative import ends in `.js`.** Not `.ts`, not extensionless.
+- **A parameter typed as an interface or a primitive is a boot error**, not `undefined`. Constructor parameter types must name a runtime value — a class or a `Token`.
+- **A module is decorated _or_ configured, never both.** `@Module` on a class that also has a `static forRoot()` registers every import twice.
+- **`Module.forRoot()` returns a new object per call**, so calling it twice creates two scopes with two instances. If two feature modules need the same binding, give it its own `global: true` module — that is exactly why `EventsPublisherModule` exists.
+
+### Custom parameter decorators do not exist
+
+`createParamDecorator` has no successor. `@CurrentUser()` became `CurrentUser`, an injected service that reads the caller out of `AuthContext`:
+
+```ts
+constructor(private readonly caller: CurrentUser) {}
+
+@Get('/mine')
+mine() { return this.things.forUser(this.caller.require().id); }
+```
+
+---
+
+## apps/be layout
 
 ```
 src/
-├── main.ts                    # Bootstrap: express app, global pipes/filters/interceptors, CORS, WS adapter
-├── app.module.ts              # Root module — imports all feature & infra modules
-├── constants.ts               # Global constants (LOGGER, FILES, PAGINATION, time units)
-├── config/                    # Environment configuration module
-│   ├── app.config.module.ts   # Dynamic config module (.forRoot)
-│   ├── services/app.config.service.ts  # Typed config access
-│   ├── env.validation.ts      # Config validation with class-transformer + class-validator
-│   ├── env-vars.dto.ts        # Raw env var DTO
-│   ├── dto/                   # Grouped config DTOs (service, db, redis, oauth, ai)
-│   └── enum/                  # AppEnv: local | dev | stage | prod
-├── core/                      # Global utilities (NOT a NestJS module)
-│   ├── decorators/            # @Public, @Roles, @CurrentUser, @ApiJwtAuth, @Auditable,
-│   │                          # @Password, @Email, @IsNullable, @IsUniqueEnum,
-│   │                          # @ValidatedFiles, @UUIDParam, @NoCache, @EnvThrottle
-│   ├── filters/               # GenericExceptionFilter, TypeOrmExceptionFilter
-│   ├── interceptors/          # HttpLoggingInterceptor
-│   ├── middlewares/           # RequestMiddleware (context+requestId), HtmlBasicAuthMiddleware (docs auth)
-│   ├── pagination/            # Cursor-based pagination: PaginationFactory, PageDto, PageMetaDto, PageOptionsDto, cursor.util, PaginationDirection
-│   ├── pipes/                 # UnionValidationPipe
-│   ├── validators/            # Custom class-validator decorators
-│   ├── helpers/               # HelpersModule (global helper services)
-│   ├── utils/                 # password.util (Bun.password wrapper)
-│   └── docs/                  # Swagger + Scalar API docs setup
-├── infra/                     # Infrastructure layer
-│   ├── db/                    # DatabaseModule (.forRoot), data-source-options, SnakeNamingStrategy
-│   │   ├── migrations/        # TypeORM migrations
-│   │   ├── strategies/        # SnakeNamingStrategy
-│   │   └── lock/              # PostgreSQL advisory lock module
-│   ├── logger/                # LoggerModule, ContextLogger, ContextService (AsyncLocalStorage)
-│   ├── health/                # HealthModule: /service/health, /service/up, /service/config
-│   ├── redis/                 # RedisModule, RedisCacheThrottlerModule, RedisService
-│   └── queue/                 # QueueModule, JobModule, JobProcessor, @JobHandler decorator
-│       ├── decorators/        # @JobHandler({ queue, name })
-│       ├── services/          # JobPublisherService, JobDispatcherService
-│       └── types/             # QueueJob type definitions
-├── auth/                      # AuthModule (.forRoot) — JWT + OAuth
-│   ├── auth.controller.ts     # /auth routes: login, register, password reset, OAuth callbacks
-│   ├── auth.service.ts        # Auth business logic, token creation
-│   ├── strategies/            # Passport: JwtStrategy, LocalStrategy, GoogleStrategy, GithubStrategy, LinkedInStrategy
-│   ├── guards/                # JwtAuthGuard (global), RolesGuard (global)
-│   ├── entity/                # AuthProvider entity (OAuth provider linking)
-│   ├── repos/                 # AuthProvidersRepository
-│   └── dto/                   # Login, Register, Password reset, OAuth DTOs
-├── users/                     # UsersModule
-│   ├── users.controller.ts    # /users routes
-│   ├── users.service.ts       # User CRUD
-│   ├── entity/                # User, PasswordResetToken entities
-│   ├── enum/                  # UserRole: admin | user
-│   ├── repos/                 # UsersRepository, PasswordResetTokensRepository
-│   ├── dto/                   # User DTOs
-│   └── invites/               # Nested InvitesModule submodule
-│       ├── invites.controller.ts
-│       ├── invites.service.ts
-│       ├── entity/            # Invite entity
-│       ├── enum/              # InviteStatus: pending | accepted | expired
-│       ├── repos/             # InvitesRepository
-│       └── dto/               # CreateInviteDto, ListInvitesDto
-├── audit/                     # AuditModule — automatic entity change logging
-│   ├── audit.controller.ts    # /audit routes
-│   ├── audit.service.ts       # Audit log queries
-│   ├── subscribers/           # TypeORM EntitySubscriber (auto INSERT/UPDATE/DELETE logging)
-│   ├── entity/                # AuditLog entity (JSONB old/new values)
-│   ├── enum/                  # AuditAction: INSERT | UPDATE | DELETE
-│   ├── repos/                 # AuditLogRepository
-│   └── dto/                   # AuditLogQueryDto
-├── file/                      # FileModule — file upload + S3
-│   ├── file.controller.ts     # /files routes: upload, list, download, delete
-│   ├── file.service.ts        # File operations
-│   ├── s3.service.ts          # AWS S3 integration (presigned URLs, bucket ops)
-│   ├── entity/                # FileEntity (name, size, dimensions, S3 path)
-│   ├── repos/                 # FileRepository
-│   ├── guards/                # MultipartFormDataGuard
-│   ├── validators/            # File size/name validators
-│   └── dto/                   # FileUploadDto, FileResponseDto
-├── notifications/             # NotificationModule — email + WS + Slack + queue handlers
-│   ├── notification.module.ts
-│   ├── notification-queue.module.ts  # Queue consumer module (JobModule)
-│   ├── handlers/              # NotificationHandler (@JobHandler methods)
-│   ├── email/                 # EmailModule, EmailService (Resend), React Email templates
-│   ├── events/                # EventsModule, EventsGateway (Socket.io), SocketConfigAdapter
-│   │   ├── events.ts          # EVENTS constant (queues, routing keys, EventMap types)
-│   │   └── events.dto.ts      # WebSocket message types
-│   ├── slack/                 # SlackModule, SlackService
-│   └── dto/                   # RegisteredPayload, InvitePayload, PasswordResetPayload
-└── ai/                        # AIModule (.forRoot) — multi-provider AI
-    ├── ai.controller.ts       # /ai routes: query, models
-    ├── ai.service.ts          # AI querying + streaming
-    ├── services/              # AIProviderService
-    ├── enum/                  # AIProvider: google | groq | openrouter
-    └── dto/                   # AI request/response DTOs
-
-e2e/                           # E2E tests
-├── setup/                     # preload.ts (DB setup), context.ts
-├── utils/                     # api-client.ts, db-client.ts, ws-client.ts
-├── constants.ts
-├── health/                    # health.e2e.spec.ts
-├── auth/                      # auth.e2e.spec.ts
-├── users/                     # users.e2e.spec.ts (cursor pagination)
-└── audit/                     # audit.e2e.spec.ts (cursor pagination)
+├── main.ts                    web process: HttpFactory, prefix, CORS, static client
+├── worker.ts                  worker process: WorkerFactory, no HTTP server
+├── app.module.ts              AppModule + WorkerModule, both over one foundation()
+├── http.options.ts            global middleware order, error mapper, request logging
+├── config/                    zod env validation → one typed tree
+├── core/                      error mapper, pagination schema, throttle decorator
+├── auth/                      Better Auth options, profile controller, CurrentUser
+├── users/                     users CRUD
+├── client/                    serves apps/fe/dist in production (SpaFallback)
+├── game/                      ← the application
+│   ├── game.module.ts         forRoot({ engine, controllers })
+│   ├── game.gateway.ts        @Gateway('/ws') — the only socket
+│   ├── game.controller.ts     /api/game/*
+│   ├── wallet.controller.ts   /api/wallet/*
+│   ├── game.math.ts           the curve, the payout, the crash-point draw
+│   ├── game.events.ts         queue, job, topic and event names + payloads
+│   ├── game.messages.ts       inbound socket payload parsers
+│   ├── engine/                CrashEngineService — the clock
+│   ├── handlers/game.jobs.ts  the round lifecycle, as four jobs
+│   ├── bots/                  cosmetic lobby activity (opt-in)
+│   ├── schema/                drizzle tables
+│   ├── repos/                 drizzle queries
+│   ├── services/              round, bet, wallet, auto-cashout, state, player-chat
+│   └── dto/                   zod schemas + route schemas
+├── notifications/             email, the events publisher, chat topics
+└── infra/                     db, redis, queue, health
 ```
 
 ---
 
-## **NestJS Architecture Guidelines**
+## The game, and the rules that are not negotiable
 
-### Module Pattern
-- **One module per domain/feature** (e.g., `users`, `auth`, `notifications`)
-- **One controller per main route**, additional controllers for sub-routes
-- **Nested submodules** for related features (e.g., `users/invites/`)
-- **Dynamic modules** use `.forRoot()` pattern (Auth, Database, AI, Config)
-- **Infrastructure modules** live under `src/infra/` (db, redis, queue, logger, health)
+### Two processes, one engine
 
-### Folder Conventions per Module
-| Folder | Purpose |
-|--------|---------|
-| `dto/` | Request/response DTOs validated with `class-validator` |
-| `entity/` | TypeORM entities |
-| `enum/` | TypeScript enums |
-| `services/` | Business logic services |
-| `handlers/` | Job event handlers (decorated with `@JobHandler`) |
-| `repos/` | Custom TypeORM repositories (when needed) |
-| `guards/` | Module-specific guards |
-| `strategies/` | Passport strategies (auth module) |
-| `subscribers/` | TypeORM entity subscribers (audit module) |
-| `validators/` | Module-specific validators |
+**`bun dev` runs both.** It used to start the web process alone, which gives an app that boots, serves and authenticates - and then sits on `Starting...` forever, because the round it scheduled is a job with nobody to consume it. `apps/be/scripts/dev.ts` runs the pair and takes both down if either dies. `bun run dev:web` is the web process alone.
 
-### Core Utilities (`src/core/`) — NOT a NestJS module
-Imported directly via `@/core/...`:
-- `@/core/decorators` — Custom parameter & metadata decorators
-- `@/core/filters` — Exception filters (registered globally in `main.ts`)
-- `@/core/interceptors` — HttpLoggingInterceptor (registered globally)
-- `@/core/middlewares` — RequestMiddleware (Express-level), HtmlBasicAuthMiddleware
-- `@/core/pagination` — Cursor-based PaginationFactory service, DTOs, cursor utilities, module
-- `@/core/pipes` — UnionValidationPipe
-- `@/core/utils` — password.util (Bun.password wrapper)
-- `@/core/validators` — Custom class-validator decorators
-- `@/core/docs` — Swagger + Scalar API documentation setup
-- `@/core/helpers` — HelpersModule (global utilities)
+They share only `app.module.ts`.
 
-### Custom Decorators (`src/core/decorators/`)
-| Decorator | Purpose |
-|-----------|---------|
-| `@Public()` | Bypass JWT & Roles guards |
-| `@Roles(role)` / `@RequireAllRoles(roles)` | Role-based access control |
-| `@CurrentUser()` | Extract authenticated user from request |
-| `@ApiJwtAuth()` | Swagger JWT security annotation |
-| `@Auditable(options?)` | Mark entity for automatic audit logging |
-| `@Password()` | Password strength validation |
-| `@Email()` | Email format validation |
-| `@IsNullable()` | Allow null values in validation |
-| `@IsUniqueEnum()` | Ensure unique enum values in array |
-| `@ValidatedFiles(opts)` | File upload validation (size, name, count) |
-| `@UUIDParam(name)` | Parse + validate UUID route parameter |
-| `@NoCache()` | Disable caching for endpoint |
-| `@EnvThrottle(opts)` | Environment-aware rate limiting |
+- The **web process** owns the clock (`CrashEngineService`), the sockets and the HTTP routes.
+- The **worker** owns every database transition, as BullMQ jobs.
+- They talk over one Redis pub/sub channel (`EngineCommand`).
 
----
+**`GameModule.forRoot({ engine: false })` in the worker is load-bearing.** Two processes ticking would each enqueue their own crash job and broadcast their own multiplier. For the same reason **the `app` service cannot be scaled past one replica** as it stands.
 
-## **Global Bootstrap (`src/main.ts`)**
+### Multipliers are integer hundredths
 
-The application bootstrap registers these globally:
-1. `ContextLogger` — custom logger replacing NestJS default
-2. `RequestMiddleware` — Express-level middleware for request context (requestId, timestamps)
-3. `ValidationPipe` — global with `transform: true`, `forbidNonWhitelisted: true`
-4. `HttpLoggingInterceptor` — logs all HTTP requests/responses with timing
-5. `GenericExceptionFilter` + `TypeOrmExceptionFilter` — consistent error responses
-6. `SocketConfigAdapter` — Socket.io with Redis adapter
-7. CORS enabled, trust proxy, global prefix `api`
-8. API docs served at `/{GLOBAL_PREFIX}/docs` (Swagger) and Scalar
+`1.07x` is `107`, everywhere: in the database (`crash_point_x100`), in the engine, in the payout. Only `toMultiplier()` divides, at the edge. Never reintroduce a float multiplier — the payout arithmetic depends on this.
+
+### The order of a round is the fairness guarantee
+
+1. **Create** — draw a server seed from `crypto.getRandomValues`, publish `SHA256(seed)` as the commitment. The crash point does **not** exist yet.
+2. **Betting window** — players contribute client seeds; a player who does not gets one generated for them.
+3. **Launch** — combine the client seeds, _then_ draw the crash point from `serverSeed:clientSeed:nonce`.
+4. **Crash** — settle, then publish the server seed, client seed, nonce and algorithm.
+
+Drawing earlier would mean the players could not have influenced it. Drawing later would mean we chose it knowing the bets. **Do not reorder this.**
+
+### The RNG split is deliberate
+
+- **Server seed → `crypto.getRandomValues`.** It is published after each round, and every `@arkv/rng` algorithm is a non-cryptographic PRNG whose state is recoverable from a few outputs. Seeding it from `@arkv/rng` would make future crash points predictable.
+- **Crash point → `@arkv/rng`, seeded deterministically.** Reproducible by a player, which is the whole point, and unbiased by construction.
+
+`rngAlgorithm` is stored on every round, so changing the default cannot retroactively invalidate history.
+
+### There is no advisory lock, and none is needed
+
+The Postgres version wrapped bets in `pg_try_advisory_xact_lock`. Three things replace it:
+
+1. **`transactionSync` cannot yield** — an async callback is a type error, so read-check-write is atomic within a process.
+2. **The debit is guarded in SQL** — `WHERE balance_cents >= ?`, so an overdraft is impossible even across processes.
+3. **`game_bet_round_user_demo_index` is unique** — which catches the cross-process double bet.
+
+Never "simplify" the debit into a JavaScript balance check followed by an update.
+
+### Auth is cookie-first, and dev is same-origin
+
+The client goes through Vite's proxy (`ws: true`), so development has one origin
+like production does. That is not a convenience: better-auth's cookie is
+`SameSite=Lax` and would not ride a cross-origin WebSocket upgrade, and a social
+sign-in's callback never hands the client a bearer token at all. `authStore.token`
+is therefore **optional** — branch on `isAuthenticated`, never on `token`.
+
+`http://localhost:5173` must stay in `AUTH_TRUSTED_ORIGINS`: better-auth checks the
+`Origin` header, which the browser still sets to Vite's port through a proxy.
+
+### Bots are cosmetic and must stay that way
+
+`GameBotsService` has no repository and no `GameBetService`, by design. A bot that placed real bets would be contributing entropy to the crash point through the client-seed pool — the house influencing its own outcome. Keep them outside the fairness boundary.
 
 ---
 
-## **Config Module**
+## Database
 
-- **Environment validation** in `env.validation.ts` using `class-transformer` + `class-validator`
-- **Typed config** via `AppConfigService<ValidatedConfig>` — access with `.get('db')`, `.getOrThrow('jwt')`, etc.
-- **Config DTOs** in `config/dto/`: `ServiceVarsDto`, `DbVarsDto`, `RedisVarsDto`, `OAuthVarsDto`, `AIVarsDto`
-- **Config groups**: `app`, `db`, `jwt`, `redis`, `oauth`, `ai`, `aws`, `cors`, `http`, `ws`
-- **Environments**: `local`, `dev`, `stage`, `prod` (`AppEnv` enum)
+SQLite, one file, **two writer processes**. The pragmas in `infra/db/database.module.ts` are the concurrency design: `journal_mode = WAL`, `busy_timeout`, `synchronous = NORMAL`, `foreign_keys = ON`. Do not remove them.
 
----
+Repositories are **synchronous** except `list`, which is async only because `paginate` serves `Bun.SQL` too. The synchrony is what makes the bet path atomic — it is not an accident to be tidied away.
 
-## **Database**
+A repository takes `SyncDatabase` (the DI token) and exposes `static over(handle)` for use inside a transaction. `infra/db/tx.ts` holds the single cast that makes that work.
 
-### TypeORM Configuration
-- **PostgreSQL** via `pg` driver
-- **Entities** in `<module>/entity/` folders — auto-discovered
-- **SnakeNamingStrategy** — camelCase properties → snake_case columns
-- **Migrations** in `src/infra/db/migrations/`
-- **Data source config** in `src/infra/db/data-source-options.ts`
-- **Advisory locks** via `src/infra/db/lock/pg-lock.module.ts`
-
-### DB Constraint Naming Convention (enforced via Biome GritQL plugins)
-
-All database indexes, foreign keys, and enum types **must** have explicit names — never rely on TypeORM auto-generated names. This makes debugging migration errors and DB issues far easier.
-
-| Constraint Type | Pattern | Example |
-|-----------------|---------|---------|
-| **Foreign Key** | `FK_{source_table}_to_{target_table}` | `FK_auth_provider_to_user` |
-| **Index** | `{descriptive_columns}_index` | `audit_actor_id_index` |
-| **Unique Index** | `{descriptive_columns}_index` (with `{ unique: true }`) | `provider_auth_provider_id_index` |
-| **Enum Type** | `{snake_case_name}_enum` | `user_role_enum`, `invite_status_enum` |
-
-**Rules:**
-- `@Index()` — always pass the index name as the first string argument
-- `@JoinColumn()` — always include `foreignKeyConstraintName` property
-- `@Column({ type: 'enum' })` — always include `enumName` property
-- When two entities share the same TS enum, use the **same `enumName`** in both (e.g., `UserRole` → `'user_role_enum'` everywhere)
-
-These rules are enforced by GritQL plugins in `plugins/` and run as part of `bun run lint`.
-
-### Entities (6)
-| Entity | Module | Key Fields |
-|--------|--------|------------|
-| `User` | users | id, email, name, role, isActive |
-| `PasswordResetToken` | users | token, userId, expiresAt |
-| `AuthProvider` | auth | provider, providerId, userId |
-| `Invite` | users/invites | email, status, invitedBy, token |
-| `AuditLog` | audit | entityName, action, oldValues (JSONB), newValues (JSONB), actorId |
-| `FileEntity` | file | name, size, mimeType, width, height, s3Key |
-
-### Migration Commands
 ```bash
-bun run mig:gen MyMigration   # Generate migration from entity changes
-bun run mig:run               # Run pending migrations
-bun run mig:revert            # Revert last migration
-bun run db:drop               # Drop entire schema
+bun run mig:gen    # generate from schema changes
+bun run mig:run    # apply
+bun run db:drop
 ```
 
----
-
-## **Authentication & Authorization**
-
-### Passport Strategies
-- **LocalStrategy** — email/password login
-- **JwtStrategy** — JWT token validation (global guard)
-- **GoogleStrategy** — Google OAuth2
-- **GithubStrategy** — GitHub OAuth2
-- **LinkedInStrategy** — LinkedIn OAuth2
-
-### Guards (globally registered)
-- **JwtAuthGuard** — validates JWT on all routes (skip with `@Public()`)
-- **RolesGuard** — RBAC, use `@Roles(UserRole.ADMIN)` to restrict
-
-### Auth Endpoints (`/api/auth/`)
-- `POST /login` — local email/password
-- `POST /register` — new user or invite-based registration
-- `POST /forgotten-password` — request password reset
-- `POST /password-reset` — reset with token
-- `GET /google`, `/google/callback` — Google OAuth
-- `GET /github`, `/github/callback` — GitHub OAuth
-- `GET /linkedin`, `/linkedin/callback` — LinkedIn OAuth
+Migrations also run at boot, in `DatabaseBootstrap`.
 
 ---
 
-## **Job Queue System (BullMQ + Redis)**
+## WebSockets
 
-### Queues
-- `notifications-events-queue` — email + WS notifications
-- `background-jobs-queue` — long-running background tasks
+**One gateway, one connection**: `@Gateway('/ws')` in `game.gateway.ts`, carrying the game, global chat, player DMs and notifications. socket.io let NestJS merge two gateway classes onto one server; dunx mounts a gateway as a route, so two classes would mean two connections. Two gateways on one path is a boot error.
 
-### Job Handler Pattern
-```typescript
-@JobHandler({ queue: EVENTS.QUEUES.BACKGROUND_JOBS, name: EVENTS.ROUTING_KEYS.USER_REGISTERED })
-async handleUserRegistered(job: JobHandlerPayload<typeof EVENTS.ROUTING_KEYS.USER_REGISTERED>) { ... }
-```
+- Chat scrollback lives in **Redis**, not the database: a capped list at `chat:global:history`, `rpush` + `ltrim` to the last 50. That is where the NestJS version kept it, and the key is deliberately unchanged so a deploy does not silently empty every lobby. Chat is not a record - a round is, and that is what SQLite holds.
+- The upgrade **admits anonymous callers** — watching is public. `context.player` is `null` for a spectator, and every handler spending money checks it.
+- It also accepts `?token=`, because a browser cannot set a header on a WebSocket. **Percent-encode it** — better-auth issues base64, which contains `/`, `+` and `=`.
+- Handlers **send** their acks (`betAck`, `cashOutAck`, `seedAck`) rather than returning them. dunx replies to `@OnMessage('x')` under the name `x`, and a request and its acknowledgement are not the same event.
+- The wire is `{ event, data }`. The client's `apps/fe/src/systems/network/socket.ts` is a socket.io-shaped shim over it, which is why the React components never changed.
+- Broadcasting goes through `EventsPublisher`, never `socket.publish` — the latter does not cross processes.
 
-### Published Events (`src/notifications/events/events.ts`)
-| Routing Key | Payload | Action |
-|-------------|---------|--------|
-| `user.registered` | RegisteredPayload | Welcome email + WS notification |
-| `user.invited` | InvitePayload | Invite email + WS notification |
-| `user.password_reset` | PasswordResetPayload | Password reset email |
+### The wire is declared once, in `libs/contracts`
 
-### Publishing Jobs
-```typescript
-await jobPublisher.publishJob(EVENTS.ROUTING_KEYS.USER_REGISTERED, payload, { emitToAdmins: true });
-```
+Every socket event name, the payload it carries, and the enums both sides read live in `@firecracker/contracts`. Both apps depend on it; neither restates it.
 
-### Queue Dashboard
-- Bull Board UI available at `/api/queues`
+They used to. The server declared the payloads in `game.events.ts` and the client hand-wrote its own beside its handlers, and the copies drifted **four times** — three of them a `userId` the server sent and the client did not read, the fourth a `username` the client read as `senderName`, which crashed the chat panel. Every one shipped, and every one was found by a person looking at a screen.
+
+- **In the lib:** event names, payloads, `GameRoundStatus`, `GameBetStatus`, `UserRole`, `InviteStatus`, `WalletTransactionType`.
+- **Not in the lib:** queue names, job names, job payloads, topic helpers. That is the server talking to itself, and a name a browser can read is a name somebody will send.
+- **No zod in there.** Sharing schemas would put zod in the browser bundle, and validating a frame is a separate decision from agreeing on its shape. The payloads are `interface`s and erase at build time.
+- Publish through `publishGame`, not `EventsPublisher.publish` — the latter takes `unknown`, which is the hole all four bugs came through.
 
 ---
 
-## **WebSocket (Socket.io + Redis Adapter)**
+## Testing
 
-- **EventsGateway** — JWT-authenticated Socket.io gateway
-- **Redis adapter** — multi-instance broadcast support
-- **Rooms**: `chat` (all users), `user_{id}` (private), `admins` (admin-only)
-- **Events**: `chatMessage` (broadcast), `aiRequest` (AI streaming)
-- **Config**: WS path and transports configurable via env vars
-
----
-
-## **Logging (`src/infra/logger/`)**
-
-- **ContextLogger** — structured JSON logging with `AsyncLocalStorage`-based context
-- **ContextService** — preserves requestId, userId, method, event across async boundaries
-- **Features**: error serialization, sensitive field masking (password, jwt, token, secret, key, phone), circular reference handling, array truncation
-- **Log levels**: VERBOSE → DEBUG → LOG → WARN → ERROR → FATAL
-- **Filtered endpoints**: `/api/service/up`, `/api/service/health`, `/favicon.ico`
-
----
-
-## **Redis**
-
-- **RedisModule** — IoRedis client wrapper
-- **RedisCacheThrottlerModule** — cache-manager + @nestjs/throttler with Redis storage
-- **Cache TTL**: configurable via `REDIS_CACHE_TTL` env var
-- **Throttle tiers**: short (10/1s), medium (50/10s), long (300/60s) — skipped for authenticated users
-
----
-
-## **Notifications**
-
-- **Email**: Resend API + React Email templates (welcome, invite, password reset)
-- **WebSocket**: Socket.io gateway with JWT auth
-- **Slack**: SlackService for bot notifications
-- **Email dev server**: `bun run email` (port 3035)
-
----
-
-## **File Management**
-
-- **S3Service** — AWS S3 upload, download, delete, presigned URLs
-- **FileService** — file operations with DB metadata tracking
-- **Validators**: size (1KB–10MB), name length (6+ chars), max 6 files
-- **Image dimensions**: extracted via `image-size` and stored
-
----
-
-## **AI Integration**
-
-- **Providers**: Google Gemini, Groq, OpenRouter (`AIProvider` enum)
-- **Vercel AI SDK** (`ai` package) for unified provider interface
-- **REST**: `POST /api/ai/query`, `GET /api/ai/models`
-- **WebSocket streaming**: real-time AI responses via Socket.io `aiRequest` event
-- **Dynamic model discovery** from provider APIs with static fallbacks
-
----
-
-## **Audit Logging**
-
-- **`@Auditable()` decorator** on entities — auto-tracks changes via TypeORM subscriber
-- **AuditLog entity** — stores entityName, action (INSERT/UPDATE/DELETE), oldValues, newValues (JSONB), actorId
-- **REST**: `GET /api/audit` — query audit logs with pagination
-
----
-
-## **Pagination (Cursor / Keyset)**
-
-All paginated endpoints use **cursor-based (keyset) pagination** — no offset/page numbers. This is index-friendly and produces consistent results regardless of concurrent writes.
-
-### Query Parameters
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `take` | number | 10 | Items per page (1–50) |
-| `cursor` | string | — | Opaque cursor from a previous response (omit for first page) |
-| `direction` | `forward` \| `backward` | `forward` | Pagination direction |
-| `order` | `ASC` \| `DESC` | `DESC` | Sort order |
-| `search` | string | — | Optional search filter (endpoint-specific) |
-
-### Response Meta
-```json
-{
-  "data": [...],
-  "meta": {
-    "take": 10,
-    "hasNextPage": true,
-    "hasPreviousPage": false,
-    "nextCursor": "eyJzIjoiMjAyNS0wNi0wMVQxMjowMDowMC4wMDBaIiwiaSI6ImFiYzEyMyJ9",
-    "previousCursor": null
-  }
-}
-```
-
-### Cursor Format
-Base64url-encoded JSON: `{ "s": "<sort_column_ISO_date>", "i": "<entity_UUID>" }`. The `s` field is the boundary row's sort column value and `i` is the UUID tiebreaker. Invalid cursors return `400 Bad Request`.
-
-### How It Works (`PaginationFactory`)
-1. **Sort key resolution**: auto-detects `updatedAt` → `createdAt` → `id` from entity metadata (configurable via `orderBy` parameter)
-2. **Cursor WHERE clause**: compound condition `(sort_col < :val) OR (sort_col = :val AND id < :id)` for DESC (inverted for ASC/backward)
-3. **`take+1` sentinel**: fetches one extra row to determine `hasNextPage` without a COUNT query
-4. **Backward navigation**: inverts SQL ORDER BY, then reverses results in-app
-5. **Precision handling**: uses `date_trunc('milliseconds', ...)` in SQL to match JavaScript Date precision (PostgreSQL timestamps have microsecond precision)
-
-### Usage in Repositories
-All repositories call `paginationFactory.paginate(queryBuilder, pageOptionsDto)` — the cursor logic is fully encapsulated in the factory. No repository changes needed when switching sort keys or adding new paginated endpoints.
-
----
-
-## **Health Checks**
-
-- `GET /api/service/health` — DB, memory, Redis health
-- `GET /api/service/up` — uptime in seconds
-- `GET /api/service/config` — version, env, commit info, feature status
-
----
-
-## **Testing**
-
-### Unit Tests (`src/**/*.spec.ts`)
 ```bash
-bun test              # Run all unit tests
-bun test --watch      # Watch mode
-bun test --coverage   # Coverage report
+bun run test             # every workspace
+bun run test:e2e         # e2e, from apps/be
 ```
 
-### E2E Tests (`e2e/**/*.e2e.spec.ts`)
-```bash
-bun run test:e2e                                          # Run all E2E tests
-bun run test:e2e:single ./e2e/relative/path/to/test.e2e.ts  # Run single E2E test
-```
+`bun run test`, not a bare `bun test` at the root: the root `bunfig.toml` preloads
+`@dunx/transform`, which resolves from `apps/be` and not from the root, so a
+root-level run fails naming a provider it could not build. Each workspace runs its
+own.
 
-### E2E Utilities (`e2e/utils/`)
-- `api-client.ts` — HTTP request helper
-- `db-client.ts` — direct DB access for setup/teardown
-- `ws-client.ts` — WebSocket client for gateway tests
-- `e2e/setup/preload.ts` — database setup before test suite
+- `*.test.ts` — unit, no container
+- `*.spec.ts` — integration: the real graph, a real `Bun.serve` on port 0, in-memory SQLite
+- `game.spec.ts` drives rounds through the repository rather than the engine. **Do not put the clock in a test.**
 
----
-
-## **Scripts Reference**
-
-| Command | Description |
-|---------|-------------|
-| `bun dev` | Start dev server with hot reload (`bun --watch`) |
-| `bun run build` | Build for production (nest build + tsc-alias) |
-| `bun start` | Start production build (`bun dist/main.js`) |
-| `bun test` | Run unit tests |
-| `bun run test:e2e` | Run E2E tests with DB preload |
-| `bun run test:e2e:single <path>` | Run single E2E test |
-| `bun run lint` | Lint and fix with Biome |
-| `bun run format` | Format with Biome |
-| `bun run mig:gen <Name>` | Generate TypeORM migration |
-| `bun run mig:run` | Run pending migrations |
-| `bun run mig:revert` | Revert last migration |
-| `bun run db:drop` | Drop database schema |
-| `bun run create:admin` | Create admin user interactively |
-| `bun run email` | Start React Email preview server (port 3035) |
-| `bun run email:export` | Export email templates as HTML |
-| `bun run gen:env:docs` | Generate env vars documentation |
+A bug fix comes with the test that would have caught it.
 
 ---
 
-## **Key Constants (`src/constants.ts`)**
+## Commands
 
-- `GLOBAL_PREFIX = 'api'`
-- `PASSWORD_HASH_ROUNDS = 10`
-- `REQUEST_ID_HEADER_KEY = 'X-Request-Id'`
-- `FILES`: min 1KB, max 10MB, min name length 6, max 6 files
-- `PAGINATION`: default take 10, max 50, max cursor 512, order by precedence [updatedAt, createdAt, id]
-- Time: `MILLISECOND`, `SECOND`, `MINUTE`, `HOUR`, `DAY` (all in ms)
+| Command                       | Does                        |
+| ----------------------------- | --------------------------- |
+| `bun dev`                     | both apps, and the worker   |
+| `bun run dev:be` / `dev:fe`   | one of them                 |
+| `bun run worker`              | the queue consumer          |
+| `bun run test`                | every test in the workspace |
+| `bun run lint` / `format`     | oxlint / oxfmt              |
+| `bun run typecheck`           | every workspace             |
+| `bun run mig:gen` / `mig:run` | drizzle migrations          |
+
+Redis must be up for rounds to advance: `docker compose up -d`.
+
+`QUEUE_PREFIX`, `THROTTLE_PREFIX` and `WS_RELAY_CHANNEL` must name **this** app. They arrived from the template saying `dunx-template`, which put two applications on one queue namespace in a shared Redis - each consuming the other's jobs.
 
 ---
 
-## **Docker**
+## Style
 
-- **docker-compose.yml** — PostgreSQL 17.5 (port 5438) + Redis 8.4 (port 6383)
-- **docker-compose.full.yml** — above + app backend container with health checks
-- **Dockerfile** — multi-stage build, `oven/bun:1.3.9-slim`, non-root user
+- Comments explain **why**, never what. If a line is surprising, say what it would break if changed.
+- No dead code, no speculative abstraction, no commented-out blocks.
+- `readonly` on anything that is not reassigned; `#private` for real privacy.
+- Prefer a named function to a comment explaining an expression.
+- Match the surrounding file's density and idiom.
