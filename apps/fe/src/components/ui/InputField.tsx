@@ -1,4 +1,4 @@
-import { Box, Input, InputProps, Text } from '@chakra-ui/react';
+import { Box, Input, type InputProps, Text } from '@chakra-ui/react';
 
 export const InputField = ({
   label,

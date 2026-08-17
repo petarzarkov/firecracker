@@ -8,10 +8,10 @@ export interface BetEntry {
   username: string;
   betAmountCents: number;
   status: 'ACTIVE' | 'CASHED_OUT' | 'LOST';
-  cashedOutAt?: number;
-  payoutCents?: number;
+  cashedOutAt?: number | undefined;
+  payoutCents?: number | undefined;
   /** True when the update was applied locally before server confirmation. */
-  isOptimistic?: boolean;
+  isOptimistic?: boolean | undefined;
 }
 
 export interface CrashedRound {
@@ -80,18 +80,18 @@ interface GameActions {
       multiplier: number;
       elapsed: number;
       activeBets: BetEntry[];
-      waitingEndsAt?: Date;
-      startedAt?: Date;
-      recentCrashes?: CrashedRound[];
+      waitingEndsAt?: Date | undefined;
+      startedAt?: Date | undefined;
+      recentCrashes?: CrashedRound[] | undefined;
     },
     myUserId?: string,
   ) => void;
   setPhase: (payload: {
     roundId: string;
     phase: GamePhase;
-    waitingEndsAt?: Date;
-    startedAt?: Date;
-    crashedAt?: Date;
+    waitingEndsAt?: Date | undefined;
+    startedAt?: Date | undefined;
+    crashedAt?: Date | undefined;
   }) => void;
   addTick: (multiplier: number, elapsed: number) => void;
   setCrashed: (roundId: string, crashPoint: number) => void;
@@ -340,11 +340,12 @@ export const useGameStore = create<GameState & GameActions>()(
           const idx = state.activeBets.findIndex(
             (b) => b.userId === myBet.userId,
           );
-          if (idx >= 0) {
-            state.activeBets[idx].status = newStatus;
-            state.activeBets[idx].isOptimistic = false;
-            state.activeBets[idx].cashedOutAt = undefined;
-            state.activeBets[idx].payoutCents = undefined;
+          const rolled = idx >= 0 ? state.activeBets[idx] : undefined;
+          if (rolled !== undefined) {
+            rolled.status = newStatus;
+            rolled.isOptimistic = false;
+            rolled.cashedOutAt = undefined;
+            rolled.payoutCents = undefined;
           }
           myBet.status = newStatus;
           myBet.isOptimistic = false;

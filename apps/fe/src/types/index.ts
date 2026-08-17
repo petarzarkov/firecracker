@@ -13,11 +13,11 @@ export { UserRole } from '@firecracker/contracts';
 export interface ChatMessage {
   senderId: string;
   senderName: string;
-  senderPicture?: string;
+  senderPicture?: string | undefined;
   message: string;
   timestamp: Date;
-  isSystem?: boolean;
-  model?: string; // Model used for AI responses
+  isSystem?: boolean | undefined;
+  model?: string | undefined; // Model used for AI responses
 }
 
 /**

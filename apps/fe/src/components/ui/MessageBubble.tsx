@@ -14,7 +14,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FaCheck, FaCopy } from 'react-icons/fa';
 import { MdExpandLess, MdExpandMore } from 'react-icons/md';
-import ReactMarkdown, { Components } from 'react-markdown';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'; // Dark theme for code
 import type { ChatMessage } from '../../types';
@@ -72,10 +72,7 @@ export function MessageBubble({
 
         // 2. BLOCK CODE (e.g. ```typescript ... ```)
         return (
-          <CodeBlock
-            language={match ? match[1] : 'text'}
-            codeString={codeString}
-          />
+          <CodeBlock language={match?.[1] ?? 'text'} codeString={codeString} />
         );
       },
       // Handle Paragraphs

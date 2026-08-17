@@ -1,165 +1,121 @@
+import type { Stage, StageSample } from '@firecracker/stage';
 import { Box, Text, VStack } from '@chakra-ui/react';
 import { useEffect, useRef, useState } from 'react';
-import {
-  type GamePhase,
-  getLiveMultiplier,
-  liveRef,
-  useGameStore,
-} from '@/store/gameStore';
-import { drawBackgroundGlow } from './crash-chart/background';
-import { CountdownDisplay } from './crash-chart/CountdownDisplay';
-import { drawChart } from './crash-chart/chart';
-import {
-  GRID_MULTIPLIERS,
-  mToYPct,
-  WICK_OFFSET_X_PCT,
-  WICK_OFFSET_Y_PCT,
-} from './crash-chart/constants';
-import {
-  type FireworkParticle,
-  type FireworkRocket,
-} from './crash-chart/fireworks';
-import {
-  drawParticles,
-  type Particle,
-  updateParticles,
-} from './crash-chart/particles';
-import { drawPhaseEffects } from './crash-chart/phase-effects';
-import { drawStars, initStars, type Star } from './crash-chart/stars';
-import { type WickSpark } from './crash-chart/wick';
+import { getLiveMultiplier, liveRef, useGameStore } from '@/store/gameStore';
+import { CountdownDisplay } from './CountdownDisplay';
 
+/** The store's phase, as the stage names it. */
+const STAGE_PHASE = {
+  IDLE: 'idle',
+  WAITING: 'waiting',
+  RUNNING: 'running',
+  CRASHED: 'crashed',
+} as const;
+
+/**
+ * The round, drawn by `@firecracker/stage`, with the readouts left in the DOM.
+ *
+ * ## What moved, and what did not
+ *
+ * The canvas half - grid, axis labels, curve, starfield, rocket, sparks, embers
+ * and fireworks - is now a PIXI scene in its own workspace. What stayed here is
+ * the text: the multiplier, the countdown and the crash result. Those are worth
+ * keeping in the DOM because they are the parts a person reads rather than
+ * watches, and the theme already styles them.
+ *
+ * The axis labels went the other way for the opposite reason. They were DOM nodes
+ * positioned against a hardcoded 360px reference height while the gridlines were
+ * drawn against the canvas's real one, so on a 652px chart the `1x` label sat 43px
+ * below its own line. Inside the stage there is one scale, so they cannot
+ * disagree - and they have to be there now anyway, since the axis rescales as a
+ * round climbs and DOM labels would mean re-rendering React mid-round.
+ */
 export function CrashChart() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const imageRef = useRef<HTMLImageElement>(null);
-
-  const starsRef = useRef<Star[]>(initStars());
-  const particlesRef = useRef<Particle[]>([]);
-  const crashBurstFiredRef = useRef(false);
-  const crashFlashRef = useRef(0);
-  const multiplierSpanRef = useRef<HTMLElement>(null);
-  const wickSparksRef = useRef<WickSpark[]>([]);
-  const fireworkRocketsRef = useRef<FireworkRocket[]>([]);
-  const fireworkParticlesRef = useRef<FireworkParticle[]>([]);
-  const fireworksFiredRef = useRef(false);
+  const multiplierSpanRef = useRef<HTMLSpanElement>(null);
 
   const phase = useGameStore((state) => state.phase);
-  const phaseRef = useRef<GamePhase>(phase);
-  phaseRef.current = phase;
 
-  useEffect(() => {
-    if (phase !== 'CRASHED') {
-      crashBurstFiredRef.current = false;
-      fireworksFiredRef.current = false;
-      fireworkRocketsRef.current = [];
-      fireworkParticlesRef.current = [];
-    }
-    if (phase !== 'RUNNING') {
-      wickSparksRef.current = [];
-    }
-  }, [phase]);
+  /**
+   * The live phase, for the sampler.
+   *
+   * The stage's ticker runs outside React, so it cannot close over `phase` from
+   * a render - it would read whatever the value was when the effect last ran.
+   */
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
 
   const [crashMultiplier, setCrashMultiplier] = useState(1.0);
   useEffect(() => {
-    if (phase === 'CRASHED') {
-      setCrashMultiplier(liveRef.multiplier);
-      crashFlashRef.current = 60;
-    }
+    if (phase === 'CRASHED') setCrashMultiplier(liveRef.multiplier);
   }, [phase]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    let animId: number;
+    if (canvas === null) return;
 
-    const draw = () => {
-      const W = canvas.clientWidth;
-      const H = canvas.clientHeight;
+    let stage: Stage | null = null;
+    let live = true;
 
-      if (W === 0 || H === 0) {
-        animId = requestAnimationFrame(draw);
-        return;
-      }
+    /**
+     * What the stage asks for, every frame.
+     *
+     * Reads `liveRef` rather than the store: ticks mutate that ref and never call
+     * `set()`, which is what keeps a running round from re-rendering React sixty
+     * times a second. Moving to PIXI did not change that contract, it inherited it.
+     */
+    const sample = (): StageSample => ({
+      phase: STAGE_PHASE[phaseRef.current],
+      multiplier: getLiveMultiplier(),
+      points: liveRef.chartPoints,
+    });
 
-      if (canvas.width !== W || canvas.height !== H) {
-        canvas.width = W;
-        canvas.height = H;
-      }
+    void import('@firecracker/stage')
+      .then(({ createStage }) =>
+        createStage({
+          canvas,
+          sample,
+          rocketUrl: '/png/android-chrome-192x192.png',
+        }),
+      )
+      .then((created) => {
+        // The effect can be torn down before PIXI finishes initialising - React
+        // StrictMode guarantees it in development - and a stage nobody holds a
+        // reference to would tick forever.
+        if (!live) {
+          created.destroy();
+          return;
+        }
+        stage = created;
+      })
+      .catch((error: unknown) => {
+        console.error('[stage] could not start', error);
+      });
 
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        animId = requestAnimationFrame(draw);
-        return;
-      }
-
-      const currentPhase = phaseRef.current;
-      const currentMultiplier = getLiveMultiplier();
-
-      ctx.clearRect(0, 0, W, H);
-
-      drawBackgroundGlow(
-        ctx,
-        W,
-        H,
-        currentPhase,
-        currentMultiplier,
-        crashFlashRef.current,
-      );
-      if (crashFlashRef.current > 0) crashFlashRef.current -= 1;
-
-      drawStars(ctx, W, H, starsRef.current, currentPhase);
-      drawChart(ctx, W, H, currentPhase);
-
-      let wickX = W / 2;
-      let wickY = H / 2;
-
-      if (imageRef.current) {
-        const imgRect = imageRef.current.getBoundingClientRect();
-        const canvasRect = canvas.getBoundingClientRect();
-        const imgCenterX = imgRect.left - canvasRect.left + imgRect.width / 2;
-        const imgCenterY = imgRect.top - canvasRect.top + imgRect.height / 2;
-        wickX = imgCenterX + imgRect.width * WICK_OFFSET_X_PCT;
-        wickY = imgCenterY + imgRect.height * WICK_OFFSET_Y_PCT;
-      }
-
-      drawPhaseEffects(
-        ctx,
-        W,
-        H,
-        currentPhase,
-        wickSparksRef.current,
-        fireworkRocketsRef.current,
-        fireworkParticlesRef.current,
-        fireworksFiredRef,
-        wickX,
-        wickY,
-      );
-
-      updateParticles(
-        particlesRef.current,
-        W,
-        H,
-        currentPhase,
-        currentMultiplier,
-        crashBurstFiredRef,
-      );
-      if (particlesRef.current.length > 0) {
-        drawParticles(
-          ctx,
-          particlesRef.current,
-          currentMultiplier,
-          currentPhase === 'CRASHED',
-        );
-      }
-
-      if (multiplierSpanRef.current && currentPhase === 'RUNNING') {
-        multiplierSpanRef.current.textContent = `${currentMultiplier.toFixed(2)}x`;
-      }
-
-      animId = requestAnimationFrame(draw);
+    return () => {
+      live = false;
+      stage?.destroy();
+      stage = null;
     };
+  }, []);
 
-    animId = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(animId);
+  /**
+   * The multiplier readout, written straight to the DOM node.
+   *
+   * Its own loop rather than a value the stage hands back, so the text keeps
+   * updating at the browser's pace and this component never re-renders for it.
+   */
+  useEffect(() => {
+    let frame: number;
+    const paint = () => {
+      const node = multiplierSpanRef.current;
+      if (node !== null && phaseRef.current === 'RUNNING') {
+        node.textContent = `${getLiveMultiplier().toFixed(2)}x`;
+      }
+      frame = requestAnimationFrame(paint);
+    };
+    frame = requestAnimationFrame(paint);
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   return (
@@ -184,40 +140,6 @@ export function CrashChart() {
         }}
       />
 
-      {GRID_MULTIPLIERS.map((m) => {
-        const topPct = mToYPct(m);
-        if (topPct < 0 || topPct > 100) return null;
-        return (
-          <Box
-            key={m}
-            position="absolute"
-            left="4px"
-            top={`${topPct}%`}
-            transform="translateY(-50%)"
-            pointerEvents="none"
-            userSelect="none"
-          >
-            <Text
-              fontSize="11px"
-              color="rgba(255,255,255,0.55)"
-              fontFamily="monospace"
-              fontWeight="medium"
-              lineHeight={1}
-              whiteSpace="nowrap"
-            >
-              {m}x
-            </Text>
-          </Box>
-        );
-      })}
-
-      <style>{`
-        @keyframes fc-pulse {
-          from { transform: scale(1); }
-          to   { transform: scale(1.14); }
-        }
-      `}</style>
-
       <VStack
         position="absolute"
         inset={0}
@@ -227,32 +149,6 @@ export function CrashChart() {
         pointerEvents="none"
         userSelect="none"
       >
-        {(phase === 'WAITING' || phase === 'RUNNING') && (
-          <Box
-            style={{
-              animation:
-                phase === 'RUNNING'
-                  ? 'fc-pulse 0.6s ease-in-out infinite alternate'
-                  : 'none',
-            }}
-          >
-            <img
-              ref={imageRef}
-              src="/png/android-chrome-192x192.png"
-              alt="firecracker"
-              width={phase === 'RUNNING' ? 120 : 90}
-              height={phase === 'RUNNING' ? 120 : 90}
-              style={{
-                opacity: phase === 'WAITING' ? 0.4 : 1,
-                filter:
-                  phase === 'RUNNING'
-                    ? 'drop-shadow(0 0 20px #4CAF50)'
-                    : 'none',
-                transition: 'width 0.3s, height 0.3s, opacity 0.3s',
-              }}
-            />
-          </Box>
-        )}
         {phase === 'CRASHED' && (
           <Text fontSize="100px" lineHeight="1">
             💥
@@ -274,7 +170,7 @@ export function CrashChart() {
               color="green.400"
               lineHeight="1"
               style={{
-                textShadow: '0 0 30px #4CAF50, 0 0 60px #4CAF5088',
+                textShadow: '0 0 30px #ff6b00, 0 0 60px #ff6b0088',
                 letterSpacing: '-2px',
               }}
             >

@@ -1,19 +1,13 @@
 {
+  "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "target": "ES2023",
-    "module": "Preserve",
-    "moduleResolution": "bundler",
-    "lib": ["ES2023"],
-    "types": ["bun"],
-    "strict": true,
-    "exactOptionalPropertyTypes": true,
-    "noUncheckedIndexedAccess": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "verbatimModuleSyntax": true,
-    "isolatedModules": true,
-    "skipLibCheck": true,
-    "noEmit": true
+    /* Consumed as source by both a Bun app and a Vite bundle — `exports` points
+       at `src/`, so there is no build step and each consumer compiles what it
+       imports. That is also why imports here stay extensionless-free of Node's
+       rules and resolve the bundler's way. */
+    "module": "preserve",
+    "moduleResolution": "bundler"
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["node_modules"]
 }
