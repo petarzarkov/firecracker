@@ -64,6 +64,13 @@ function MessageButton({ bet }: { bet: BetEntry }) {
   // No socket, not signed in, or it is your own row.
   if (!socket || myUserId === undefined || bet.userId === myUserId) return null;
 
+  /**
+   * Bots carry a synthetic `bot:` id and no user row, so opening a conversation
+   * with one is refused server-side. Offering the button anyway would be a control
+   * that always fails - see `GameBotsService` for why they have no real identity.
+   */
+  if (bet.userId.startsWith('bot:')) return null;
+
   return (
     <Box
       as="button"

@@ -36,4 +36,11 @@ export const notificationVarsSchema = z.object({
     .describe(
       'Retries inside one job attempt. The queue retries the job on top of this.',
     ),
+
+  /**
+   * Slack, for service notices. Both halves or nothing: a token with no channel
+   * has nowhere to post, so `SlackService` reports itself unconfigured either way.
+   */
+  SLACK_BOT_TOKEN: z.string().optional(),
+  SLACK_CHANNEL: z.string().optional(),
 });

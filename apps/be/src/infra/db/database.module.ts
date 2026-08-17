@@ -12,12 +12,13 @@ import {
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator';
 import { AppConfigService } from '../../config/app.config.service.js';
 import * as schema from './schema.js';
+import { applyAuditTriggers } from './triggers.js';
 
 export const MIGRATIONS_FOLDER = join(import.meta.dir, 'migrations');
 
 /**
- * Applies the drizzle-kit migrations in the constructor, so the schema is current
- * before anything else in the graph is built. `bun:sqlite` is synchronous, so there
+ * Applies the drizzle-kit migrations and the audit triggers in the constructor, so
+ * both are done before anything else in the graph is built. `bun:sqlite` is synchronous, so there
  * is nothing to await and no boot phase to coordinate.
  *
  * dunx settles every async factory before the first constructor runs, which is what
@@ -32,6 +33,7 @@ export class DatabaseBootstrap {
     }
 
     migrate(this.connection.db, { migrationsFolder: MIGRATIONS_FOLDER });
+    applyAuditTriggers(this.connection.raw);
   }
 
   /** The raw `bun:sqlite` handle, for health probes and `BEGIN IMMEDIATE`. */

@@ -45,6 +45,20 @@ const DEFAULTS: Record<string, string> = {
   // The credential `AuthAdminSeeder` creates at boot, and what the suite signs in
   // with. A user row inserted by hand has no `account` row and cannot sign in.
   SEED_ADMIN_EMAIL: 'admin@e2e-test.com',
+  /**
+   * Throwaway OAuth credentials.
+   *
+   * A provider is only registered when **both** halves are present, so without
+   * these the social routes 404 and the suite could not tell "not configured" from
+   * "broken". They are never exchanged with a provider - the assertion stops at
+   * the authorize URL this server builds - so fake values are the honest choice.
+   */
+  GITHUB_OAUTH_CLIENT_ID: 'e2e-github-id',
+  GITHUB_OAUTH_CLIENT_SECRET: 'e2e-github-secret',
+  GOOGLE_OAUTH_CLIENT_ID: 'e2e-google-id',
+  GOOGLE_OAUTH_CLIENT_SECRET: 'e2e-google-secret',
+  LINKEDIN_OAUTH_CLIENT_ID: 'e2e-linkedin-id',
+  LINKEDIN_OAUTH_CLIENT_SECRET: 'e2e-linkedin-secret',
   SEED_ADMIN_PASSWORD: 'e2e-admin-password',
   // The rate limiter is real and its counters live in a Redis that outlives the
   // process, so a suite needs its own namespace and enough headroom to finish.

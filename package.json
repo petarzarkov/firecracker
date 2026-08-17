@@ -32,8 +32,7 @@
     "mig:run": "bun run --filter 'firecracker-be' mig:run",
     "db:drop": "bun run --filter 'firecracker-be' db:drop",
     "seed": "bun run --filter 'firecracker-be' seed",
-    "mod:cost": "bunx @arkv/module-cost --less",
-    "dev:web": "bun run --filter 'firecracker-be' dev:web"
+    "mod:cost": "bunx @arkv/module-cost --less"
   },
   "devDependencies": {
     "husky": "^9.1.7",

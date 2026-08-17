@@ -1,10 +1,12 @@
 import { z } from 'zod';
+import { aiVarsSchema } from './dto/ai-vars.dto.js';
 import { authVarsSchema } from './dto/auth-vars.dto.js';
 import { dbVarsSchema } from './dto/db-vars.dto.js';
 import { gameVarsSchema } from './dto/game-vars.dto.js';
 import { notificationVarsSchema } from './dto/notification-vars.dto.js';
 import { redisVarsSchema } from './dto/redis-vars.dto.js';
 import { serviceVarsSchema } from './dto/service-vars.dto.js';
+import { StorageDriver, storageVarsSchema } from './dto/storage-vars.dto.js';
 
 /**
  * One flat schema over the raw environment, composed from the per-concern
@@ -16,11 +18,24 @@ export const envVarsSchema = z
     ...serviceVarsSchema.shape,
     ...dbVarsSchema.shape,
     ...redisVarsSchema.shape,
+    ...storageVarsSchema.shape,
     ...authVarsSchema.shape,
     ...notificationVarsSchema.shape,
     ...gameVarsSchema.shape,
+    ...aiVarsSchema.shape,
   })
   .superRefine((vars, ctx) => {
+    if (
+      vars.STORAGE_DRIVER === StorageDriver.S3 &&
+      vars.S3_BUCKET === undefined
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['S3_BUCKET'],
+        message: 'S3_BUCKET is required when STORAGE_DRIVER=s3',
+      });
+    }
+
     if (vars.APP_ENV === 'prod' && vars.BETTER_AUTH_SECRET === undefined) {
       ctx.addIssue({
         code: 'custom',

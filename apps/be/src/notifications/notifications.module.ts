@@ -3,6 +3,7 @@ import { HttpModule } from '@dunx/http/client';
 import { AppConfigService } from '../config/app.config.service.js';
 import { NotificationJobs } from './handlers/notification.jobs.js';
 import { EmailService } from './services/email.service.js';
+import { SlackService } from './slack/slack.service.js';
 
 /**
  * Email and the jobs that send it.
@@ -43,7 +44,7 @@ export class NotificationsModule {
           inject: [AppConfigService] as const,
         }),
       ],
-      providers: [EmailService, NotificationJobs],
+      providers: [EmailService, NotificationJobs, SlackService],
     };
   }
 }

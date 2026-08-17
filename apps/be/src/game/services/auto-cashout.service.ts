@@ -2,7 +2,7 @@ import { Logger } from '@dunx/core';
 import { RedisConnection } from '@dunx/infra/redis';
 import { EventsPublisher } from '../../notifications/events/events.publisher.js';
 import { userTopic } from '../../notifications/events/events.js';
-import { GAME_EVENTS, GAME_TOPIC } from '../game.events.js';
+import { GAME_EVENTS, GAME_TOPIC, publishGame } from '../game.events.js';
 import { toMultiplier } from '../game.math.js';
 import { GameBetService } from './game-bet.service.js';
 import { WalletService } from './wallet.service.js';
@@ -90,11 +90,20 @@ export class AutoCashOutService {
         const bet = this.bets.cashOut(userId, roundId, at, entry.isDemo);
         const wallet = this.wallets.getWallet(userId, entry.isDemo);
 
-        this.events.publish(userTopic(userId), GAME_EVENTS.WALLET_UPDATED, {
-          balanceCents: wallet.balanceCents,
-          isDemo: entry.isDemo,
-        });
-        this.events.publish(GAME_TOPIC, GAME_EVENTS.BET_CASHED_OUT, {
+        publishGame(
+          this.events,
+          userTopic(userId),
+          GAME_EVENTS.WALLET_UPDATED,
+          {
+            balanceCents: wallet.balanceCents,
+            isDemo: entry.isDemo,
+          },
+        );
+        publishGame(this.events, GAME_TOPIC, GAME_EVENTS.BET_CASHED_OUT, {
+          // The auto-cashout's whole point is that the player is not watching.
+          // Without their id the client cannot tell the frame is about them, and
+          // the bet panel keeps offering a cash-out that already happened.
+          userId,
           username: entry.username,
           multiplier: toMultiplier(at),
           payoutCents: bet.payoutCents ?? 0,

@@ -151,6 +151,8 @@ export interface BetPlacedPayload {
 }
 
 export interface BetCashedOutPayload {
+  /** Who cashed out. Without it a client cannot tell whether it was them. */
+  readonly userId: string;
   readonly username: string;
   readonly multiplier: number;
   readonly payoutCents: number;
@@ -189,3 +191,44 @@ export interface WalletUpdatedPayload {
   readonly balanceCents: number;
   readonly isDemo: boolean;
 }
+
+/**
+ * Every server-sent game event, with the payload it carries.
+ *
+ * ## Why this exists
+ *
+ * `EventsPublisher.publish` takes `unknown`, so nothing checked that a frame
+ * matched the interface named after it. Three separate bugs came out of that gap,
+ * all the same shape: `betPlaced`, `betAck` and `betCashedOut` each went out
+ * without the `userId` a client needs to recognise itself, and each one was found
+ * by a person looking at a screen rather than by a compiler.
+ *
+ * Publishing through {@link publishGame} makes the payload a type error instead.
+ */
+export interface GamePayloads {
+  readonly [GAME_EVENTS.ROUND_STATE]: GameRoundStatePayload;
+  readonly [GAME_EVENTS.PHASE_CHANGE]: GamePhasePayload;
+  readonly [GAME_EVENTS.TICK]: GameTickPayload;
+  readonly [GAME_EVENTS.CRASHED]: GameCrashedPayload;
+  readonly [GAME_EVENTS.BET_PLACED]: BetPlacedPayload;
+  readonly [GAME_EVENTS.BET_CASHED_OUT]: BetCashedOutPayload;
+  readonly [GAME_EVENTS.BET_ACK]: BetAckPayload;
+  readonly [GAME_EVENTS.CASH_OUT_ACK]: CashOutAckPayload;
+  readonly [GAME_EVENTS.SEED_ACK]: SeedAckPayload;
+  readonly [GAME_EVENTS.WALLET_UPDATED]: WalletUpdatedPayload;
+}
+
+/**
+ * Publish a game frame, with the payload checked against the event name.
+ *
+ * A thin wrapper over `EventsPublisher.publish`, which takes `unknown` because it
+ * serves chat and notifications too. Every game publish goes through here.
+ */
+export const publishGame = <E extends keyof GamePayloads>(
+  events: { publish: (topic: string, event: string, data: unknown) => void },
+  topic: string,
+  event: E,
+  data: GamePayloads[E],
+): void => {
+  events.publish(topic, event, data);
+};

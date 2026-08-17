@@ -6,7 +6,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "dev": "bun ./scripts/dev.ts",
+    "dev": "bun --watch src/main.ts",
     "start": "bun src/main.ts",
     "worker": "bun src/worker.ts",
     "dev:worker": "bun --watch src/worker.ts",
@@ -26,8 +26,7 @@
     "db:drop": "bun ./scripts/db-drop.ts",
     "seed": "bun --env-file=.env ./scripts/seed.ts",
     "gen:openapi": "bunx dunx-openapi ./src/openapi.config.ts",
-    "gen:env:docs": "bun ./scripts/gen-env-docs.ts",
-    "dev:web": "bun --watch src/main.ts"
+    "gen:env:docs": "bun ./scripts/gen-env-docs.ts"
   },
   "dependencies": {
     "@arkv/rng": "^0.8.2",
@@ -37,6 +36,7 @@
     "@dunx/infra": "^2.0.1",
     "@dunx/openapi": "^2.0.1",
     "@dunx/transform": "^2.0.1",
+    "@google/genai": "^2.17.1",
     "better-auth": "^1.6.25",
     "bullmq": "^6.0.5",
     "drizzle-orm": "^0.45.2",

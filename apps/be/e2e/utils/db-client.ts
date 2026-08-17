@@ -26,11 +26,37 @@ export class DbClient {
   }
 
   countRows(
-    table: 'session' | 'account' | 'game_round' | 'game_bet' | 'wallet',
+    table:
+      | 'session'
+      | 'account'
+      | 'file'
+      | 'game_round'
+      | 'game_bet'
+      | 'wallet',
   ): number {
     const row = this.#db
       .query(`SELECT count(*) AS n FROM "${table}"`)
       .get() as { n: number } | null;
+    return row?.n ?? 0;
+  }
+
+  /**
+   * An invitation's code, which is the one thing the API deliberately never
+   * returns - see the note on the `Invite` schema. This is the database standing
+   * in for the email the invitee would have received.
+   */
+  inviteCodeFor(email: string): string {
+    const row = this.#db
+      .query('SELECT code FROM invite WHERE email = ?')
+      .get(email) as { code: string } | null;
+    if (row === null) throw new Error(`no invite for ${email}`);
+    return row.code;
+  }
+
+  countAuditRows(entityId: string): number {
+    const row = this.#db
+      .query('SELECT count(*) AS n FROM audit_log WHERE entity_id = ?')
+      .get(entityId) as { n: number } | null;
     return row?.n ?? 0;
   }
 

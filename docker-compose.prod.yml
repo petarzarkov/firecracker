@@ -78,6 +78,10 @@ services:
         COMMIT_MESSAGE: ${COMMIT_MESSAGE:-}
     env_file:
       - .env
+    environment:
+      # The worker is its own container here, so the API must not also consume -
+      # see `WORKER_MODE` in apps/be/.env.example.
+      WORKER_MODE: separate
     ports:
       - '${API_PORT:-3001}:3001'
     volumes:

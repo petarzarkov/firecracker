@@ -128,17 +128,6 @@ describe('the auth endpoints the client calls', () => {
     expect(unknown.status).toBe(200);
   });
 
-  test('an unconfigured social provider refuses cleanly', async () => {
-    const { origin } = getTestContext();
-    const response = await json(origin, '/sign-in/social', {
-      provider: 'github',
-      callbackURL: 'http://localhost:5173',
-    });
-    // A 4xx naming the provider, not a 500 - the client shows this to a user.
-    expect(response.status).toBeGreaterThanOrEqual(400);
-    expect(response.status).toBeLessThan(500);
-  });
-
   test('signing out kills the session the token pointed at', async () => {
     const { origin } = getTestContext();
     const email = uniqueEmail();

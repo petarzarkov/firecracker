@@ -1,10 +1,17 @@
 import type { ConfigSource, DynamicModule, ModuleRef } from '@dunx/core';
 import { LoggerModule } from '@dunx/infra/logger';
 import { AccountsModule } from './auth/auth.module.js';
+import { AIModule } from './ai/ai.module.js';
+import { AuditModule } from './audit/audit.module.js';
 import { AppConfigModule } from './config/app.config.module.js';
 import { ClientModule } from './client/client.module.js';
+import { AuditContextMiddleware } from './core/middlewares/audit-context.middleware.js';
+import { FilesFeatureModule } from './files/files.module.js';
+import { StorageModule } from './infra/files/storage.module.js';
+import { ImagesConfigModule } from './infra/images/images.module.js';
 import { AppConfigService } from './config/app.config.service.js';
 import { GameModule } from './game/game.module.js';
+import { InvitesModule } from './invites/invites.module.js';
 import { DatabaseModule } from './infra/db/database.module.js';
 import { HealthModule } from './infra/health/health.module.js';
 import { QueuesModule } from './infra/queue/queue.module.js';
@@ -65,6 +72,16 @@ const foundation = (
     : LoggerModule.forRoot({ level: options.logLevel }),
   DatabaseModule.forRoot(),
   RedisCacheModule.forRoot(),
+  StorageModule.forRoot(),
+  ImagesConfigModule.forRoot(),
+  /**
+   * `global: true`, and in `foundation()` so both processes get one instance.
+   *
+   * One matters more than usual here: `GoogleService` paces itself against a
+   * per-minute quota and deranks when it hits one, and two clients would each
+   * think they had the whole allowance.
+   */
+  AIModule.forRoot({ controllers: publisher === 'socket' }),
   // One binding per process, and the one thing the two processes configure
   // differently: `socket` publishes through this server's `PubSub`, `relay` puts
   // the frame straight on the Redis channel every web node is listening to.
@@ -102,6 +119,9 @@ export class AppModule {
         NotificationsModule.forRoot(),
         HealthModule,
         UsersModule,
+        FilesFeatureModule.forRoot(),
+        AuditModule,
+        InvitesModule,
         // Last: the engine's `onInit` recovers the in-flight round and needs the
         // queue, the database and Redis all constructed before it runs.
         GameModule.forRoot(),
@@ -110,11 +130,18 @@ export class AppModule {
           : []),
       ],
       /**
-       * `ThrottleGuard` limits every route, tuned per route by `@Throttle`
-       * metadata. That is the global-guard-plus-metadata shape, and splitting it
-       * per feature would mean a rate limiter each feature could forget.
+       * The two **app-level** middlewares.
+       *
+       *  - `ThrottleGuard` limits every route, tuned per route by `@Throttle`
+       *    metadata. Splitting it per feature would mean a rate limiter each
+       *    feature could forget.
+       *  - `AuditContextMiddleware` stamps the actor the trigger records. It looks
+       *    like a feature-scoped concern, but the writes it has to cover include
+       *    better-auth's own sign-up - a controller inside `@dunx/auth` rather than
+       *    inside `AccountsModule` - and module middleware has no ancestor layer.
+       *    Scoping it would silently stamp the *previous* request's id there.
        */
-      providers: [ThrottleGuard],
+      providers: [AuditContextMiddleware, ThrottleGuard],
     };
   }
 }
@@ -141,6 +168,7 @@ export class WorkerModule {
         ...foundation(options, 'relay'),
         QueuesModule.forRoot({ controllers: false }),
         NotificationsModule.forRoot(),
+        FilesFeatureModule.forRoot({ controllers: false }),
         GameModule.forRoot({ engine: false, controllers: false }),
       ],
     };

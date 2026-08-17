@@ -26,6 +26,7 @@ import {
   GAME_CLIENT_EVENTS,
   GAME_EVENTS,
   GAME_TOPIC,
+  publishGame,
   playerChatTopic,
   PLAYER_CHAT_EVENTS,
   type BetAckPayload,
@@ -59,6 +60,8 @@ export interface SocketPlayer {
   readonly userId: string;
   readonly email: string;
   readonly username: string;
+  /** better-auth calls it `image`; the client has always called it `picture`. */
+  readonly picture: string | null;
   readonly roles: readonly string[];
 }
 
@@ -172,6 +175,7 @@ export class GameGateway {
         userId: user.id,
         email: user.email,
         username: user.name || user.email.split('@')[0] || user.id,
+        picture: user.image ?? null,
         roles: rolesOf(user),
       },
     };
@@ -222,6 +226,7 @@ export class GameGateway {
               id: player.userId,
               email: player.email,
               displayName: player.username,
+              picture: player.picture,
             },
           },
         }),
@@ -330,12 +335,13 @@ export class GameGateway {
       }
 
       const wallet = this.wallets.getWallet(player.userId, isDemo);
-      this.events.publish(
+      publishGame(
+        this.events,
         userTopic(player.userId),
         GAME_EVENTS.WALLET_UPDATED,
         { balanceCents: wallet.balanceCents, isDemo },
       );
-      this.events.publish(GAME_TOPIC, GAME_EVENTS.BET_PLACED, {
+      publishGame(this.events, GAME_TOPIC, GAME_EVENTS.BET_PLACED, {
         userId: player.userId,
         username: player.username,
         betAmountCents: bet.betAmountCents,
@@ -423,12 +429,14 @@ export class GameGateway {
       const wallet = this.wallets.getWallet(player.userId, isDemo);
       const multiplier = toMultiplier(multiplierX100);
 
-      this.events.publish(
+      publishGame(
+        this.events,
         userTopic(player.userId),
         GAME_EVENTS.WALLET_UPDATED,
         { balanceCents: wallet.balanceCents, isDemo },
       );
-      this.events.publish(GAME_TOPIC, GAME_EVENTS.BET_CASHED_OUT, {
+      publishGame(this.events, GAME_TOPIC, GAME_EVENTS.BET_CASHED_OUT, {
+        userId: player.userId,
         username: player.username,
         multiplier,
         payoutCents: bet.payoutCents ?? 0,
@@ -596,6 +604,10 @@ export class GameGateway {
       username: player.username,
       message: text,
       timestamp: new Date().toISOString(),
+      // The client renders this as the avatar and falls back to an initial. The
+      // NestJS version sent it and this migration dropped it, so every line showed
+      // a letter where a face had been.
+      picture: player.picture,
     };
 
     this.events.publish(TOPICS.CHAT, EVENTS.MESSAGE, line);

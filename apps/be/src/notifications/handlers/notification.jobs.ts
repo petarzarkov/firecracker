@@ -9,6 +9,7 @@ import {
   TOPICS,
   userTopic,
   type PasswordResetJob,
+  type UserInvitedJob,
   type UserBannedJob,
   type UserRegisteredJob,
 } from '../events/events.js';
@@ -80,6 +81,35 @@ export class NotificationJobs {
 
     this.logger.info('handled user.password-reset', { userId });
     return { sent: email };
+  }
+
+  /**
+   * The invitation email, and a notice to the admin room.
+   *
+   * The link carries the code, so this job's payload is a credential in a queue -
+   * which is why the queue is the app's own Redis rather than a third party, and
+   * why the invite expires in a week regardless of whether anybody reads it.
+   */
+  @JobHandler({ queue: QUEUES.NOTIFICATIONS, name: JOBS.USER_INVITED })
+  async invited(job: Job<UserInvitedJob>): Promise<{ invited: string }> {
+    const { email, role, url, expiresAt } = job.data;
+
+    await this.email.send({
+      to: email,
+      subject: 'You have been invited to Firecracker',
+      body:
+        `You have been invited to join Firecracker as ${role}. ` +
+        `Set your password here: ${url}\n\n` +
+        `The invitation expires on ${new Date(expiresAt).toUTCString()}.`,
+    });
+
+    this.events.publish(TOPICS.ADMINS, EVENTS.NOTIFICATION, {
+      event: JOBS.USER_INVITED,
+      payload: { email, role },
+    });
+
+    this.logger.info('handled user.invited', { email, role });
+    return { invited: email };
   }
 
   @JobHandler({ queue: QUEUES.NOTIFICATIONS, name: JOBS.USER_BANNED })

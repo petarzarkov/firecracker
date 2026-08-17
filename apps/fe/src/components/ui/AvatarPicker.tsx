@@ -1,13 +1,10 @@
 import { Box, Image, SimpleGrid, Text } from '@chakra-ui/react';
 import { useState } from 'react';
+import { apiFetch } from '@/systems/network/api';
 import { Button } from './Button';
 import { InputField } from './InputField';
 
-/**
- * Bundled with the app, so the picker works offline and on first paint. Replace
- * with a real gallery by putting files in `public/png/avatars/` and listing them
- * here - no server route needed for a static set.
- */
+/** The offline fallback, used when the trending call cannot be made at all. */
 const AVATARS: readonly string[] = [
   '/png/android-chrome-192x192.png',
   '/png/apple-touch-icon.png',
@@ -26,21 +23,29 @@ export const AvatarPicker = ({
   onCustomUrlChange: (val: string) => void;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [avatars, setAvatars] = useState<string[]>([]);
 
   /**
-   * The suggestion grid used to come from `GET /api/auth/avatars/trending`, a
-   * route on the NestJS auth controller that proxied an avatar service. That
-   * controller is gone and Better Auth has no equivalent, so the grid is now a
-   * fixed local set.
+   * Fetched on first open, from `GET /api/profile/avatars/trending`.
    *
-   * Deterministic rather than remote on purpose: a sign-up form that cannot finish
-   * because a third-party image host is slow is a worse trade than eight fewer
-   * choices. A custom URL still accepts anything, and OAuth sign-ins bring their
-   * provider's picture with them.
+   * It was `/api/auth/avatars/trending` before the migration; better-auth owns
+   * `/auth` now, so the route moved. The endpoint degrades to a single fallback
+   * rather than failing, so this never leaves the form unusable - and the bundled
+   * set below covers the case where even that call does not return.
    */
-  const avatars = AVATARS;
+  const togglePicker = async () => {
+    const opening = !isOpen;
+    setIsOpen(opening);
+    if (!opening || avatars.length > 0) return;
 
-  const togglePicker = () => setIsOpen((open) => !open);
+    try {
+      const res = await apiFetch('/api/profile/avatars/trending');
+      const data = (await res.json()) as { avatars?: string[] };
+      setAvatars(data.avatars?.length ? data.avatars : [...AVATARS]);
+    } catch {
+      setAvatars([...AVATARS]);
+    }
+  };
 
   return (
     <Box>

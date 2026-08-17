@@ -3,6 +3,7 @@ import { RedisRelay, type HttpOptions } from '@dunx/http';
 import { SERVICE_ROUTES } from './constants.js';
 import type { AppConfig } from './config/env.validation.js';
 import { errorMapper } from './core/errors/error-mapper.js';
+import { AuditContextMiddleware } from './core/middlewares/audit-context.middleware.js';
 import { ThrottleGuard } from './infra/redis/guards/throttle.guard.js';
 
 /**
@@ -19,11 +20,11 @@ export const httpOptions = (config: AppConfig): HttpOptions => {
     /**
      * Outermost first, after the built-in request logger. `SessionGuard` leads
      * because everything after it wants to know who is calling: it runs the rest of
-     * the chain inside `AuthContext`, so the throttler can count per user. A guard
-     * is middleware that throws, so ordering is the only thing that decides which
-     * runs first.
+     * the chain inside `AuthContext`, so the throttler can count per user and the
+     * audit stamp can name one. A guard is middleware that throws, so ordering is
+     * the only thing that decides which runs first.
      */
-    middleware: [SessionGuard, ThrottleGuard],
+    middleware: [SessionGuard, ThrottleGuard, AuditContextMiddleware],
     onError: errorMapper,
     /**
      * A path that matched nothing answers **404**, not the session guard's 401.

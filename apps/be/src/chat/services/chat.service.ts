@@ -18,6 +18,8 @@ export interface ChatLine {
   readonly username: string;
   readonly message: string;
   readonly timestamp: string;
+  /** The sender's avatar at the time they sent it. `null` if they had none. */
+  readonly picture: string | null;
 }
 
 /**

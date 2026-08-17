@@ -80,6 +80,7 @@ export const validateConfig = (env: ConfigSource) => {
       windowSeconds: vars.THROTTLE_WINDOW_SECONDS,
     },
     queue: {
+      mode: vars.WORKER_MODE,
       prefix: vars.QUEUE_PREFIX,
       maxRetries: vars.QUEUE_MAX_RETRIES,
       retryDelayMs: vars.QUEUE_RETRY_DELAY_MS,
@@ -93,6 +94,36 @@ export const validateConfig = (env: ConfigSource) => {
       webhookUrl: vars.EMAIL_WEBHOOK_URL,
       timeoutMs: vars.EMAIL_TIMEOUT_MS,
       maxRetries: vars.EMAIL_MAX_RETRIES,
+    },
+    storage: {
+      driver: vars.STORAGE_DRIVER,
+      localRoot: vars.STORAGE_LOCAL_ROOT,
+      prefix: vars.STORAGE_PREFIX,
+      bucket: vars.S3_BUCKET,
+      region: vars.S3_REGION,
+      endpoint: vars.S3_ENDPOINT,
+      accessKeyId: vars.S3_ACCESS_KEY_ID,
+      secretAccessKey: vars.S3_SECRET_ACCESS_KEY,
+      maxBytes: vars.UPLOAD_MAX_BYTES,
+      allowedTypes: vars.UPLOAD_ALLOWED_TYPES,
+    },
+    images: {
+      quality: vars.IMAGE_QUALITY,
+      maxWidth: vars.IMAGE_MAX_WIDTH,
+      thumbnailWidth: vars.IMAGE_THUMBNAIL_WIDTH,
+    },
+    slack: {
+      botToken: vars.SLACK_BOT_TOKEN,
+      channel: vars.SLACK_CHANNEL,
+    },
+    ai: {
+      temperature: vars.AI_TEMPERATURE,
+      timeoutMs: vars.AI_TIMEOUT_MS,
+      providers: {
+        gemini: vars.AI_GEMINI_API_KEY,
+        groq: vars.AI_GROQ_API_KEY,
+        openrouter: vars.AI_OPENROUTER_API_KEY,
+      },
     },
     /**
      * The crash game's tunables, read by the engine, the bet service and the
@@ -112,6 +143,7 @@ export const validateConfig = (env: ConfigSource) => {
         enabled: vars.GAME_BOTS_ENABLED,
         minPerRound: vars.GAME_BOTS_MIN_PER_ROUND,
         maxPerRound: vars.GAME_BOTS_MAX_PER_ROUND,
+        chatChance: vars.GAME_BOTS_CHAT_CHANCE,
       },
     },
     auth: {

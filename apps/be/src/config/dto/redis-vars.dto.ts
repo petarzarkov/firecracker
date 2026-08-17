@@ -35,7 +35,20 @@ export const redisVarsSchema = z.object({
   THROTTLE_LIMIT: z.coerce.number().int().min(1).max(10_000).default(20),
   THROTTLE_WINDOW_SECONDS: z.coerce.number().int().min(1).max(3600).default(60),
 
-  QUEUE_PREFIX: z.string().default('dunx-template'),
+  /**
+   * Where the queue is consumed.
+   *
+   * `inline` - one process serves HTTP **and** works the queues, through
+   * `WorkerFactory.attach`. This is the default and what development wants: the
+   * game is a round loop driven by jobs, so a web process with nobody consuming
+   * is an app that boots, serves, and then sits on `Starting...` forever.
+   *
+   * `separate` - the web process does not consume, and `bun run worker` is a
+   * second process. That is the shape to deploy when the two need to scale or
+   * restart independently, and it is what docker-compose.prod.yml runs.
+   */
+  WORKER_MODE: z.enum(['inline', 'separate']).default('inline'),
+  QUEUE_PREFIX: z.string().default('firecracker'),
   QUEUE_MAX_RETRIES: z.coerce.number().int().min(1).max(10).default(3),
   QUEUE_RETRY_DELAY_MS: z.coerce
     .number()

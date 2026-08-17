@@ -51,6 +51,7 @@ interface ServerBetPlacedPayload {
 }
 
 interface ServerBetCashedOutPayload {
+  userId: string;
   username: string;
   multiplier: number;
   payoutCents: number;
@@ -177,12 +178,21 @@ export function useGameSocket() {
 
     socket.on('betCashedOut', (data: ServerBetCashedOutPayload) => {
       startTransition(() => {
+        /**
+         * Keyed on the id, not the username.
+         *
+         * This is what makes an **auto**-cashout visible: the whole point of one
+         * is that the player is not watching, so the only way the panel learns the
+         * bet is closed is this frame. Matched by username it matched nothing,
+         * `myBet` never flipped, and the button went on offering a cash-out that
+         * had already happened until the round ended.
+         */
         const existing = useGameStore
           .getState()
-          .activeBets.find((b) => b.userId === data.username);
+          .activeBets.find((b) => b.userId === data.userId);
         updateBet(
           {
-            userId: data.username,
+            userId: data.userId,
             username: data.username,
             betAmountCents: existing?.betAmountCents ?? 0,
             status: 'CASHED_OUT',

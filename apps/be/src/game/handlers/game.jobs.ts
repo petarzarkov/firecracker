@@ -10,6 +10,7 @@ import {
   GAME_JOBS,
   GAME_QUEUE,
   GAME_TOPIC,
+  publishGame,
   type RoundJob,
 } from '../game.events.js';
 import { toMultiplier } from '../game.math.js';
@@ -55,12 +56,16 @@ export class GameJobs {
   async schedule(): Promise<{ roundId: string }> {
     const round = await this.rounds.createNextRound();
 
-    this.events.publish(GAME_TOPIC, GAME_EVENTS.PHASE_CHANGE, {
+    publishGame(this.events, GAME_TOPIC, GAME_EVENTS.PHASE_CHANGE, {
       phase: 'waiting',
       roundId: round.id,
       seedHash: round.seedHash,
       nonce: round.nonce,
-      waitingEndsAt: round.waitingEndsAt?.toISOString(),
+      // Spread rather than assigned: the payload declares an *absent* key, and
+      // `exactOptionalPropertyTypes` separates that from an explicit `undefined`.
+      ...(round.waitingEndsAt === null
+        ? {}
+        : { waitingEndsAt: round.waitingEndsAt.toISOString() }),
     });
 
     await this.#command({ action: 'waiting', roundId: round.id });
@@ -97,7 +102,7 @@ export class GameJobs {
     // that lost the transition race still had them available.
     await this.redis.del(clientSeedsKey(roundId)).catch(() => 0);
 
-    this.events.publish(GAME_TOPIC, GAME_EVENTS.PHASE_CHANGE, {
+    publishGame(this.events, GAME_TOPIC, GAME_EVENTS.PHASE_CHANGE, {
       phase: 'running',
       roundId: round.id,
       seedHash: round.seedHash,
@@ -129,7 +134,7 @@ export class GameJobs {
 
     await this.#command({ action: 'crash' });
 
-    this.events.publish(GAME_TOPIC, GAME_EVENTS.CRASHED, {
+    publishGame(this.events, GAME_TOPIC, GAME_EVENTS.CRASHED, {
       roundId: round.id,
       crashPoint: toMultiplier(round.crashPointX100),
       crashedAt: (round.crashedAt ?? new Date()).toISOString(),
@@ -172,7 +177,8 @@ export class GameJobs {
       try {
         const { refunds } = this.rounds.failAndRefund(round.id);
         for (const refund of refunds) {
-          this.events.publish(
+          publishGame(
+            this.events,
             userTopic(refund.userId),
             GAME_EVENTS.WALLET_UPDATED,
             { balanceCents: refund.balanceCents, isDemo: refund.isDemo },

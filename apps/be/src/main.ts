@@ -1,6 +1,7 @@
 import { Logger } from '@dunx/core';
 import { HttpFactory, StaticFiles } from '@dunx/http';
 import { OpenApiExplorer, OpenApiModule } from '@dunx/openapi';
+import { WorkerFactory } from '@dunx/infra/queue';
 import { AppModule } from './app.module.js';
 import { SpaFallback } from './client/client.module.js';
 import { authDocument } from './auth/auth.document.js';
@@ -30,9 +31,16 @@ import { SERVICE_ROUTES } from './constants.js';
  */
 const boot = validateConfig(Bun.env);
 
+/**
+ * Hoisted because `WorkerFactory.attach` needs the same module reference the app
+ * was built from - it finds the handlers by inspecting it and resolves them out of
+ * the container that is already running.
+ */
+const root = AppModule.forRoot();
+
 const app = await HttpFactory.create(
   OpenApiModule.forRootAsync({
-    root: AppModule.forRoot(),
+    root,
     useFactory: (config: AppConfigService) => {
       const { app: meta, docs } = config.values;
       return {
@@ -81,6 +89,36 @@ if (config.get('client').dist !== undefined) {
   app.use(StaticFiles);
 }
 
+/**
+ * The queues, in this process, when `WORKER_MODE=inline`.
+ *
+ * `WorkerFactory.attach` consumes inside the container that is already running,
+ * so one process serves HTTP and works the queue - which is what the NestJS
+ * version did, and what makes `bun dev` a single command that produces a game
+ * that actually advances. `bun run worker` still exists for `separate`, where the
+ * two scale independently.
+ *
+ * The consumer is started **after** `listen()` below, so a job that publishes a
+ * socket frame cannot run before there is a server to publish through.
+ */
+const consumer =
+  config.get('queue').mode === 'inline'
+    ? await WorkerFactory.attach(app, root)
+    : null;
+
+/**
+ * Registered **before** `enableShutdownHooks`, and the order is the point: signal
+ * handlers run in registration order, and a consumer still working when the
+ * providers tear down finds its database connection closed underneath it.
+ */
+if (consumer !== null) {
+  const drain = (): void => {
+    void consumer.stop();
+  };
+  process.on('SIGTERM', drain);
+  process.on('SIGINT', drain);
+}
+
 app.enableShutdownHooks();
 const cancelWatchdog = forceExitAfter();
 
@@ -94,6 +132,14 @@ if (config.get('auth').usingDevSecret) {
 }
 
 const url = await app.listen(appConfig.port);
+
+if (consumer !== null) {
+  const consuming = await consumer.start();
+  logger.info('consuming queues in this process', {
+    queues: consuming,
+    mode: 'inline',
+  });
+}
 
 logger.info(`${appConfig.name} listening`, {
   url,

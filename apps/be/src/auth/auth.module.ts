@@ -11,10 +11,12 @@ import { accounts } from './schema/account.schema.js';
 import { sessions } from './schema/session.schema.js';
 import { verifications } from './schema/verification.schema.js';
 import { JOBS, QUEUES } from '../notifications/events/events.js';
+import { AuditModule } from '../audit/audit.module.js';
 import { registrationHooks } from './auth.hooks.js';
 import { AUTH_MOUNT, baseAuthOptions } from './auth.options.js';
 import { ProfileController } from './profile.controller.js';
 import { AuthAdminSeeder } from './services/auth-admin.seeder.js';
+import { AvatarsService } from './services/avatars.service.js';
 import { CurrentUser } from './services/current-user.service.js';
 
 /**
@@ -31,6 +33,9 @@ import { CurrentUser } from './services/current-user.service.js';
  * Hoisted to a `const` so the same reference is both imported and re-exported. A
  * scope is keyed on the module reference, so a second `forRootAsync(...)` call in
  * `exports` would name a module that is not in the graph.
+ *
+ * `AuditModule` is imported for `ProfileController`, which lists a caller's own
+ * audit trail.
  */
 const auth = AuthModule.forRootAsync(
   {
@@ -134,9 +139,9 @@ const auth = AuthModule.forRootAsync(
  * which is the only shape that composes.
  */
 @Module({
-  imports: [auth],
+  imports: [AuditModule, auth],
   controllers: [ProfileController],
-  providers: [CurrentUser, AuthAdminSeeder],
+  providers: [CurrentUser, AuthAdminSeeder, AvatarsService],
   /**
    * `AuthModule` re-exported by reference, so an importer sees `Auth`,
    * `AuthContext` and `SessionGuard` without naming any of them. `CurrentUser` is
