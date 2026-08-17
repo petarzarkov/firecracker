@@ -27,7 +27,21 @@ export interface StageSample {
 export type StageSampler = () => StageSample;
 
 export interface StageOptions {
-  readonly canvas: HTMLCanvasElement;
+  /**
+   * The element to draw into. The stage creates its **own** canvas inside it and
+   * removes it again on {@link Stage.destroy}.
+   *
+   * Deliberately not a canvas the caller owns. Handing PIXI a React-owned
+   * `<canvas>` meant that StrictMode's mount/cleanup/mount - and any remount -
+   * pointed two `Application`s at one element, and a canvas has exactly one
+   * WebGL context: the first app's teardown tore the context out from under the
+   * second, and every shader after that failed to compile with "context may be
+   * lost". Owning the element makes the overlap harmless, because there is no
+   * shared thing to lose.
+   *
+   * It must be positioned (the canvas is absolutely filled into it).
+   */
+  readonly container: HTMLElement;
   readonly sample: StageSampler;
   /** The rocket sprite. Absent means the stage draws the round without one. */
   readonly rocketUrl?: string;

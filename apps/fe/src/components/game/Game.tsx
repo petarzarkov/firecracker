@@ -18,6 +18,7 @@ import { useSocket } from '@/SocketContext';
 import { useAuthStore } from '@/store/authStore';
 import { useChatStore } from '@/store/chatStore';
 import { useGameSocket } from '@/systems/network/useGameSocket';
+import { useWideLayout } from '@/hooks/useWideLayout';
 import { BetPanel } from './BetPanel';
 import { CrashChart } from './CrashChart';
 import { PlayerHistory } from './PlayerHistory';
@@ -236,6 +237,12 @@ function InlineChatPanel({ full = false }: { full?: boolean }) {
 export function Game() {
   useGameSocket();
 
+  /**
+   * Only the live layout is mounted. Both used to be, with one hidden by
+   * `display` - which meant two `CrashChart`s, and so two PIXI renderers, one of
+   * them animating a box nobody could see.
+   */
+  const wide = useWideLayout();
   const socket = useSocket();
   const { globalChat, closeGlobalChat, playerChats } = useChatStore(
     (state) => state,
@@ -294,168 +301,167 @@ export function Game() {
         </Flex>
       </Flex>
 
-      {/* ── Mobile layout (base → lg) ───────────────────────────────────── */}
-      <Box
-        display={{ base: 'flex', lg: 'none' }}
-        flex={1}
-        flexDirection="column"
-        overflow="hidden"
-      >
-        {/* Chart — fills all space above the fixed tab panel */}
-        <Box
-          flex={1}
-          minH={0}
-          overflow="hidden"
-          p={2}
-          pb={1}
-          display="flex"
-          flexDirection="column"
-        >
-          <CrashChart />
-        </Box>
-
-        {/* Tab panel — fixed height, never grows with content */}
-        <Tabs.Root
-          defaultValue="game"
-          display="flex"
-          flexDirection="column"
-          h="30vh"
-          flexShrink={0}
-          overflow="hidden"
-          variant="subtle"
-        >
-          {/* Tab bar */}
-          <Tabs.List
-            bg="gray.900"
-            borderTop="1px solid"
-            borderColor="gray.700"
-            flexShrink={0}
-          >
-            <Tabs.Trigger
-              value="game"
-              flex={1}
-              fontFamily="mono"
-              fontSize="xs"
-              letterSpacing="wide"
-              color="gray.500"
-              _selected={{ color: 'green.400', bg: 'gray.800' }}
-            >
-              CONTROLS
-            </Tabs.Trigger>
-            <Tabs.Trigger
-              value="players"
-              flex={1}
-              fontFamily="mono"
-              fontSize="xs"
-              letterSpacing="wide"
-              color="gray.500"
-              _selected={{ color: 'green.400', bg: 'gray.800' }}
-            >
-              PLAYERS
-            </Tabs.Trigger>
-            <Tabs.Trigger
-              value="history"
-              flex={1}
-              fontFamily="mono"
-              fontSize="xs"
-              letterSpacing="wide"
-              color="gray.500"
-              _selected={{ color: 'green.400', bg: 'gray.800' }}
-            >
-              MY BETS
-            </Tabs.Trigger>
-            <Tabs.Trigger
-              value="chat"
-              flex={1}
-              fontFamily="mono"
-              fontSize="xs"
-              letterSpacing="wide"
-              color="gray.500"
-              _selected={{ color: 'green.400', bg: 'gray.800' }}
-            >
-              CHAT
-            </Tabs.Trigger>
-          </Tabs.List>
-
-          {/* Content area — fills rest of tab panel, each panel scrolls */}
-          <Box flex={1} minH={0} overflow="hidden">
-            <Tabs.Content
-              value="game"
-              h="full"
-              overflow="hidden"
-              p={0}
-              bg="gray.900"
-            >
-              <Box h="full" overflowY="auto" p={0}>
-                <BetPanel />
-              </Box>
-            </Tabs.Content>
-
-            <Tabs.Content value="history" h="full" overflow="hidden" p={0}>
-              <PlayerHistory />
-            </Tabs.Content>
-
-            <Tabs.Content value="players" h="full" overflowY="auto" p={0}>
-              <Flex direction="column" p={2} gap={3}>
-                <RoundHistory />
-                <PlayerList />
-              </Flex>
-            </Tabs.Content>
-
-            <Tabs.Content value="chat" h="full" overflow="hidden" p={0}>
-              <InlineChatPanel full />
-            </Tabs.Content>
-          </Box>
-        </Tabs.Root>
-      </Box>
-
-      {/* ── Desktop layout (lg+) — 3 columns ───────────────────────────── */}
-      <Flex flex={1} overflow="hidden" display={{ base: 'none', lg: 'flex' }}>
-        {/* Left: player bet history (top half) + global chat (bottom half) */}
-        <Flex
-          direction="column"
-          w={{ base: '185px', lg: '205px' }}
-          flexShrink={0}
-          borderRight="1px solid"
-          borderColor="#2e2e2e"
-          overflow="hidden"
-        >
-          <PlayerHistory />
-          <InlineChatPanel full />
-        </Flex>
-
-        {/* Center: chart + bet panel */}
-        <Flex flex={1} direction="column" p={3} gap={2} overflow="hidden">
-          <CrashChart />
-          <BetPanel />
-        </Flex>
-
-        {/* Right sidebar: history + players */}
-        <Flex
-          direction="column"
-          w={{ base: '210px', lg: '265px' }}
-          flexShrink={0}
-          p={3}
-          gap={3}
-          bg="gray.900"
-          borderLeft="1px solid"
-          borderColor="#2e2e2e"
-          overflow="hidden"
-        >
-          <RoundHistory />
+      {/* ── Mobile layout (below lg) ────────────────────────────────────── */}
+      {!wide && (
+        <Box display="flex" flex={1} flexDirection="column" overflow="hidden">
+          {/* Chart — fills all space above the fixed tab panel */}
           <Box
-            borderTop="1px solid"
-            borderColor="#2e2e2e"
-            pt={3}
             flex={1}
+            minH={0}
             overflow="hidden"
+            p={2}
+            pb={1}
             display="flex"
             flexDirection="column"
           >
-            <PlayerList />
+            <CrashChart />
           </Box>
+
+          {/* Tab panel — fixed height, never grows with content */}
+          <Tabs.Root
+            defaultValue="game"
+            display="flex"
+            flexDirection="column"
+            h="30vh"
+            flexShrink={0}
+            overflow="hidden"
+            variant="subtle"
+          >
+            {/* Tab bar */}
+            <Tabs.List
+              bg="gray.900"
+              borderTop="1px solid"
+              borderColor="gray.700"
+              flexShrink={0}
+            >
+              <Tabs.Trigger
+                value="game"
+                flex={1}
+                fontFamily="mono"
+                fontSize="xs"
+                letterSpacing="wide"
+                color="gray.500"
+                _selected={{ color: 'green.400', bg: 'gray.800' }}
+              >
+                CONTROLS
+              </Tabs.Trigger>
+              <Tabs.Trigger
+                value="players"
+                flex={1}
+                fontFamily="mono"
+                fontSize="xs"
+                letterSpacing="wide"
+                color="gray.500"
+                _selected={{ color: 'green.400', bg: 'gray.800' }}
+              >
+                PLAYERS
+              </Tabs.Trigger>
+              <Tabs.Trigger
+                value="history"
+                flex={1}
+                fontFamily="mono"
+                fontSize="xs"
+                letterSpacing="wide"
+                color="gray.500"
+                _selected={{ color: 'green.400', bg: 'gray.800' }}
+              >
+                MY BETS
+              </Tabs.Trigger>
+              <Tabs.Trigger
+                value="chat"
+                flex={1}
+                fontFamily="mono"
+                fontSize="xs"
+                letterSpacing="wide"
+                color="gray.500"
+                _selected={{ color: 'green.400', bg: 'gray.800' }}
+              >
+                CHAT
+              </Tabs.Trigger>
+            </Tabs.List>
+
+            {/* Content area — fills rest of tab panel, each panel scrolls */}
+            <Box flex={1} minH={0} overflow="hidden">
+              <Tabs.Content
+                value="game"
+                h="full"
+                overflow="hidden"
+                p={0}
+                bg="gray.900"
+              >
+                <Box h="full" overflowY="auto" p={0}>
+                  <BetPanel />
+                </Box>
+              </Tabs.Content>
+
+              <Tabs.Content value="history" h="full" overflow="hidden" p={0}>
+                <PlayerHistory />
+              </Tabs.Content>
+
+              <Tabs.Content value="players" h="full" overflowY="auto" p={0}>
+                <Flex direction="column" p={2} gap={3}>
+                  <RoundHistory />
+                  <PlayerList />
+                </Flex>
+              </Tabs.Content>
+
+              <Tabs.Content value="chat" h="full" overflow="hidden" p={0}>
+                <InlineChatPanel full />
+              </Tabs.Content>
+            </Box>
+          </Tabs.Root>
+        </Box>
+      )}
+
+      {/* ── Desktop layout (lg+) — 3 columns ───────────────────────────── */}
+      {wide && (
+        <Flex flex={1} overflow="hidden">
+          {/* Left: player bet history (top half) + global chat (bottom half) */}
+          <Flex
+            direction="column"
+            w={{ base: '185px', lg: '205px' }}
+            flexShrink={0}
+            borderRight="1px solid"
+            borderColor="#2e2e2e"
+            overflow="hidden"
+          >
+            <PlayerHistory />
+            <InlineChatPanel full />
+          </Flex>
+
+          {/* Center: chart + bet panel */}
+          <Flex flex={1} direction="column" p={3} gap={2} overflow="hidden">
+            <CrashChart />
+            <BetPanel />
+          </Flex>
+
+          {/* Right sidebar: history + players */}
+          <Flex
+            direction="column"
+            w={{ base: '210px', lg: '265px' }}
+            flexShrink={0}
+            p={3}
+            gap={3}
+            bg="gray.900"
+            borderLeft="1px solid"
+            borderColor="#2e2e2e"
+            overflow="hidden"
+          >
+            <RoundHistory />
+            <Box
+              borderTop="1px solid"
+              borderColor="#2e2e2e"
+              pt={3}
+              flex={1}
+              overflow="hidden"
+              display="flex"
+              flexDirection="column"
+            >
+              <PlayerList />
+            </Box>
+          </Flex>
         </Flex>
-      </Flex>
+      )}
 
       {/* ── Floating pop-out chat ───────────────────────────────────────── */}
       {globalChat.isOpen && (

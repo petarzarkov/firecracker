@@ -31,7 +31,7 @@ const STAGE_PHASE = {
  * round climbs and DOM labels would mean re-rendering React mid-round.
  */
 export function CrashChart() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
   const multiplierSpanRef = useRef<HTMLSpanElement>(null);
 
   const phase = useGameStore((state) => state.phase);
@@ -51,11 +51,10 @@ export function CrashChart() {
   }, [phase]);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (canvas === null) return;
+    const container = boxRef.current;
+    if (container === null) return;
 
-    let stage: Stage | null = null;
-    let live = true;
+    let disposed = false;
 
     /**
      * What the stage asks for, every frame.
@@ -70,32 +69,32 @@ export function CrashChart() {
       points: liveRef.chartPoints,
     });
 
-    void import('@firecracker/stage')
+    /**
+     * Held as a promise, and torn down through it.
+     *
+     * Cleanup regularly runs while `createStage` is still awaiting a renderer -
+     * StrictMode's mount/cleanup/mount guarantees it in development - and a
+     * stage nobody kept a reference to would tick forever. Chaining the destroy
+     * onto the same promise means the teardown always finds it.
+     */
+    const pending: Promise<Stage | null> = import('@firecracker/stage')
       .then(({ createStage }) =>
-        createStage({
-          canvas,
-          sample,
-          rocketUrl: '/png/android-chrome-192x192.png',
-        }),
+        disposed
+          ? null
+          : createStage({
+              container,
+              sample,
+              rocketUrl: '/png/android-chrome-192x192.png',
+            }),
       )
-      .then((created) => {
-        // The effect can be torn down before PIXI finishes initialising - React
-        // StrictMode guarantees it in development - and a stage nobody holds a
-        // reference to would tick forever.
-        if (!live) {
-          created.destroy();
-          return;
-        }
-        stage = created;
-      })
       .catch((error: unknown) => {
         console.error('[stage] could not start', error);
+        return null;
       });
 
     return () => {
-      live = false;
-      stage?.destroy();
-      stage = null;
+      disposed = true;
+      void pending.then((stage) => stage?.destroy());
     };
   }, []);
 
@@ -129,16 +128,8 @@ export function CrashChart() {
       border="1px solid"
       borderColor="gray.700"
     >
-      <canvas
-        ref={canvasRef}
-        style={{
-          position: 'absolute',
-          inset: 0,
-          width: '100%',
-          height: '100%',
-          display: 'block',
-        }}
-      />
+      {/* The stage creates its own canvas in here — see `StageOptions`. */}
+      <Box ref={boxRef} position="absolute" inset={0} />
 
       <VStack
         position="absolute"

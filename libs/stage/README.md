@@ -49,7 +49,7 @@ geometry and the mote pool's recycling. PIXI's scene objects construct fine
 headlessly — only the renderer needs a GPU.
 
 **The renderer itself is not covered.** `Application.init()` hangs without
-resolving *or throwing* on a machine with no usable GPU (reproduced with a
+resolving _or throwing_ on a machine with no usable GPU (reproduced with a
 five-line PIXI page under ANGLE/SwiftShader), so it cannot be exercised in a
 headless CI container. `createStage` races it against a timeout for that reason —
 a rejection reaches the caller, where a silent hang would leave a black rectangle

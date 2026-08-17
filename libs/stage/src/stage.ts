@@ -64,20 +64,17 @@ const slopeAt = (
 };
 
 export const createStage = async (options: StageOptions): Promise<Stage> => {
-  const { canvas, sample } = options;
+  const { container, sample } = options;
 
   const app = new Application();
 
   let timer: ReturnType<typeof setTimeout> | undefined;
   const started = app.init({
-    canvas,
     background: BACKGROUND,
     antialias: true,
     resolution: Math.min(globalThis.devicePixelRatio ?? 1, 2),
     autoDensity: true,
-    // The canvas is absolutely positioned inside its box, so the box is what has
-    // a size worth matching.
-    resizeTo: canvas.parentElement ?? canvas,
+    resizeTo: container,
   });
   await Promise.race([
     started,
@@ -88,6 +85,13 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
       );
     }),
   ]).finally(() => clearTimeout(timer));
+
+  // Filled into the box rather than laid out by it: the readouts sit over the
+  // top in their own absolutely-positioned layer.
+  app.canvas.style.position = 'absolute';
+  app.canvas.style.inset = '0';
+  app.canvas.style.display = 'block';
+  container.appendChild(app.canvas);
 
   const dot = softDotTexture();
   const halo = haloTexture();
@@ -249,9 +253,9 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
   return {
     destroy(): void {
       app.ticker.remove(frame);
-      // `destroy(true)` takes the canvas with it; React owns that element, so
-      // the renderer is told to leave it alone.
-      app.destroy({ removeView: false }, { children: true });
+      // `removeView` takes the canvas out of the DOM with it. The stage made
+      // that element, so the stage is what cleans it up.
+      app.destroy({ removeView: true }, { children: true });
     },
   };
 };
