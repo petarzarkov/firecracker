@@ -138,8 +138,6 @@ export function useWebSocket() {
         }
       });
 
-      // ── Player chat events ──────────────────────────────────────────────
-
       newSocket.on(PLAYER_CHAT_EVENTS.ROOM_CREATED, (data: PlayerChatRoom) => {
         newSocket.emit(GAME_CLIENT_EVENTS.JOIN_PLAYER_CHAT, {
           roomId: data.roomId,
@@ -212,7 +210,7 @@ export function useWebSocket() {
         );
       });
 
-      // ── Chat — the server emits 'message' for each new line ──
+      // Chat — the server emits 'message' for each new line
       // Server shape: { username, message, timestamp }
       newSocket.on(SOCKET_EVENTS.MESSAGE, (data: ChatLine) => {
         addGlobalChatMessage({
@@ -224,7 +222,6 @@ export function useWebSocket() {
         });
       });
 
-      // ── Connected player count ──────────────────────────────────────────
       newSocket.on(SOCKET_EVENTS.USER_COUNT, (count: number) => {
         setConnectedPlayers(count);
       });

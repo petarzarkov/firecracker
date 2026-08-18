@@ -32,7 +32,7 @@ interface Star {
 
 export interface Starfield {
   readonly view: ParticleContainer;
-  update(phase: StagePhase, width: number, height: number): void;
+  update(phase: StagePhase, width: number, height: number, delta: number): void;
 }
 
 const reseed = (star: Star, z: number): void => {
@@ -78,8 +78,8 @@ export const createStarfield = (texture: Texture): Starfield => {
   return {
     view,
 
-    update(phase, width, height): void {
-      const speed = SPEED[phase];
+    update(phase, width, height, delta): void {
+      const speed = SPEED[phase] * delta;
       const halfW = width / 2;
       const halfH = height / 2;
 

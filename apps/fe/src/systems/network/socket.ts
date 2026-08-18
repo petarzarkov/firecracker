@@ -162,8 +162,6 @@ export class Socket {
     return this;
   }
 
-  // ── Private ───────────────────────────────────────────────────────────────
-
   #open(): void {
     if (this.#closed) return;
 

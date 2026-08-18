@@ -34,11 +34,34 @@ export const liveRef: {
   chartPoints: ChartPoint[];
   /** Client-side timestamp (ms) for when the current round started. Set on RUNNING. */
   roundStartedAtMs: number | null;
+  /**
+   * Cash-outs the chart has not drawn yet.
+   *
+   * A queue rather than state, because a jump is a moment: read as state it
+   * would be redrawn on every frame for as long as it stayed true. It lives
+   * beside the tick data for the same reason that does - the socket writes here
+   * and the render loop reads, and neither goes through React.
+   */
+  cashOuts: CashOutFx[];
 } = {
   multiplier: 1.0,
   chartPoints: [],
   roundStartedAtMs: null,
+  cashOuts: [],
 };
+
+/** A cash-out, as the chart wants to draw it. */
+export interface CashOutFx {
+  name: string;
+  multiplier: number;
+  payoutCents: number;
+}
+
+/** Hands over everything queued and empties the queue. */
+export function takeCashOuts(): readonly CashOutFx[] {
+  if (liveRef.cashOuts.length === 0) return [];
+  return liveRef.cashOuts.splice(0, liveRef.cashOuts.length);
+}
 
 /** Multiplier divisor — must match GAME.MULTIPLIER_DIVISOR on the server. */
 const MULTIPLIER_DIVISOR = 10_000;
@@ -55,6 +78,24 @@ export function getLiveMultiplier(): number {
     return Math.floor(Math.exp(elapsed / MULTIPLIER_DIVISOR) * 100) / 100;
   }
   return liveRef.multiplier;
+}
+
+/**
+ * The curve itself, unrounded.
+ *
+ * {@link getLiveMultiplier} floors to hundredths because that is what the server
+ * would actually pay - `multiplierAtX100` is `floor(exp(t / divisor) * 100)`, and
+ * a readout promising 1.139x when a cash-out settles at 1.13x would be lying
+ * about money.
+ *
+ * Drawing has no such obligation, and paid for it. One hundredth is about eight
+ * vertical pixels early in a round, so a line plotted through rounded samples
+ * climbed in visible eight-pixel stairs roughly ten times a second - the last of
+ * the stutter left after the tick interpolation. The number stays rounded; the
+ * line follows the real curve.
+ */
+export function multiplierAt(elapsedMs: number): number {
+  return Math.exp(elapsedMs / MULTIPLIER_DIVISOR);
 }
 
 interface GameState {
@@ -186,6 +227,7 @@ export const useGameStore = create<GameState & GameActions>()(
           liveRef.chartPoints = [];
           liveRef.multiplier = 1.0;
           liveRef.roundStartedAtMs = null;
+          liveRef.cashOuts.length = 0;
           state.waitingEndsAt = payload.waitingEndsAt ?? null;
           state.multiplier = 1.0;
           state.activeBets = [];

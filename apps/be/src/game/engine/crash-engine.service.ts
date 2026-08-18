@@ -67,7 +67,7 @@ export interface AutoCashOut {
  * needed: this class injects `EventsPublisher` and publishes ticks itself.
  */
 export class CrashEngineService implements OnInit, OnShutdown {
-  // ── In-memory state. The database is canonical; this is the clock's copy. ──
+  // In-memory state. The database is canonical; this is the clock's copy.
   #roundId: string | null = null;
   #phase: GameRoundStatus | null = null;
   #startedAt: Date | null = null;
@@ -98,7 +98,7 @@ export class CrashEngineService implements OnInit, OnShutdown {
     this.#clear();
   }
 
-  // ── What the gateway and the controller read ──────────────────────────────
+  // What the gateway and the controller read
 
   get roundId(): string | null {
     return this.#roundId;
@@ -152,7 +152,7 @@ export class CrashEngineService implements OnInit, OnShutdown {
     this.#autoCashOut = fn;
   }
 
-  // ── Transitions, driven by the worker over pub/sub ────────────────────────
+  // Transitions, driven by the worker over pub/sub
 
   setWaiting(roundId: string): void {
     this.#clear();
@@ -180,8 +180,6 @@ export class CrashEngineService implements OnInit, OnShutdown {
     this.#phase = GameRoundStatus.CRASHED;
     this.#crashedAt = new Date();
   }
-
-  // ── Private ───────────────────────────────────────────────────────────────
 
   /**
    * Pick up whatever round was in flight when this process last died.

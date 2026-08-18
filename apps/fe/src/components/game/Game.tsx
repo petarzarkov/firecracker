@@ -27,8 +27,6 @@ import { RoundHistory } from './RoundHistory';
 import { UserMenu } from './UserMenu';
 import { WalletWidget } from './WalletWidget';
 
-// ── Inline global chat panel ───────────────────────────────────────────────
-
 function InlineChatPanel({ full = false }: { full?: boolean }) {
   const socket = useSocket();
   const user = useAuthStore((state) => state.user);
@@ -232,8 +230,6 @@ function InlineChatPanel({ full = false }: { full?: boolean }) {
   );
 }
 
-// ── Main game component ────────────────────────────────────────────────────
-
 export function Game() {
   useGameSocket();
 
@@ -261,7 +257,7 @@ export function Game() {
       fontFamily="mono"
       overflow="hidden"
     >
-      {/* ── Header ─────────────────────────────────────────────────────── */}
+      {/* Header */}
       <Flex
         px={4}
         py={2}
@@ -301,7 +297,7 @@ export function Game() {
         </Flex>
       </Flex>
 
-      {/* ── Mobile layout (below lg) ────────────────────────────────────── */}
+      {/* Mobile layout (below lg) */}
       {!wide && (
         <Box display="flex" flex={1} flexDirection="column" overflow="hidden">
           {/* Chart — fills all space above the fixed tab panel */}
@@ -413,7 +409,7 @@ export function Game() {
         </Box>
       )}
 
-      {/* ── Desktop layout (lg+) — 3 columns ───────────────────────────── */}
+      {/* Desktop layout (lg+) — 3 columns */}
       {wide && (
         <Flex flex={1} overflow="hidden">
           {/* Left: player bet history (top half) + global chat (bottom half) */}
@@ -463,7 +459,7 @@ export function Game() {
         </Flex>
       )}
 
-      {/* ── Floating pop-out chat ───────────────────────────────────────── */}
+      {/* Floating pop-out chat */}
       {globalChat.isOpen && (
         <ChatWindow
           title="Chat"

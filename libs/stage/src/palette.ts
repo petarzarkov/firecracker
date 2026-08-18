@@ -20,6 +20,9 @@ export const LABEL_ALPHA = 0.55;
 
 export const STAR = 0xffffff;
 
+/** What a cash-out's label is written in: legible over a lit plot, not white. */
+export const CASHOUT_TEXT = 0xffe2b0;
+
 export const FLASH = 0xff4444;
 
 /**
@@ -52,6 +55,18 @@ export const WICK_SPARKS = [0xffc832, 0xff8c00, 0xffffb4, 0xff5a00] as const;
 
 export const WICK_CORE = 0xfffdc8;
 export const WICK_HALO = 0xffa01e;
+
+/**
+ * The fuse's flame, hotter as the round climbs - amber, then orange, then the
+ * violet the tip wash already turns at 10x, so the two agree about what a big
+ * round looks like.
+ */
+export const flameFor = (multiplier: number): number => {
+  if (multiplier >= 10) return 0xd070ff;
+  if (multiplier >= 5) return 0xff6a2a;
+  if (multiplier >= 2) return 0xff8c1e;
+  return WICK_HALO;
+};
 
 export const FIREWORKS = [
   0xff2400, // scarlet

@@ -20,10 +20,10 @@ const BURST_COUNT = 40;
 export interface Embers {
   readonly view: Container;
   /** A few motes off the tip. Call while the round is climbing. */
-  trail(x: number, y: number, multiplier: number): void;
+  trail(x: number, y: number, multiplier: number, delta: number): void;
   /** The one-shot burst when the round ends. */
   burst(x: number, y: number, multiplier: number): void;
-  advance(crashed: boolean): void;
+  advance(crashed: boolean, delta: number): void;
   clear(): void;
 }
 
@@ -33,8 +33,12 @@ export const createEmbers = (texture: Texture): Embers => {
   return {
     view: pool.view,
 
-    trail(x, y, multiplier): void {
-      const count = Math.min(Math.ceil(multiplier / 3), TRAIL_MAX_PER_FRAME);
+    trail(x, y, multiplier, delta): void {
+      // Scaled by delta too: a spawn-per-frame rate would make the trail three
+      // times denser on a 180Hz display than on a 60Hz one.
+      const count = Math.round(
+        Math.min(Math.ceil(multiplier / 3), TRAIL_MAX_PER_FRAME) * delta,
+      );
       const tint = palette.emberFor(multiplier);
       for (let i = 0; i < count; i++) {
         // Upward-biased cone, so the trail falls behind the climb rather than
@@ -70,18 +74,18 @@ export const createEmbers = (texture: Texture): Embers => {
       }
     },
 
-    advance(crashed): void {
-      pool.update((mote) => {
-        mote.x += mote.vx;
-        mote.y += mote.vy;
-        mote.vy += GRAVITY;
+    advance(crashed, delta): void {
+      pool.update((mote, step) => {
+        mote.x += mote.vx * step;
+        mote.y += mote.vy * step;
+        mote.vy += GRAVITY * step;
         const remaining = mote.life / mote.maxLife;
         mote.alpha = remaining * 0.85;
         mote.size = Math.max(0.3, remaining * mote.size);
         // Recoloured on the crash so the trail already in flight turns with the
         // curve, rather than a red line trailing orange sparks.
         if (crashed) mote.tint = palette.EMBER_CRASHED;
-      });
+      }, delta);
     },
 
     clear(): void {

@@ -38,7 +38,7 @@ export interface Fireworks {
   readonly view: Container;
   /** Launch a volley across the given area. */
   launch(width: number, height: number, left: number, right: number): void;
-  advance(): void;
+  advance(delta: number): void;
   clear(): void;
   readonly busy: boolean;
 }
@@ -91,11 +91,11 @@ export const createFireworks = (texture: Texture): Fireworks => {
       }
     },
 
-    advance(): void {
+    advance(delta): void {
       for (const shell of shells) {
         if (!shell.live) continue;
         if (shell.delay > 0) {
-          shell.delay -= 1;
+          shell.delay -= delta;
           continue;
         }
 
@@ -111,7 +111,7 @@ export const createFireworks = (texture: Texture): Fireworks => {
           tint: shell.tint,
         });
 
-        shell.y -= shell.speed;
+        shell.y -= shell.speed * delta;
         if (shell.y <= shell.targetY) {
           shell.live = false;
           burst(shell);
@@ -122,15 +122,15 @@ export const createFireworks = (texture: Texture): Fireworks => {
         shells.length = 0;
       }
 
-      pool.update((mote) => {
-        mote.x += mote.vx;
-        mote.y += mote.vy;
-        mote.vy += GRAVITY;
-        mote.vx *= DRAG;
+      pool.update((mote, step) => {
+        mote.x += mote.vx * step;
+        mote.y += mote.vy * step;
+        mote.vy += GRAVITY * step;
+        mote.vx *= DRAG ** step;
         const remaining = mote.life / mote.maxLife;
         mote.alpha = remaining * 0.88;
         mote.size = Math.max(0.3, remaining * mote.size);
-      });
+      }, delta);
     },
 
     clear(): void {

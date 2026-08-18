@@ -33,8 +33,7 @@ function statusColor(status: BetEntry['status']): string {
   return 'blue.300';
 }
 
-// ── Cash-out button — updates multiplier text via RAF, not React re-renders ──
-
+/** Cash-out button — updates multiplier text via RAF, not React re-renders */
 function CashOutButton({ onCashOut }: { onCashOut: () => void }) {
   const labelRef = useRef<HTMLSpanElement>(null);
 
@@ -72,8 +71,7 @@ function CashOutButton({ onCashOut }: { onCashOut: () => void }) {
   );
 }
 
-// ── Bet status bar — always rendered; visibility toggled to avoid layout jumps ─
-
+/** Bet status bar — always rendered; visibility toggled to avoid layout jumps */
 function BetStatusBar({
   myBet,
   show,
@@ -143,8 +141,7 @@ function BetStatusBar({
   );
 }
 
-// ── Place bet button — fixed dimensions to prevent layout jumps ──────────────
-
+/** Place bet button — fixed dimensions to prevent layout jumps */
 function PlaceBetButton({
   canBet,
   myBet,
@@ -194,8 +191,6 @@ function NextRoundHint() {
   );
 }
 
-// ── Shared bet amount input ──────────────────────────────────────────────────
-
 function BetAmountInput({
   amount,
   onChange,
@@ -244,8 +239,6 @@ function BetAmountInput({
     </Box>
   );
 }
-
-// ── BetPanel ────────────────────────────────────────────────────────────────
 
 export function BetPanel() {
   const socket = useSocket();

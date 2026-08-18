@@ -59,8 +59,6 @@ export type GameJobName = (typeof GAME_JOBS)[keyof typeof GAME_JOBS];
 export const playerChatTopic = (roomId: string): string =>
   `player_chat_${roomId}`;
 
-// ── Job payloads ────────────────────────────────────────────────────────────
-
 export interface RoundJob {
   readonly roundId: string;
 }

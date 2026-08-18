@@ -1,7 +1,13 @@
 import type { Stage, StageSample } from '@firecracker/stage';
 import { Box, Text, VStack } from '@chakra-ui/react';
 import { useEffect, useRef, useState } from 'react';
-import { getLiveMultiplier, liveRef, useGameStore } from '@/store/gameStore';
+import {
+  getLiveMultiplier,
+  liveRef,
+  multiplierAt,
+  takeCashOuts,
+  useGameStore,
+} from '@/store/gameStore';
 import { CountdownDisplay } from './CountdownDisplay';
 
 /** The store's phase, as the stage names it. */
@@ -66,7 +72,16 @@ export function CrashChart() {
     const sample = (): StageSample => ({
       phase: STAGE_PHASE[phaseRef.current],
       multiplier: getLiveMultiplier(),
+      // From the same clock as the multiplier, so the leading edge the stage
+      // draws is consistent with the number over it.
+      elapsed:
+        liveRef.roundStartedAtMs === null
+          ? 0
+          : Date.now() - liveRef.roundStartedAtMs,
       points: liveRef.chartPoints,
+      // The unrounded curve, so the line is limited by pixels rather than by the
+      // hundredths the server pays in. See `multiplierAt`.
+      curveAt: multiplierAt,
     });
 
     /**
@@ -84,7 +99,9 @@ export function CrashChart() {
           : createStage({
               container,
               sample,
-              rocketUrl: '/png/android-chrome-192x192.png',
+              takeCashOuts,
+              rocketUrl: '/sprites/firecracker.svg',
+              parachutistUrl: '/sprites/parachutist.svg',
             }),
       )
       .catch((error: unknown) => {
@@ -140,12 +157,6 @@ export function CrashChart() {
         pointerEvents="none"
         userSelect="none"
       >
-        {phase === 'CRASHED' && (
-          <Text fontSize="100px" lineHeight="1">
-            💥
-          </Text>
-        )}
-
         <Box textAlign="center">
           {phase === 'IDLE' && (
             <Text fontSize="3xl" color="gray.600" fontWeight="bold">

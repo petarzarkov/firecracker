@@ -27,7 +27,7 @@ const seed = (
 
 /** Steps `frames` times with a no-op, letting motes age out. */
 const age = (p: ReturnType<typeof pool>, frames: number) => {
-  for (let i = 0; i < frames; i++) p.update(() => {});
+  for (let i = 0; i < frames; i++) p.update(() => {}, 1);
 };
 
 describe('the mote pool', () => {
@@ -71,7 +71,7 @@ describe('the mote pool', () => {
     const p = pool(6);
     for (let frame = 0; frame < 200; frame++) {
       if (frame % 3 === 0) p.spawn(seed({ life: 1 + (frame % 7) }));
-      p.update(() => {});
+      p.update(() => {}, 1);
       expect(p.alive).toBeGreaterThanOrEqual(0);
       expect(p.alive).toBeLessThanOrEqual(6);
     }
@@ -80,7 +80,7 @@ describe('the mote pool', () => {
   test('a step can kill a mote early by returning false', () => {
     const p = pool(4);
     p.spawn(seed({ life: 100 }));
-    p.update(() => false);
+    p.update(() => false, 1);
     expect(p.alive).toBe(0);
   });
 
@@ -91,7 +91,7 @@ describe('the mote pool', () => {
     let seen = 0;
     p.update(() => {
       seen += 1;
-    });
+    }, 1);
     expect(seen).toBe(2);
   });
 
@@ -104,7 +104,7 @@ describe('the mote pool', () => {
     let captured: Mote | null = null;
     p.update((mote) => {
       captured = mote;
-    });
+    }, 1);
     // Read through a local so the assertions do not fight the closure's type.
     const mote = captured as Mote | null;
     expect(mote?.x).toBe(1);
@@ -123,14 +123,14 @@ describe('the mote pool', () => {
     let seen = 0;
     p.update(() => {
       seen += 1;
-    });
+    }, 1);
     expect(seen).toBe(0);
   });
 
   test('a zero-capacity pool is inert rather than a crash', () => {
     const p = pool(0);
     p.spawn(seed());
-    p.update(() => {});
+    p.update(() => {}, 1);
     p.clear();
     expect(p.alive).toBe(0);
   });
@@ -141,6 +141,52 @@ describe('the mote pool', () => {
     p.spawn(seed({ life: 5 }));
     p.update((mote) => {
       expect(Number.isFinite(mote.life / mote.maxLife)).toBe(true);
-    });
+    }, 1);
+  });
+});
+
+/**
+ * Frame-rate independence.
+ *
+ * Every velocity here is per-60fps-frame and integrated by multiplying with the
+ * ticker's delta. Before that, motion was per *frame*: on a 144Hz display the
+ * round's trail moved at two and a half times its intended speed and lifetimes
+ * expired that much sooner, which is a large part of what "snappy" looked like.
+ */
+describe('the pool advances in real time, not in frames', () => {
+  const travel = (delta: number, frames: number): number => {
+    const p = pool(1);
+    p.spawn({ x: 0, y: 0, vx: 10, vy: 0, life: 600, size: 1, tint: 0 });
+    let x = 0;
+    for (let i = 0; i < frames; i++) {
+      p.update((mote, step) => {
+        mote.x += mote.vx * step;
+        x = mote.x;
+      }, delta);
+    }
+    return x;
+  };
+
+  test('half-rate frames of double length cover the same ground', () => {
+    expect(travel(2, 30)).toBeCloseTo(travel(1, 60), 6);
+  });
+
+  test('and so do double-rate frames of half length', () => {
+    expect(travel(0.5, 120)).toBeCloseTo(travel(1, 60), 6);
+  });
+
+  test('a lifetime is spent at the same rate whatever the frame rate', () => {
+    const spend = (delta: number) => {
+      const p = pool(1);
+      p.spawn({ x: 0, y: 0, vx: 0, vy: 0, life: 60, size: 1, tint: 0 });
+      let frames = 0;
+      while (p.alive > 0 && frames < 10_000) {
+        p.update(() => {}, delta);
+        frames += 1;
+      }
+      return frames * delta;
+    };
+    expect(spend(2)).toBeCloseTo(spend(1), 0);
+    expect(spend(0.5)).toBeCloseTo(spend(1), 0);
   });
 });

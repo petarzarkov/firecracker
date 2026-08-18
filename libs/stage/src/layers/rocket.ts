@@ -6,35 +6,63 @@ import { Assets, Container, Sprite, type Texture } from 'pixi.js';
  * ## It flies now
  *
  * It used to be an `<img>` centred over the canvas by CSS, and the canvas found
- * its wick by calling `getBoundingClientRect()` on the DOM node **every frame** to
- * reconcile two coordinate systems. It also never moved: the round climbed and the
- * rocket sat in the middle of the screen with sparks coming off it.
+ * its wick by calling `getBoundingClientRect()` on the DOM node **every frame**
+ * to reconcile two coordinate systems. It also never moved: the round climbed
+ * and the rocket sat in the middle of the screen with sparks coming off it.
  *
  * As a sprite in the same scene as the curve there is one coordinate system, no
  * layout read on the render path, and it can do the obvious thing - ride the tip.
+ *
+ * ## Its own art
+ *
+ * The texture is `sprites/firecracker.svg`, drawn for this. Before that it was
+ * the favicon: square, padded for a 16px browser tab, and with its fuse wherever
+ * the icon designer happened to put it. The offsets below are measured off the
+ * artwork, so they belong with it - see the note in the SVG.
  */
 
 /**
- * Where the wick sits relative to the sprite's centre, as a fraction of its size.
- * Measured off the asset; the sparks and the halo hang from here.
+ * The fuse tip, as a fraction of the sprite from its centre. Measured from the
+ * SVG: the fuse ends at (26, 205) in a 96x224 viewBox whose centre is (48, 112).
  */
-const WICK_OFFSET_X = -0.16;
-const WICK_OFFSET_Y = 0.39;
+const WICK_OFFSET_X = (26 - 48) / 96;
+const WICK_OFFSET_Y = (205 - 112) / 224;
 
-const WAITING_SIZE = 90;
-const RUNNING_SIZE = 120;
+/** Drawn height. Width follows from the artwork's aspect. */
+const WAITING_HEIGHT = 118;
+const RUNNING_HEIGHT = 150;
 
 /** How far the rocket leans into the climb, at most. Radians. */
 const MAX_TILT = 0.55;
 
+/** How fast the lean catches up, per 60fps frame. */
+const TILT_EASE = 0.12;
+
 export interface Rocket {
   readonly view: Container;
   /** Point it at `(x, y)`, leaning by `slope` (dy/dx of the curve, screen space). */
-  place(x: number, y: number, slope: number, running: boolean): void;
+  place(
+    x: number,
+    y: number,
+    slope: number,
+    running: boolean,
+    delta: number,
+  ): void;
   hide(): void;
   /** The lit end, in stage coordinates. Valid after {@link place}. */
   readonly wickX: number;
   readonly wickY: number;
+  /** The body's current lean, so the flame can hang along it. */
+  readonly angle: number;
+  /**
+   * Where it was last drawn.
+   *
+   * Not the same as the curve's tip: near the axis ceiling the sprite is nudged
+   * down to stay on the canvas. The explosion has to happen where the player
+   * watched the rocket be, not where the arithmetic put its tip.
+   */
+  readonly x: number;
+  readonly y: number;
 }
 
 /**
@@ -50,6 +78,11 @@ export const createRocket = async (url?: string): Promise<Rocket> => {
   }
 
   const sprite = texture === null ? null : new Sprite(texture);
+  const aspect =
+    texture === null || texture.height === 0
+      ? 1
+      : texture.width / texture.height;
+
   if (sprite !== null) {
     sprite.anchor.set(0.5);
     sprite.visible = false;
@@ -58,6 +91,9 @@ export const createRocket = async (url?: string): Promise<Rocket> => {
 
   let wickX = 0;
   let wickY = 0;
+  let tilt = 0;
+  let drawnX = 0;
+  let drawnY = 0;
 
   return {
     view,
@@ -68,29 +104,49 @@ export const createRocket = async (url?: string): Promise<Rocket> => {
     get wickY() {
       return wickY;
     },
+    get angle() {
+      return tilt;
+    },
+    get x() {
+      return drawnX;
+    },
+    get y() {
+      return drawnY;
+    },
 
-    place(x, y, slope, running): void {
-      const size = running ? RUNNING_SIZE : WAITING_SIZE;
+    place(x, y, slope, running, delta): void {
+      drawnX = x;
+      drawnY = y;
+      const height = running ? RUNNING_HEIGHT : WAITING_HEIGHT;
+      const width = height * aspect;
 
-      // `atan` rather than `atan2`: the tilt is a lean, not a heading. A rocket
-      // that rotated to follow the curve exactly would be lying on its side by
-      // the time the round went vertical.
-      const tilt = Math.max(-MAX_TILT, Math.min(MAX_TILT, Math.atan(-slope)));
+      /**
+       * `atan` rather than `atan2`: the tilt is a lean, not a heading. A rocket
+       * that rotated to follow the curve exactly would be lying on its side by
+       * the time the round went vertical.
+       *
+       * Eased rather than applied. The slope is measured over a handful of
+       * server ticks, so it steps as they arrive; snapping to it made the rocket
+       * twitch about ten times a second, which was the most visible part of the
+       * old jitter.
+       */
+      const wanted = Math.max(-MAX_TILT, Math.min(MAX_TILT, Math.atan(-slope)));
+      tilt += (wanted - tilt) * Math.min(1, TILT_EASE * delta);
 
       if (sprite !== null) {
         sprite.visible = true;
         sprite.x = x;
         sprite.y = y;
         sprite.rotation = tilt;
-        sprite.width = size;
-        sprite.height = size;
-        sprite.alpha = running ? 1 : 0.75;
+        sprite.width = width;
+        sprite.height = height;
+        sprite.alpha = running ? 1 : 0.85;
       }
 
-      // The wick offset rotates with the sprite, or the sparks would detach from
-      // it the moment it leans.
-      const ox = WICK_OFFSET_X * size;
-      const oy = WICK_OFFSET_Y * size;
+      // The offsets are fractions of each dimension, and they rotate with the
+      // sprite - or the sparks would detach from the fuse the moment it leans.
+      const ox = WICK_OFFSET_X * width;
+      const oy = WICK_OFFSET_Y * height;
       const cos = Math.cos(tilt);
       const sin = Math.sin(tilt);
       wickX = x + ox * cos - oy * sin;
@@ -99,6 +155,7 @@ export const createRocket = async (url?: string): Promise<Rocket> => {
 
     hide(): void {
       if (sprite !== null) sprite.visible = false;
+      tilt = 0;
     },
   };
 };

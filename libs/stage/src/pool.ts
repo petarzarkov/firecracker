@@ -47,14 +47,21 @@ export interface MoteSeed {
   tint: number;
 }
 
-/** Advances one mote. Returning `false` kills it early. */
-export type MoteStep = (mote: Mote) => boolean | void;
+/**
+ * Advances one mote. Returning `false` kills it early.
+ *
+ * `delta` is PIXI's frame delta, `1` at 60fps. Every velocity in this scene is
+ * expressed per-60fps-frame and multiplied by it, so a 144Hz display does not
+ * run the round's particles at two and a half times speed - which is what
+ * "snappy" looked like before, alongside the stepping curve.
+ */
+export type MoteStep = (mote: Mote, delta: number) => boolean | void;
 
 export interface MotePool {
   readonly view: ParticleContainer;
   spawn(seed: MoteSeed): void;
   /** Steps every live mote and syncs the result onto its particle. */
-  update(step: MoteStep): void;
+  update(step: MoteStep, delta: number): void;
   /** Kills everything, e.g. when a round ends. */
   clear(): void;
   readonly alive: number;
@@ -150,7 +157,7 @@ export const createMotePool = (
       mote.alpha = 1;
     },
 
-    update(step: MoteStep): void {
+    update(step: MoteStep, delta: number): void {
       for (let i = 0; i < capacity; i++) {
         const mote = motes[i] as Mote;
         const particle = particles[i] as Particle;
@@ -159,8 +166,8 @@ export const createMotePool = (
           continue;
         }
 
-        mote.life -= 1;
-        const living = step(mote) !== false && mote.life > 0;
+        mote.life -= delta;
+        const living = step(mote, delta) !== false && mote.life > 0;
         if (!living) {
           mote.life = 0;
           particle.alpha = 0;

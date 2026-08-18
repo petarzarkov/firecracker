@@ -18,6 +18,7 @@ export { ceilingFor, createScale, gridFor } from './scale.js';
 export type { Insets, Plot, Scale } from './scale.js';
 export type {
   Stage,
+  StageCashOut,
   StageOptions,
   StagePhase,
   StagePoint,
