@@ -132,8 +132,6 @@ export const PaginatedTransactions = paginatedOf(
 const RoundIdParams = z.object({ roundId: z.uuid() });
 const DemoQuery = z.object({ isDemo: z.stringbool().default(false) });
 
-// ── Route schemas ───────────────────────────────────────────────────────────
-
 export const gameState = {} as const satisfies RouteSchemas;
 export const listRounds = {
   query: pageOptionsSchema,

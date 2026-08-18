@@ -33,8 +33,7 @@ function statusColor(status: BetEntry['status']): string {
   return 'blue.300';
 }
 
-// ── Cash-out button — updates multiplier text via RAF, not React re-renders ──
-
+/** Cash-out button — updates multiplier text via RAF, not React re-renders */
 function CashOutButton({ onCashOut }: { onCashOut: () => void }) {
   const labelRef = useRef<HTMLSpanElement>(null);
 
@@ -72,8 +71,7 @@ function CashOutButton({ onCashOut }: { onCashOut: () => void }) {
   );
 }
 
-// ── Bet status bar — always rendered; visibility toggled to avoid layout jumps ─
-
+/** Bet status bar — always rendered; visibility toggled to avoid layout jumps */
 function BetStatusBar({
   myBet,
   show,
@@ -83,7 +81,12 @@ function BetStatusBar({
 }) {
   const textRef = useRef<HTMLSpanElement>(null);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: optional chaining is intentional — deps change when myBet transitions
+  /**
+   * Narrow deps on purpose: the loop reads only these two fields of `myBet`, and
+   * depending on the object would restart the RAF on every settle. (The
+   * `biome-ignore` that used to sit here named a linter this repo does not have —
+   * oxlint replaced it, and its react rules are not switched on yet.)
+   */
   useEffect(() => {
     if (!myBet || myBet.status !== 'ACTIVE') return;
     let animId: number;
@@ -138,8 +141,7 @@ function BetStatusBar({
   );
 }
 
-// ── Place bet button — fixed dimensions to prevent layout jumps ──────────────
-
+/** Place bet button — fixed dimensions to prevent layout jumps */
 function PlaceBetButton({
   canBet,
   myBet,
@@ -173,16 +175,31 @@ function PlaceBetButton({
   );
 }
 
-// ── Shared bet amount input ──────────────────────────────────────────────────
+/**
+ * Says where an edit is going.
+ *
+ * Without it the inputs being live is ambiguous in the worst direction: a player
+ * who raises AUTO EXIT while riding at 1.4x could reasonably read it as moving the
+ * exit on the bet they are watching. It cannot - the server was told at placement -
+ * so the label has to say so.
+ */
+function NextRoundHint() {
+  return (
+    <Text as="span" ml={2} fontSize="xs" color="gray.500" fontWeight="normal">
+      · next round
+    </Text>
+  );
+}
 
 function BetAmountInput({
   amount,
   onChange,
-  disabled,
+  nextRound,
 }: {
   amount: string;
   onChange: (v: string) => void;
-  disabled: boolean;
+  /** The value is queued for the next round, not the one on the table. */
+  nextRound: boolean;
 }) {
   return (
     <Box flex={1}>
@@ -194,6 +211,7 @@ function BetAmountInput({
         fontWeight="semibold"
       >
         BET AMOUNT
+        {nextRound && <NextRoundHint />}
       </Text>
       <Flex align="center" gap={2}>
         <Text color="#aaa" fontSize="lg">
@@ -215,16 +233,12 @@ function BetAmountInput({
           px={3}
           py={1.5}
           borderRadius="md"
-          disabled={disabled}
-          _disabled={{ opacity: 0.5, cursor: 'not-allowed' }}
           _focus={{ borderColor: 'green.500', outline: 'none' }}
         />
       </Flex>
     </Box>
   );
 }
-
-// ── BetPanel ────────────────────────────────────────────────────────────────
 
 export function BetPanel() {
   const socket = useSocket();
@@ -251,7 +265,21 @@ export function BetPanel() {
     !Number.isNaN(autoCashOutTarget) && autoCashOutTarget > 1;
   const canBet = phase === 'WAITING' && myBet === null && amountCents >= 100;
   const canCashOut = phase === 'RUNNING' && myBet?.status === 'ACTIVE';
-  const inputDisabled = phase !== 'WAITING' || myBet !== null;
+  /**
+   * Whether an edit lands on the **next** round rather than this one.
+   *
+   * The inputs used to be *disabled* whenever a bet was open or the round was not
+   * in its betting window - roughly four fifths of a cycle, and exactly the part
+   * of it a player spends deciding what to do next. Nothing was protected by that:
+   * `amountCents` and `autoCashOutTarget` are read in `handlePlaceBet`, and the
+   * server is told `autoCashOutAt` once, at placement. There is no path by which
+   * typing here changes a stake already on the table.
+   *
+   * So the inputs stay live and the labels say where the value is going. With
+   * auto-play on it is load-bearing rather than convenient: the only moment you
+   * could retune it was the one moment it was about to re-bet for you.
+   */
+  const editsNextRound = myBet !== null || phase !== 'WAITING';
 
   const handlePlaceBet = useCallback(() => {
     if (!socket || !canBet || !myUsername || myUserId === undefined) return;
@@ -280,6 +308,10 @@ export function BetPanel() {
     isDemoMode,
     hasAutoCashOut,
     autoCashOutTarget,
+    // Read inside, and it arrives *after* the first render - the socket's
+    // `connected` frame is what sets it. Omitted, this callback captured the
+    // `undefined` it was built with and the guard above silently swallowed the bet.
+    myUserId,
   ]);
 
   function handleCashOut() {
@@ -344,7 +376,6 @@ export function BetPanel() {
                 fontFamily="mono"
                 fontSize="xs"
                 onClick={() => setAmount(a.toFixed(2))}
-                disabled={inputDisabled}
                 _hover={{
                   borderColor: 'green.400',
                   color: 'green.300',
@@ -460,7 +491,7 @@ export function BetPanel() {
           <BetAmountInput
             amount={amount}
             onChange={setAmount}
-            disabled={inputDisabled}
+            nextRound={editsNextRound}
           />
         </Tabs.Content>
 
@@ -470,13 +501,14 @@ export function BetPanel() {
             <BetAmountInput
               amount={amount}
               onChange={setAmount}
-              disabled={inputDisabled}
+              nextRound={editsNextRound}
             />
 
             {/* Auto exit target */}
             <Box minW="90px">
               <Text fontSize="xs" color="gray.500" mb={1} letterSpacing="wide">
                 AUTO EXIT
+                {editsNextRound && <NextRoundHint />}
               </Text>
               <Flex align="center" gap={1}>
                 <Input
@@ -496,12 +528,10 @@ export function BetPanel() {
                   px={2}
                   py={2}
                   borderRadius="md"
-                  disabled={myBet !== null}
-                  _disabled={{ opacity: 0.5, cursor: 'not-allowed' }}
                   _focus={{ borderColor: 'yellow.500', outline: 'none' }}
                   _placeholder={{ color: 'gray.600' }}
                 />
-                {hasAutoCashOut && myBet === null ? (
+                {hasAutoCashOut ? (
                   <Box
                     as="button"
                     onClick={() => setAutoCashOut('')}

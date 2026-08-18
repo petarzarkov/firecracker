@@ -44,8 +44,6 @@ export class GameRoundService {
     private readonly logger: Logger,
   ) {}
 
-  // ── Fairness primitives ───────────────────────────────────────────────────
-
   /**
    * 32 bytes from the platform CSPRNG.
    *
@@ -108,8 +106,6 @@ export class GameRoundService {
   nextNonce(): Promise<number> {
     return this.redis.incr(NONCE_KEY);
   }
-
-  // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   /**
    * A new round in WAITING, with the seed committed and the crash point still
@@ -240,8 +236,6 @@ export class GameRoundService {
       return { refunds, round: failed };
     });
   }
-
-  // ── Reads ─────────────────────────────────────────────────────────────────
 
   getCurrentRound(): GameRoundRow | undefined {
     return this.rounds.findCurrentRound();

@@ -72,8 +72,6 @@ export const parseChat = (data: unknown): string | null => {
 export const playerFacing = (error: unknown, fallback: string): string =>
   error instanceof BetRejected ? error.message : fallback;
 
-// ── Player chat ─────────────────────────────────────────────────────────────
-
 export interface JoinChatRequest {
   /** Re-joining a room already known, typically after a reconnect. */
   readonly roomId: string | undefined;

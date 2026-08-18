@@ -258,6 +258,7 @@ Redis must be up for rounds to advance: `docker compose up -d`.
 ## Style
 
 - Comments explain **why**, never what. If a line is surprising, say what it would break if changed.
+- **No section-divider comments.** Never write `// ── Reads ──────────`, `/* --- Helpers --- */`, or any banner of dashes, box-drawing characters or equals signs used to carve a file into regions. They are navigation furniture: they say nothing a reader cannot see, they go stale the moment code moves across them, and a file that needs them is a file that wants splitting. If a group of declarations belongs together, that is what a module is for; if one of them needs explaining, put a doc comment on **it**.
 - No dead code, no speculative abstraction, no commented-out blocks.
 - `readonly` on anything that is not reassigned; `#private` for real privacy.
 - Prefer a named function to a comment explaining an expression.

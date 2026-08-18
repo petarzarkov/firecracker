@@ -15,7 +15,12 @@ import {
 import { startTransition, useEffect } from 'react';
 import { useSocket } from '@/SocketContext';
 import { useAuthStore } from '@/store/authStore';
-import { type BetEntry, type GamePhase, useGameStore } from '@/store/gameStore';
+import {
+  type BetEntry,
+  type GamePhase,
+  liveRef,
+  useGameStore,
+} from '@/store/gameStore';
 
 /**
  * The wire's phase, mapped to the store's.
@@ -146,6 +151,13 @@ export function useGameSocket() {
     });
 
     socket.on(GAME_EVENTS.BET_CASHED_OUT, (data: BetCashedOutPayload) => {
+      // Queued before the store work, so the chart draws the jump on the frame
+      // the news arrived rather than after React has caught up.
+      liveRef.cashOuts.push({
+        name: data.username,
+        multiplier: data.multiplier,
+        payoutCents: data.payoutCents,
+      });
       startTransition(() => {
         /**
          * Keyed on the id, not the username.

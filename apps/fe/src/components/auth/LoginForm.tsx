@@ -3,7 +3,7 @@
    added the social and anonymous paths. Worth splitting per mode, and not inside a
    migration that would then be reviewing two changes at once. */
 import { Box, Icon, Image, Link, Stack, Text } from '@chakra-ui/react';
-import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
+import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react';
 import { FaGamepad, FaGithub, FaLinkedin } from 'react-icons/fa';
 import { useAuthStore } from '../../store/authStore';
 import { useGameStore } from '../../store/gameStore';

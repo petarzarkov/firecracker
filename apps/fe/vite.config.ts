@@ -5,7 +5,7 @@ import { version } from './package.json';
 
 export default defineConfig(({ mode }) => {
   const apiTarget =
-    loadEnv(mode, process.cwd()).VITE_API_PROXY_TARGET ??
+    loadEnv(mode, process.cwd())['VITE_API_PROXY_TARGET'] ??
     'http://localhost:3999';
 
   process.env = {
@@ -31,7 +31,7 @@ export default defineConfig(({ mode }) => {
      * so the upgrade is forwarded rather than dropped. Override it only to point a
      * client at a remote API deliberately.
      */
-    VITE_API_URL: loadEnv(mode, process.cwd()).VITE_API_URL ?? '',
+    VITE_API_URL: loadEnv(mode, process.cwd())['VITE_API_URL'] ?? '',
   };
   return {
     plugins: [react()],

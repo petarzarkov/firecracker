@@ -13,6 +13,7 @@
   "dependencies": {
     "@chakra-ui/react": "3.30.0",
     "@firecracker/contracts": "workspace:*",
+    "@firecracker/stage": "workspace:*",
     "immer": "11.1.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",

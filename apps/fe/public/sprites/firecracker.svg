@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 224" width="96" height="224">
+  <!--
+    The firecracker, drawn rather than borrowed.
+
+    This replaces `android-chrome-192x192.png` — the favicon, which was being
+    used as the rocket because it was the only art to hand. A favicon is square,
+    padded, and sized for a 16px browser tab, so it arrived with dead margin on
+    every side and no idea where its own fuse was.
+
+    SVG so it stays crisp at any size the plot gives it: the chart scales with
+    the viewport, and the sprite is drawn at 90–120px, well past a 192px raster's
+    comfort once a high-DPI display doubles it.
+
+    Geometry worth knowing before editing: the fuse tip sits at (26, 205) in this
+    viewBox, which is where the stage hangs the wick glow and sparks. The offsets
+    in `rocket.ts` are that point expressed as a fraction of the sprite — move
+    the fuse here and they have to move there.
+  -->
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8f1d12"/>
+      <stop offset="0.32" stop-color="#e8402a"/>
+      <stop offset="0.62" stop-color="#ff6b4a"/>
+      <stop offset="1" stop-color="#a8240f"/>
+    </linearGradient>
+    <linearGradient id="cone" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#b8322a"/>
+      <stop offset="0.4" stop-color="#ffd9c9"/>
+      <stop offset="1" stop-color="#c2361f"/>
+    </linearGradient>
+    <linearGradient id="fin" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5e1208"/>
+      <stop offset="1" stop-color="#9e2412"/>
+    </linearGradient>
+    <!-- The body's stripes are clipped to it rather than drawn to fit. -->
+    <clipPath id="barrel">
+      <rect x="22" y="44" width="52" height="140" rx="9"/>
+    </clipPath>
+  </defs>
+
+  <!-- Fins, behind the barrel so their roots disappear under it. -->
+  <path d="M22 150 L6 196 L22 184 Z" fill="url(#fin)"/>
+  <path d="M74 150 L90 196 L74 184 Z" fill="url(#fin)"/>
+
+  <!-- Nose cone. -->
+  <path d="M48 2 L74 52 L22 52 Z" fill="url(#cone)"/>
+  <path d="M48 2 L58 52 L38 52 Z" fill="#ffffff" opacity="0.22"/>
+
+  <!-- Barrel. -->
+  <rect x="22" y="44" width="52" height="140" rx="9" fill="url(#body)"/>
+
+  <!-- Helical stripes: parallelograms clipped to the barrel. -->
+  <g clip-path="url(#barrel)" fill="#fff6ec" opacity="0.9">
+    <path d="M6 74 L34 44 L58 44 L30 74 Z"/>
+    <path d="M6 116 L34 86 L58 86 L30 116 Z"/>
+    <path d="M6 158 L34 128 L58 128 L30 158 Z"/>
+  </g>
+
+  <!-- A specular edge, so the barrel reads as a cylinder rather than a slab. -->
+  <rect x="30" y="48" width="7" height="132" rx="3.5" fill="#ffffff" opacity="0.28"/>
+
+  <!-- Collar and base. -->
+  <rect x="19" y="40" width="58" height="10" rx="5" fill="#2a0d06"/>
+  <rect x="20" y="176" width="56" height="12" rx="5" fill="#2a0d06"/>
+
+  <!-- Fuse, ending at (26, 205). -->
+  <path d="M40 188 C36 196, 32 198, 26 205"
+        stroke="#d8c39a" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path d="M40 188 C36 196, 32 198, 26 205"
+        stroke="#8a7248" stroke-width="1.6" fill="none" stroke-linecap="round"
+        stroke-dasharray="3 5"/>
+</svg>

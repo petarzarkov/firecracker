@@ -1,28 +1,24 @@
 {
+  "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "target": "ES2020",
-    "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "skipLibCheck": true,
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    /* Vite compiles this, so resolution is the bundler's and imports stay
+       extensionless — the same override `libs/contracts` and `libs/stage` make. */
+    "module": "preserve",
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": true,
     "jsx": "react-jsx",
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
-    "esModuleInterop": true,
+    "useDefineForClassFields": true,
     "allowSyntheticDefaultImports": true,
-    "forceConsistentCasingInFileNames": true,
-    "baseUrl": ".",
+    "types": ["bun", "vite/client"],
+    /* `baseUrl` is gone: TypeScript resolves `paths` relative to this file
+       already, and TS 7 deprecates it. */
     "paths": {
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  /* `vite.config.ts` is checked here rather than through a composite project
+     reference. The reference existed to give it Node semantics; the base config
+     covers that, and a referenced project cannot inherit `noEmit`. */
+  "include": ["src", "vite.config.ts"],
+  "exclude": ["node_modules", "dist"]
 }

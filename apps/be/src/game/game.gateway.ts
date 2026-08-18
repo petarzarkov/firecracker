@@ -264,8 +264,6 @@ export class GameGateway {
     socket.send(JSON.stringify({ event, data }));
   }
 
-  // ── Inbound ───────────────────────────────────────────────────────────────
-
   @OnMessage(GAME_CLIENT_EVENTS.PLACE_BET)
   async placeBet(
     data: unknown,
@@ -640,8 +638,6 @@ export class GameGateway {
       this.pubsub.subscriberCount(GAME_TOPIC),
     );
   }
-
-  // ── Private ───────────────────────────────────────────────────────────────
 
   /** Subscribers on this node, for the lobby's player count. */
   get spectators(): number {

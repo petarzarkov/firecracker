@@ -256,8 +256,6 @@ export class GameBetService {
     return lost;
   }
 
-  // ── Reads ─────────────────────────────────────────────────────────────────
-
   findActiveByRoundAndUser(
     roundId: string,
     userId: string,
