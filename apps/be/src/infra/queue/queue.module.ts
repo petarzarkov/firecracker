@@ -1,6 +1,7 @@
 import type { DynamicModule } from '@dunx/core';
 import { QueueModule } from '@dunx/infra/queue';
 import { AppConfigService } from '../../config/app.config.service.js';
+import { QueueDrain } from './queue-drain.service.js';
 import { QueueUnavailableMiddleware } from './queue-unavailable.middleware.js';
 import { QueuesController } from './queues.controller.js';
 
@@ -83,6 +84,18 @@ export class QueuesModule {
       imports: [queues],
       // Every feature that enqueues reads `JobPublisher`, which is what global is for.
       exports: [queues],
+      /**
+       * One list, and it has to be: the conditional below spreads into this same
+       * object, so a second `providers` key there would replace this one rather than
+       * add to it - and `QueueDrain` would silently never be constructed.
+       *
+       * `QueueDrain` is bound so the container builds it, which is what gets its
+       * `onBeforeShutdown` called. Nothing injects it.
+       */
+      providers: [
+        QueueDrain,
+        ...(options.controllers === false ? [] : [QueueUnavailableMiddleware]),
+      ],
       ...(options.controllers === false
         ? {}
         : {
@@ -91,7 +104,6 @@ export class QueuesModule {
             // It replaced a private `degrades()` helper wrapped around all five route
             // bodies - the one thing `HttpOptions.middleware` could not express.
             middleware: [QueueUnavailableMiddleware],
-            providers: [QueueUnavailableMiddleware],
           }),
     };
   }

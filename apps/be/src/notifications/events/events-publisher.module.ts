@@ -1,4 +1,4 @@
-import { provide, type DynamicModule } from '@dunx/core';
+import { Logger, provide, type DynamicModule } from '@dunx/core';
 import { PubSub } from '@dunx/http';
 import { RedisConnection } from '@dunx/infra/redis';
 import { AppConfigService } from '../../config/app.config.service.js';
@@ -38,8 +38,9 @@ export class EventsPublisherModule {
     const publisher =
       options.publisher === 'socket'
         ? provide(EventsPublisher, {
-            useFactory: (pubsub: PubSub) => new SocketPublisher(pubsub),
-            inject: [PubSub] as const,
+            useFactory: (pubsub: PubSub, logger: Logger) =>
+              new SocketPublisher(pubsub, logger),
+            inject: [PubSub, Logger] as const,
           })
         : provide(EventsPublisher, {
             useFactory: (redis: RedisConnection, config: AppConfigService) =>

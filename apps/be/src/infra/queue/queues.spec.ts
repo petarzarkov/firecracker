@@ -206,3 +206,42 @@ describe('publish here, consume in a forked child', () => {
     expect(finished.failedReason).toContain('No handler for');
   }, 40_000);
 });
+
+/**
+ * **Last in the file, and it has to be**: `drain()` is memoised and irreversible, so
+ * nothing after it would consume.
+ *
+ * The ordering this pins is what a `ctrl-c` exposed. `QueueRunner` stops the workers
+ * in `onShutdown`, and `HttpApplication.shutdown()` runs the container's teardown
+ * *after* `server.stop()` - so a delayed job coming due in between started against a
+ * `PubSub` that no longer had a server, failed, and was retried into a duplicate
+ * round. `QueueDrain` moves the stop into `onBeforeShutdown`, which runs while the
+ * server is still answering.
+ */
+describe('draining', () => {
+  test('stops consuming while the routes still answer', async () => {
+    if (!queueUp) return;
+
+    // Nothing consumes it after the drain, so it is still a real job afterwards -
+    // which is the point: it waits for the next boot rather than half-running.
+    await server.app.drain();
+
+    const id = await enqueue(JOBS.USER_REGISTERED, {
+      userId: crypto.randomUUID(),
+      email: 'after-drain@example.com',
+      name: 'After Drain',
+    });
+
+    // Long enough that a live worker would have taken it - the same job completed in
+    // well under a second above.
+    await Bun.sleep(2500);
+    const after = await view(id);
+    expect(['waiting', 'delayed', 'prioritized']).toContain(after.state);
+    expect(after.result).toBeNull();
+
+    // And the server is still serving, which is the half that makes the ordering
+    // correct rather than merely earlier.
+    const { status } = await server.json('api/health/live');
+    expect(status).toBe(200);
+  }, 20_000);
+});

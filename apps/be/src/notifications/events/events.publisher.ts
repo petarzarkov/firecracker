@@ -1,3 +1,4 @@
+import { Logger } from '@dunx/core';
 import { encode, encodeRelay, PubSub } from '@dunx/http';
 import { RedisConnection } from '@dunx/infra/redis';
 import { AppConfigService } from '../../config/app.config.service.js';
@@ -24,12 +25,36 @@ export abstract class EventsPublisher {
  * is configured, forwards the frame to every other node.
  */
 export class SocketPublisher extends EventsPublisher {
-  constructor(private readonly pubsub: PubSub) {
+  constructor(
+    private readonly pubsub: PubSub,
+    private readonly logger: Logger,
+  ) {
     super();
   }
 
+  /**
+   * **Never throws**, which is the same rule `RelayPublisher` below already had and
+   * this one did not.
+   *
+   * A frame is best-effort; a database transition is not. `PubSub.publishEvent`
+   * throws once the server has stopped, and a job handler that publishes *after*
+   * committing then fails on work it had already done - BullMQ retries it, the
+   * commit happens twice, and for `game.round.schedule` that is a duplicate round.
+   * It is how a stuck-round backlog builds up one `ctrl-c` at a time.
+   *
+   * At `warn` rather than swallowed: a publish failing while the process is serving
+   * is a real problem, even though it must not be a failed job.
+   */
   override publish(topic: string, event: string, data: unknown): void {
-    this.pubsub.publishEvent(topic, event, data);
+    try {
+      this.pubsub.publishEvent(topic, event, data);
+    } catch (error) {
+      this.logger.warn('socket frame not published', {
+        topic,
+        event,
+        reason: (error as Error).message,
+      });
+    }
   }
 }
 
