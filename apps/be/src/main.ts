@@ -52,7 +52,31 @@ const main = async (): Promise<void> => {
   // afterwards throws rather than being quietly dropped.
   app.setGlobalPrefix(appConfig.prefix);
   app.set('trust proxy', cors.trustProxy);
-  app.enableCors({ origin: cors.origin, credentials: config.get('isProd') });
+
+  /**
+   * `credentials: true` in every environment, and it used to be `isProd`.
+   *
+   * That condition was the reason a cross-origin dev client could not authenticate.
+   * `@dunx/http` resolves `origin: '*'` by **reflecting the caller** when credentials
+   * are allowed - a literal `*` is illegal alongside cookies and browsers reject it -
+   * so with credentials off, the default `CORS_ORIGIN=*` answered `*` and every
+   * credentialed request failed with "the wildcard is not allowed when the request's
+   * credentials mode is 'include'". Turning it on in dev too makes the two behave the
+   * same, which is the point of the setting.
+   *
+   * Development normally never reaches this: the client goes through Vite's proxy, so
+   * it is same-origin and CORS does not apply.
+   */
+  app.enableCors({ origin: cors.origin, credentials: true });
+
+  // Reflecting any origin *and* allowing credentials lets any site make authenticated
+  // requests with a visitor's cookie. Fine behind a proxy that is the only caller;
+  // a deployment reachable from a browser wants a real origin here.
+  if (config.get('isProd') && cors.origin === '*') {
+    logger.warn(
+      'CORS_ORIGIN is "*" with credentials allowed, so any origin can make authenticated requests. Name the client origin instead.',
+    );
+  }
 
   /**
    * One call for the whole sequence: `onBeforeShutdown` fails readiness and holds it

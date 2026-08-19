@@ -28,13 +28,15 @@ export class AuthMiddleware {
   static #timer: ReturnType<typeof setInterval> | null = null;
 
   static initialize(): void {
+    // Only polices a session it already knows about: an idle visitor who has never
+    // signed in has nothing to re-check, and should not be asking every 5 minutes.
     AuthMiddleware.#timer = setInterval(() => {
-      void AuthMiddleware.#verify();
+      if (useAuthStore.getState().user !== null) void AuthMiddleware.#sync();
     }, CHECK_INTERVAL_MS);
 
-    // On load as well as on the interval: a persisted `localStorage` state is the
-    // one most likely to be stale, because it survived a browser restart.
-    void AuthMiddleware.#verify();
+    // On load, **unconditionally**. A persisted `localStorage` state is the one most
+    // likely to be stale, and an *absent* one does not mean absent session.
+    void AuthMiddleware.#sync();
   }
 
   static cleanup(): void {
@@ -42,9 +44,28 @@ export class AuthMiddleware {
     AuthMiddleware.#timer = null;
   }
 
-  static async #verify(): Promise<void> {
+  /**
+   * Asks the server who the caller is, and makes the store agree.
+   *
+   * ## The boot call must run even with an empty store
+   *
+   * This used to open with `if (user === null) return;`, which made the cookie
+   * unreachable: the session's real carrier is better-auth's `HttpOnly` cookie and
+   * only `user` is persisted, so anything that clears `localStorage` without clearing
+   * cookies - a rebuild, "clear site data" on one origin, a `clearAuth()` from a
+   * blip - left a live session the client could not see. The app rendered the login
+   * form, and "Try Demo" then asked for a second anonymous session and was refused
+   * with `ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY`. No route out of the UI.
+   *
+   * `authStore`'s own comment already promised this - "a reload rehydrates the session
+   * from the cookie through `AuthMiddleware`" - and the guard is what stopped it.
+   *
+   * The cost is one `/get-session` on boot for a visitor who has never signed in.
+   * That is the honest price of being cookie-first: whether a session exists is a
+   * question only the server can answer.
+   */
+  static async #sync(): Promise<void> {
     const { token, user, setAuth, clearAuth } = useAuthStore.getState();
-    if (user === null) return;
 
     let session: Awaited<ReturnType<typeof authApi.currentSession>>;
     try {
@@ -56,7 +77,9 @@ export class AuthMiddleware {
     }
 
     if (session === null) {
-      clearAuth();
+      // Only if there was something to clear. A visitor with no session would
+      // otherwise get a state write, and a persist round-trip, on every load.
+      if (user !== null) clearAuth();
       return;
     }
 
@@ -78,7 +101,7 @@ export class AuthMiddleware {
           : '';
 
     if (/unauthor|forbidden|session/i.test(message)) {
-      void AuthMiddleware.#verify();
+      void AuthMiddleware.#sync();
     }
   }
 }

@@ -155,16 +155,48 @@ export const signUp = async (input: {
   };
 };
 
-/** "Try Demo" - a real user row with a wallet, and no credential. */
+/**
+ * better-auth's refusal when the caller **already has** an anonymous session.
+ *
+ * It is not an error condition for this app: the demo button asks for a demo
+ * player, and a live one on the cookie is that. See {@link signInAnonymous}.
+ */
+const ALREADY_ANONYMOUS = 'ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY';
+
+/**
+ * "Try Demo" - a real user row with a wallet, and no credential.
+ *
+ * **Adopts an existing anonymous session rather than failing on one.** The cookie
+ * outlives `localStorage`: rebuild the client, clear site data, or lose the store to
+ * a `clearAuth()`, and the browser still holds a session for a live anonymous user.
+ * better-auth then answers `ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY`, and
+ * surfacing that put the login form in a dead end - the one button an unregistered
+ * visitor has, refusing forever, with no way out of the UI.
+ *
+ * The refusal already tells us what we need: there is a demo player on this cookie.
+ * So it is answered by asking who that is.
+ */
 export const signInAnonymous = async (): Promise<Session> => {
-  const response = await post<{ token?: string; user: AuthUser }>(
-    '/sign-in/anonymous',
-    {},
-  );
-  return {
-    token: tokenFrom(response, response.data),
-    user: toUser(response.data.user),
-  };
+  try {
+    const response = await post<{ token?: string; user: AuthUser }>(
+      '/sign-in/anonymous',
+      {},
+    );
+    return {
+      token: tokenFrom(response, response.data),
+      user: toUser(response.data.user),
+    };
+  } catch (error) {
+    if (!(error instanceof AuthError) || error.code !== ALREADY_ANONYMOUS) {
+      throw error;
+    }
+    // Rethrow the original if the cookie turns out to name nobody - a session for a
+    // user that was deleted would land here, and reporting "already signed in" for
+    // it would be a worse lie than the refusal.
+    const session = await currentSession();
+    if (session === null) throw error;
+    return session;
+  }
 };
 
 export type SocialProvider = 'github' | 'google' | 'linkedin';
