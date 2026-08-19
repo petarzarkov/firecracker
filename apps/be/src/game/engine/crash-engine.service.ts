@@ -1,6 +1,7 @@
 import { Logger, type OnInit, type OnShutdown } from '@dunx/core';
 import { JobPublisher } from '@dunx/infra/queue';
 import { RedisConnection } from '@dunx/infra/redis';
+import { ScheduleKind, ScheduleRegistry } from '@dunx/infra/schedule';
 import { AppConfigService } from '../../config/app.config.service.js';
 import { EventsPublisher } from '../../notifications/events/events.publisher.js';
 import {
@@ -8,9 +9,9 @@ import {
   GAME_JOBS,
   GAME_QUEUE,
   GAME_TOPIC,
-  publishGame,
+  GameEvents,
 } from '../game.events.js';
-import { multiplierAtX100, toMultiplier } from '../game.math.js';
+import { GameMath } from '../game.math.js';
 import { GameRoundStatus } from '../schema/game-round.schema.js';
 import { GameRoundRepository } from '../repos/game-round.repository.js';
 
@@ -73,17 +74,22 @@ export class CrashEngineService implements OnInit, OnShutdown {
   #startedAt: Date | null = null;
   #crashPointX100: number | null = null;
   #crashedAt: Date | null = null;
-  #tick: ReturnType<typeof setInterval> | null = null;
+  /** Whether {@link CrashEngineService.TICK} is currently armed. */
+  #ticking = false;
 
   /** Set by the gateway, which owns the Redis hash the auto-cashouts live in. */
   #autoCashOut: ((roundId: string, multiplierX100: number) => void) | null =
     null;
+
+  /** Fixed rather than per-round, so re-arming cannot leak an entry per round. */
+  static readonly TICK = 'game.round.tick';
 
   constructor(
     private readonly rounds: GameRoundRepository,
     private readonly jobs: JobPublisher,
     private readonly redis: RedisConnection,
     private readonly events: EventsPublisher,
+    private readonly schedules: ScheduleRegistry,
     private readonly config: AppConfigService,
     private readonly logger: Logger,
   ) {}
@@ -91,7 +97,6 @@ export class CrashEngineService implements OnInit, OnShutdown {
   async onInit(): Promise<void> {
     await this.#recover();
     await this.#listenForCommands();
-    await this.#bootstrapCleanup();
   }
 
   onShutdown(): void {
@@ -119,7 +124,7 @@ export class CrashEngineService implements OnInit, OnShutdown {
     if (this.#phase !== GameRoundStatus.RUNNING || this.#startedAt === null) {
       return null;
     }
-    return multiplierAtX100(
+    return GameMath.multiplierAtX100(
       Date.now() - this.#startedAt.getTime(),
       this.config.get('game').multiplierDivisor,
     );
@@ -167,11 +172,18 @@ export class CrashEngineService implements OnInit, OnShutdown {
     this.#phase = GameRoundStatus.RUNNING;
     this.#startedAt = startedAt;
     this.#crashPointX100 = crashPointX100;
+    // Disarm before arming: the registry refuses a duplicate name, so a repeated
+    // `start` command would throw on the pub/sub path instead of re-arming.
     this.#clear();
-    this.#tick = setInterval(
+    this.schedules.add(
+      {
+        kind: ScheduleKind.INTERVAL,
+        at: this.config.get('game').tickIntervalMs,
+        name: CrashEngineService.TICK,
+      },
       () => this.#onTick(),
-      this.config.get('game').tickIntervalMs,
     );
+    this.#ticking = true;
     this.logger.info('engine ticking', { roundId, crashPointX100 });
   }
 
@@ -217,7 +229,7 @@ export class CrashEngineService implements OnInit, OnShutdown {
 
     if (round.status === GameRoundStatus.RUNNING && round.startedAt !== null) {
       const { multiplierDivisor } = this.config.get('game');
-      const now = multiplierAtX100(
+      const now = GameMath.multiplierAtX100(
         Date.now() - round.startedAt.getTime(),
         multiplierDivisor,
       );
@@ -240,25 +252,6 @@ export class CrashEngineService implements OnInit, OnShutdown {
         this.startRunning(round.id, round.crashPointX100, round.startedAt);
       }
     }
-  }
-
-  /**
-   * Kick the watchdog loop off once, from the process that owns the engine.
-   *
-   * A fixed `jobId` is what makes a restart idempotent: BullMQ refuses a second
-   * job with an id already in the queue, so a process that restarts ten times does
-   * not end up with ten cleanup loops running in parallel. The *reschedule* inside
-   * the handler deliberately does not do this - see `GameJobs.cleanup`.
-   */
-  async #bootstrapCleanup(): Promise<void> {
-    await this.#enqueue(
-      GAME_JOBS.CLEANUP,
-      {},
-      {
-        delay: this.config.get('game').cleanupIntervalMs,
-        jobId: 'game-round-cleanup-bootstrap',
-      },
-    );
   }
 
   /**
@@ -302,7 +295,7 @@ export class CrashEngineService implements OnInit, OnShutdown {
     if (this.#startedAt === null || this.#crashPointX100 === null) return;
 
     const elapsed = Date.now() - this.#startedAt.getTime();
-    const multiplierX100 = multiplierAtX100(
+    const multiplierX100 = GameMath.multiplierAtX100(
       elapsed,
       this.config.get('game').multiplierDivisor,
     );
@@ -333,8 +326,8 @@ export class CrashEngineService implements OnInit, OnShutdown {
     if (this.#roundId !== null)
       this.#autoCashOut?.(this.#roundId, multiplierX100);
 
-    publishGame(this.events, GAME_TOPIC, GAME_EVENTS.TICK, {
-      multiplier: toMultiplier(multiplierX100),
+    GameEvents.publish(this.events, GAME_TOPIC, GAME_EVENTS.TICK, {
+      multiplier: GameMath.toMultiplier(multiplierX100),
       elapsed,
     });
   }
@@ -366,10 +359,10 @@ export class CrashEngineService implements OnInit, OnShutdown {
     }
   }
 
+  /** Stops the clock. Called from four places, so it has to be idempotent. */
   #clear(): void {
-    if (this.#tick !== null) {
-      clearInterval(this.#tick);
-      this.#tick = null;
-    }
+    if (!this.#ticking) return;
+    this.schedules.remove(CrashEngineService.TICK);
+    this.#ticking = false;
   }
 }

@@ -13,13 +13,13 @@ It is a **Bun workspace monorepo** running on [dunx](https://github.com/petarzar
 ```
 firecracker/
 ├── apps/
-│   ├── be/          firecracker-be — the dunx API, the worker, the socket gateway
+│   ├── be/          firecracker-be — the dunx API, the queue consumer, the socket gateway
 │   └── fe/          firecracker-fe — the React + Vite client
 ├── libs/
 │   └── contracts/   @firecracker/contracts — the wire both apps agree on
 ├── bunfig.toml      the @dunx/transform preload (load-bearing, see below)
 ├── docker-compose.yml       development: Redis and nothing else
-└── docker-compose.prod.yml  deployed: cloudflared + Redis + API + worker
+└── docker-compose.prod.yml  deployed: cloudflared + Redis + API
 ```
 
 ### Runtime & tooling
@@ -84,9 +84,9 @@ mine() { return this.things.forUser(this.caller.require().id); }
 
 ```
 src/
-├── main.ts                    web process: HttpFactory, prefix, CORS, static client
-├── worker.ts                  worker process: WorkerFactory, no HTTP server
-├── app.module.ts              AppModule + WorkerModule, both over one foundation()
+├── main.ts                    main(): HttpFactory, prefix, CORS, shutdown hooks
+├── jobs.processor.ts          the file bullmq forks for a `background` queue
+├── app.module.ts              AppModule + JobsModule, both over one Foundation
 ├── http.options.ts            global middleware order, error mapper, request logging
 ├── config/                    zod env validation → one typed tree
 ├── core/                      error mapper, pagination schema, throttle decorator
@@ -94,7 +94,7 @@ src/
 ├── users/                     users CRUD
 ├── client/                    serves apps/fe/dist in production (SpaFallback)
 ├── game/                      ← the application
-│   ├── game.module.ts         forRoot({ engine, controllers })
+│   ├── game.module.ts         @Module — no options left to vary
 │   ├── game.gateway.ts        @Gateway('/ws') — the only socket
 │   ├── game.controller.ts     /api/game/*
 │   ├── wallet.controller.ts   /api/wallet/*
@@ -102,31 +102,43 @@ src/
 │   ├── game.events.ts         queue, job, topic and event names + payloads
 │   ├── game.messages.ts       inbound socket payload parsers
 │   ├── engine/                CrashEngineService — the clock
-│   ├── handlers/game.jobs.ts  the round lifecycle, as four jobs
+│   ├── handlers/game.jobs.ts  the round lifecycle, as three jobs
 │   ├── bots/                  cosmetic lobby activity (opt-in)
 │   ├── schema/                drizzle tables
 │   ├── repos/                 drizzle queries
-│   ├── services/              round, bet, wallet, auto-cashout, state, player-chat
+│   ├── services/              round, bet, wallet, auto-cashout, state, player-chat,
+│   │                          watchdog (the @Interval stuck-round sweep)
 │   └── dto/                   zod schemas + route schemas
 ├── notifications/             email, the events publisher, chat topics
-└── infra/                     db, redis, queue, health
+└── infra/                     db, redis, queue, schedule, health
 ```
 
 ---
 
 ## The game, and the rules that are not negotiable
 
-### Two processes, one engine
+### One process, and child processes for the slow queues
 
-**`bun dev` runs both.** It used to start the web process alone, which gives an app that boots, serves and authenticates - and then sits on `Starting...` forever, because the round it scheduled is a job with nobody to consume it. `apps/be/scripts/dev.ts` runs the pair and takes both down if either dies. `bun run dev:web` is the web process alone.
+There is no `src/worker.ts` and no `WORKER_MODE`. One process serves HTTP, holds the clock, owns the sockets and consumes the `game` queue, through `QueueModule.forRoot({ consume: true })` — the container starts the workers at `onInit` and stops them at `onShutdown`, which runs before the connections the handlers use. An entrypoint cannot express that ordering, which is why it is not in one.
 
-They share only `app.module.ts`.
+Isolation is **per handler**. `notifications` and `media` carry `@JobHandler({ background: true })`, so BullMQ forks `src/jobs.processor.ts` for them — a WebP encode is CPU-bound and an SMTP round trip is slow, and neither belongs on the loop ticking a multiplier every 100 ms. The child boots `JobsModule`, which is deliberately _not_ `AppModule`: no `GameModule` (a child building `CrashEngineService` would be a second clock), no controllers, and `publisher: 'relay'` because it has no server to publish a socket frame through.
 
-- The **web process** owns the clock (`CrashEngineService`), the sockets and the HTTP routes.
-- The **worker** owns every database transition, as BullMQ jobs.
-- They talk over one Redis pub/sub channel (`EngineCommand`).
+`isolation: 'process'`, never `'thread'`. A fork is a fresh Bun process that reads `bunfig.toml`, so `@dunx/transform/preload` runs; a thread enters through BullMQ's prebuilt `main-worker.js` where the preload never matches a `.ts` file, and the first provider with a constructor parameter fails at boot.
 
-**`GameModule.forRoot({ engine: false })` in the worker is load-bearing.** Two processes ticking would each enqueue their own crash job and broadcast their own multiplier. For the same reason **the `app` service cannot be scaled past one replica** as it stands.
+**The `app` service still cannot be scaled past one replica.** Two engines would each broadcast their own multiplier and enqueue their own crash, and the schedules are in-process and single-node for the same reason.
+
+`EngineCommand` on a Redis channel is still how the clock is told what a round became. It is a loopback publish now, kept because it is also the recovery path.
+
+### Timers are schedules, not `setInterval`
+
+`ScheduleModule` from `@dunx/infra/schedule`, wrapped as `SchedulesModule` so it is `global: true` — `ScheduleRegistry` has two injectors and a second `forRootAsync()` call would mean two registries and two copies of every schedule.
+
+- **`@Interval` / `@Cron` where the cadence is a constant.** `GameBotsService.watch` (250 ms) and `InvitesService.expireStale` (`@hourly`, which replaced a write on the `list()` read path).
+- **`ScheduleRegistry.add()` where it comes from config.** The per-round tick (`GAME_TICK_INTERVAL_MS`) and the stuck-round sweep (`GAME_CLEANUP_INTERVAL_MS`). A decorator argument is evaluated at class-definition time, before the container exists, so a decorator would mean hard-coding the number.
+
+The sweep was a `game.round.cleanup` job that rescheduled itself, plus a `#bootstrapCleanup()` in the engine to start it — and the two dodged a BullMQ trap in opposite directions. The bootstrap needed a fixed `jobId` or ten restarts meant ten loops; the reschedule needed _no_ `jobId`, because a just-completed job with that id is still in the completed set and deduplicates the next one. **Do not put it back on the queue.**
+
+Not armed in a sandbox child: BullMQ forks one per burst, so an armed schedule there would fire in two or three processes at once, on a cadence set by how busy the queues are.
 
 ### Multipliers are integer hundredths
 
@@ -172,6 +184,18 @@ is therefore **optional** — branch on `isAuthenticated`, never on `token`.
 ### Bots are cosmetic and must stay that way
 
 `GameBotsService` has no repository and no `GameBetService`, by design. A bot that placed real bets would be contributing entropy to the crash point through the client-seed pool — the house influencing its own outcome. Keep them outside the fairness boundary.
+
+---
+
+## Health, and the drain
+
+`HealthModule` from `@dunx/http` serves `/api/health/live` and `/api/health/ready`. It replaced a hand-rolled Terminus envelope; the three-state `up`/`degraded`/`down` bucket is `critical: false` on an indicator now.
+
+**Only the database is critical.** Redis, the broker and the disk report `down` without gating readiness — an absent Redis degrades a route, never the process, and no other replica has a Redis this one does not. `OptionalRedisIndicator` exists solely to flip `RedisIndicator`'s default, so do not drop it back to the base class.
+
+`Readiness` implements `OnBeforeShutdown` (`OnDrain` in 2.1.0, renamed in 2.1.1 because `@dunx/http` already had an unrelated `@OnDrain()` websocket decorator). That phase runs while the server is still accepting, which is the whole point: an `onShutdown` hook runs after `server.stop()`, so a probe answering from there answers on a closed socket. `HEALTH_DRAIN_DELAY_MS` holds readiness failing before the port closes. Liveness deliberately keeps passing while draining — a pod shutting down does not need killing.
+
+The probes are `@ApiHidden()` upstream, so they are absent from the OpenAPI document by design; `openapi.spec.ts` asserts the omission. `/api/service/config` is what survived of the old controller, because no framework can know a commit sha.
 
 ---
 
@@ -233,6 +257,8 @@ own.
 - `*.spec.ts` — integration: the real graph, a real `Bun.serve` on port 0, in-memory SQLite
 - `game.spec.ts` drives rounds through the repository rather than the engine. **Do not put the clock in a test.**
 
+Every spec sets `QUEUE_CONSUME: 'false'` except `queues.spec.ts`, and that is load-bearing: a spec builds the whole graph including the engine, which enqueues the first round at `onInit`, so a consuming test server would start the clock underneath assertions that drive rounds by hand. `queues.spec.ts` turns it on because consuming — and the fork — is its subject, and gives itself its own `QUEUE_PREFIX` so it cannot eat another run's jobs.
+
 A bug fix comes with the test that would have caught it.
 
 ---
@@ -241,9 +267,8 @@ A bug fix comes with the test that would have caught it.
 
 | Command                       | Does                        |
 | ----------------------------- | --------------------------- |
-| `bun dev`                     | both apps, and the worker   |
+| `bun dev`                     | both apps                   |
 | `bun run dev:be` / `dev:fe`   | one of them                 |
-| `bun run worker`              | the queue consumer          |
 | `bun run test`                | every test in the workspace |
 | `bun run lint` / `format`     | oxlint / oxfmt              |
 | `bun run typecheck`           | every workspace             |

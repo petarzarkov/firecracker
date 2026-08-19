@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import { ConfigValidationError } from './config-validation.error.js';
-import { validateConfig } from './env.validation.js';
+import { EnvConfig } from './env.validation.js';
 
 const base = { API_PORT: '3001' };
 
 describe('validateConfig', () => {
   test('shapes the flat environment into the nested config tree', () => {
-    const config = validateConfig({ ...base, LOG_LEVEL: 'warn' });
+    const config = EnvConfig.validate({ ...base, LOG_LEVEL: 'warn' });
 
     expect(config.app.port).toBe(3001);
     expect(config.app.prefix).toBe('api');
@@ -16,13 +16,13 @@ describe('validateConfig', () => {
   });
 
   test('API_PORT has no default, so an empty environment fails', () => {
-    expect(() => validateConfig({})).toThrow(ConfigValidationError);
-    expect(() => validateConfig({})).toThrow(/API_PORT/);
+    expect(() => EnvConfig.validate({})).toThrow(ConfigValidationError);
+    expect(() => EnvConfig.validate({})).toThrow(/API_PORT/);
   });
 
   test('the message names every offending path', () => {
     try {
-      validateConfig({ API_PORT: '70000', LOG_LEVEL: 'shouty' });
+      EnvConfig.validate({ API_PORT: '70000', LOG_LEVEL: 'shouty' });
       throw new Error('expected a throw');
     } catch (error) {
       expect(error).toBeInstanceOf(ConfigValidationError);
@@ -35,10 +35,11 @@ describe('validateConfig', () => {
 
   test('CSV vars split, and fall back to their defaults when blank', () => {
     expect(
-      validateConfig({ ...base, LOG_MASK_FIELDS: 'a, b ,c' }).log.maskFields,
+      EnvConfig.validate({ ...base, LOG_MASK_FIELDS: 'a, b ,c' }).log
+        .maskFields,
     ).toEqual(['a', 'b', 'c']);
     expect(
-      validateConfig({ ...base, LOG_MASK_FIELDS: '' }).log.maskFields,
+      EnvConfig.validate({ ...base, LOG_MASK_FIELDS: '' }).log.maskFields,
     ).toContain('password');
   });
 
@@ -50,7 +51,7 @@ describe('validateConfig', () => {
    */
   test('the cleanup threshold cannot fall inside a normal round', () => {
     expect(() =>
-      validateConfig({
+      EnvConfig.validate({
         ...base,
         GAME_WAITING_PHASE_MS: '10000',
         GAME_COOLDOWN_MS: '5000',
@@ -61,7 +62,7 @@ describe('validateConfig', () => {
 
   test('a betting window shorter than a tick is refused', () => {
     expect(() =>
-      validateConfig({
+      EnvConfig.validate({
         ...base,
         GAME_TICK_INTERVAL_MS: '5000',
         GAME_WAITING_PHASE_MS: '100',
@@ -70,7 +71,7 @@ describe('validateConfig', () => {
   });
 
   test('the game defaults are the ones the game shipped with', () => {
-    const { game } = validateConfig(base);
+    const { game } = EnvConfig.validate(base);
     expect(game.waitingPhaseMs).toBe(10_000);
     expect(game.tickIntervalMs).toBe(100);
     expect(game.multiplierDivisor).toBe(10_000);
@@ -82,29 +83,34 @@ describe('validateConfig', () => {
   test('APP_ENV=prod is the only thing that sets isProd', () => {
     const secret = 'x'.repeat(40);
     expect(
-      validateConfig({ ...base, APP_ENV: 'prod', BETTER_AUTH_SECRET: secret })
-        .isProd,
+      EnvConfig.validate({
+        ...base,
+        APP_ENV: 'prod',
+        BETTER_AUTH_SECRET: secret,
+      }).isProd,
     ).toBe(true);
-    expect(validateConfig({ ...base, APP_ENV: 'stage' }).isProd).toBe(false);
+    expect(EnvConfig.validate({ ...base, APP_ENV: 'stage' }).isProd).toBe(
+      false,
+    );
   });
 
   test('production refuses the development auth secret', () => {
-    expect(() => validateConfig({ ...base, APP_ENV: 'prod' })).toThrow(
+    expect(() => EnvConfig.validate({ ...base, APP_ENV: 'prod' })).toThrow(
       /BETTER_AUTH_SECRET is required when APP_ENV=prod/,
     );
     // Everywhere else it falls back, so a clean checkout boots with no env file.
-    expect(validateConfig(base).auth.usingDevSecret).toBe(true);
+    expect(EnvConfig.validate(base).auth.usingDevSecret).toBe(true);
   });
 
   test('redis-backed sessions must name a redis', () => {
     expect(() =>
-      validateConfig({ ...base, AUTH_SESSION_STORE: 'redis' }),
+      EnvConfig.validate({ ...base, AUTH_SESSION_STORE: 'redis' }),
     ).toThrow(/REDIS_URL is required when AUTH_SESSION_STORE=redis/);
   });
 
   test('a bot ceiling below its floor is refused', () => {
     expect(() =>
-      validateConfig({
+      EnvConfig.validate({
         ...base,
         GAME_BOTS_MIN_PER_ROUND: '5',
         GAME_BOTS_MAX_PER_ROUND: '2',
@@ -113,7 +119,7 @@ describe('validateConfig', () => {
   });
 
   test('an unknown timezone is rejected by name', () => {
-    expect(() => validateConfig({ ...base, TZ: 'Mars/Olympus' })).toThrow(
+    expect(() => EnvConfig.validate({ ...base, TZ: 'Mars/Olympus' })).toThrow(
       /Invalid IANA timezone/,
     );
   });

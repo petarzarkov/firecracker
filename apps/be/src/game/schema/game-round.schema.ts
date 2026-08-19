@@ -1,11 +1,6 @@
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { GameRoundStatus, ROUND_STATUSES } from '@firecracker/contracts';
-import {
-  createdAt,
-  timestampMs,
-  updatedAt,
-  uuidPk,
-} from '../../infra/db/columns.js';
+import { Columns } from '../../infra/db/columns.js';
 
 /** The status values, from `@firecracker/contracts`. See the bet schema. */
 export { GameRoundStatus, ROUND_STATUSES } from '@firecracker/contracts';
@@ -31,7 +26,7 @@ export { GameRoundStatus, ROUND_STATUSES } from '@firecracker/contracts';
 export const gameRounds = sqliteTable(
   'game_round',
   {
-    id: uuidPk(),
+    id: Columns.uuidPk(),
 
     /**
      * Server seed the crash point is derived from. Never sent to a client until
@@ -73,12 +68,12 @@ export const gameRounds = sqliteTable(
       .default(GameRoundStatus.WAITING),
 
     /** When the betting window closes and the rocket launches. */
-    waitingEndsAt: timestampMs('waiting_ends_at'),
-    startedAt: timestampMs('started_at'),
-    crashedAt: timestampMs('crashed_at'),
+    waitingEndsAt: Columns.timestampMs('waiting_ends_at'),
+    startedAt: Columns.timestampMs('started_at'),
+    crashedAt: Columns.timestampMs('crashed_at'),
 
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
+    createdAt: Columns.createdAt(),
+    updatedAt: Columns.updatedAt(),
   },
   (table) => [
     // `findCurrentRound` filters on status and takes the newest, and the recent

@@ -1,9 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import type { HealthReport } from '@dunx/http';
 import { createTestServer, type TestServer } from '@dunx/testing';
 import { AppModule } from '../app.module.js';
-import { validateConfig } from '../config/env.validation.js';
-import { httpOptions } from '../http.options.js';
-import { bearer, signIn, signUp } from '../test-support/session.js';
+import { EnvConfig } from '../config/env.validation.js';
+import { AppHttpOptions } from '../http.options.js';
+import { TestSession } from '../test-support/session.js';
 import type { Page } from '@dunx/infra/pagination';
 import type { SanitizedUser } from './dto/user.dto.js';
 
@@ -20,11 +21,14 @@ let server: TestServer;
 let adminToken: string;
 let admin: SanitizedUser;
 
-const asAdmin = (): Record<string, string> => bearer(adminToken);
+const asAdmin = (): Record<string, string> => TestSession.bearer(adminToken);
 
 const source = {
   API_PORT: '0',
   SQLITE_DB_PATH: ':memory:',
+  // Off: this graph includes the engine, which enqueues the first round at `onInit`,
+  // so a consuming test server would start the clock under the assertions.
+  QUEUE_CONSUME: 'false',
   // The throttler is exercised in its own suite; a shared window here would make
   // every other assertion depend on how many ran before it.
   THROTTLE_LIMIT: '10000',
@@ -51,13 +55,17 @@ beforeAll(async () => {
     // The harness inherits nothing from src/main.ts, so the production options
     // have to be handed over explicitly or the suite tests a server with no
     // guards and no error mapper.
-    ...httpOptions(validateConfig(source)),
+    ...AppHttpOptions.for(EnvConfig.validate(source)),
     requestLogging: false,
   });
 
   // `AuthAdminSeeder` created this at `onInit`, through better-auth's own sign-up,
   // so it has a credential and can actually sign in.
-  adminToken = await signIn(server, 'admin@local.dev', 'admin-password');
+  adminToken = await TestSession.signIn(
+    server,
+    'admin@local.dev',
+    'admin-password',
+  );
   admin = (await server
     .json<SanitizedUser>('api/profile', {
       headers: asAdmin(),
@@ -69,32 +77,43 @@ afterAll(async () => {
   await server.close();
 });
 
-describe('GET /api/service/*', () => {
+describe('the health probes', () => {
   test('liveness needs no credential', async () => {
-    const { status, body } = await server.json<{ uptimeSeconds: number }>(
-      'api/service/up',
-    );
+    const { status, body } = await server.json<HealthReport>('api/health/live');
     expect(status).toBe(200);
-    expect(body.uptimeSeconds).toBeGreaterThan(0);
+    expect(body.status).toBe('up');
+    expect(body.draining).toBe(false);
+    expect(body.uptimeMs).toBeGreaterThanOrEqual(0);
   });
 
-  test('readiness reports the database up and never fails on a missing service', async () => {
-    const { status, body } = await server.json<{
-      status: string;
-      info: Record<string, { status: string }>;
-      degraded: Record<string, { status: string }>;
-    }>('api/service/health');
+  test('readiness reports the database up', async () => {
+    const { status, body } =
+      await server.json<HealthReport>('api/health/ready');
 
     expect(status).toBe(200);
-    expect(body.status).toBe('ok');
-    expect(body.info['db']?.status).toBe('up');
-    // Redis may or may not be running. Either way the probe passes: a degraded
-    // area is reported, not failed.
-    expect(
-      body.info['cache']?.status ?? body.degraded['cache']?.status,
-    ).toBeDefined();
+    expect(body.status).toBe('up');
+
+    const database = body.checks.find((check) => check.name === 'database');
+    expect(database?.state).toBe('up');
+    expect(database?.critical).toBe(true);
   });
 
+  // Redis may or may not be running here, and the probe passes either way. That is
+  // what `critical: false` buys, and it is the property worth pinning.
+  test('an absent optional service is reported, not failed', async () => {
+    const { status, body } =
+      await server.json<HealthReport>('api/health/ready');
+
+    expect(status).toBe(200);
+    for (const name of ['redis', 'queue']) {
+      const check = body.checks.find((entry) => entry.name === name);
+      expect(check).toBeDefined();
+      expect(check?.critical).toBe(false);
+    }
+  });
+});
+
+describe('GET /api/service/config', () => {
   test('config reports the build', async () => {
     const { status, body } = await server.json<{ name: string; env: string }>(
       'api/service/config',
@@ -115,7 +134,7 @@ describe('SessionGuard', () => {
 
   test('a forged bearer token is a 401', async () => {
     const { status } = await server.json('api/users', {
-      headers: bearer('not-a-real-session-token'),
+      headers: TestSession.bearer('not-a-real-session-token'),
     });
     expect(status).toBe(401);
   });
@@ -139,13 +158,17 @@ describe('SessionGuard', () => {
   });
 
   test('a user role cannot reach an admin-only route', async () => {
-    const plain = await signUp(server, 'plain@example.com', 'a-password-123');
+    const plain = await TestSession.signUp(
+      server,
+      'plain@example.com',
+      'a-password-123',
+    );
 
     const { status, body } = await server.json<{ message: string }>(
       'api/users',
       {
         method: 'POST',
-        headers: bearer(plain.token),
+        headers: TestSession.bearer(plain.token),
         json: {
           email: 'other@example.com',
           name: 'Other',
@@ -176,7 +199,7 @@ describe('users CRUD', () => {
     expect(created.body.role).toBe('user');
 
     // The credential is real: the created user can sign in.
-    const token = await signIn(
+    const token = await TestSession.signIn(
       server,
       'grace@example.com',
       'a-strong-password',
@@ -342,7 +365,7 @@ describe('routing', () => {
   });
 
   test('an unmatched method on a matched path is a 404, not a 405', async () => {
-    const response = await server.request('api/service/up', {
+    const response = await server.request('api/health/live', {
       method: 'PUT',
       headers: asAdmin(),
     });

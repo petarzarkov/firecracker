@@ -1,5 +1,5 @@
 import { index, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-import { createdAt, uuidPk } from '../../infra/db/columns.js';
+import { Columns } from '../../infra/db/columns.js';
 
 export const AuditAction = Object.freeze({
   INSERT: 'INSERT',
@@ -11,7 +11,7 @@ export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction];
 export const auditLog = sqliteTable(
   'audit_log',
   {
-    id: uuidPk(),
+    id: Columns.uuidPk(),
     actorId: text('actor_id'),
     action: text('action', {
       enum: [AuditAction.INSERT, AuditAction.UPDATE, AuditAction.DELETE],
@@ -26,7 +26,7 @@ export const auditLog = sqliteTable(
       string,
       unknown
     > | null>(),
-    createdAt: createdAt(),
+    createdAt: Columns.createdAt(),
   },
   (table) => [
     index('audit_actor_id_index').on(table.actorId),

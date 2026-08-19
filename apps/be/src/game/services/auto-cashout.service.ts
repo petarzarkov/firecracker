@@ -1,15 +1,13 @@
 import { Logger } from '@dunx/core';
 import { RedisConnection } from '@dunx/infra/redis';
 import { EventsPublisher } from '../../notifications/events/events.publisher.js';
-import { userTopic } from '../../notifications/events/events.js';
-import { GAME_EVENTS, GAME_TOPIC, publishGame } from '../game.events.js';
-import { toMultiplier } from '../game.math.js';
+import { Topics } from '../../notifications/events/events.js';
+import { GAME_EVENTS, GAME_TOPIC, GameEvents } from '../game.events.js';
+import { GameMath } from '../game.math.js';
 import { GameBetService } from './game-bet.service.js';
 import { WalletService } from './wallet.service.js';
 
 /** Where a round's pending auto-cashouts live while it runs. */
-const key = (roundId: string): string => `game:auto-cashout:${roundId}`;
-
 /** How long the hash outlives the round it belongs to. */
 const TTL_SECONDS = 3600;
 
@@ -46,7 +44,7 @@ export class AutoCashOutService {
     autoCashOutAt: number,
     isDemo: boolean,
   ): Promise<void> {
-    const hash = key(roundId);
+    const hash = this.#key(roundId);
     await this.redis.hset(hash, {
       [userId]: JSON.stringify({
         username,
@@ -65,7 +63,7 @@ export class AutoCashOutService {
    * tick interval is our granularity and not theirs.
    */
   async sweep(roundId: string, multiplierX100: number): Promise<void> {
-    const hash = key(roundId);
+    const hash = this.#key(roundId);
     const pending = await this.redis.hgetall(hash).catch(() => ({}));
 
     for (const [userId, raw] of Object.entries(pending)) {
@@ -90,25 +88,30 @@ export class AutoCashOutService {
         const bet = this.bets.cashOut(userId, roundId, at, entry.isDemo);
         const wallet = this.wallets.getWallet(userId, entry.isDemo);
 
-        publishGame(
+        GameEvents.publish(
           this.events,
-          userTopic(userId),
+          Topics.user(userId),
           GAME_EVENTS.WALLET_UPDATED,
           {
             balanceCents: wallet.balanceCents,
             isDemo: entry.isDemo,
           },
         );
-        publishGame(this.events, GAME_TOPIC, GAME_EVENTS.BET_CASHED_OUT, {
-          // The auto-cashout's whole point is that the player is not watching.
-          // Without their id the client cannot tell the frame is about them, and
-          // the bet panel keeps offering a cash-out that already happened.
-          userId,
-          username: entry.username,
-          multiplier: toMultiplier(at),
-          payoutCents: bet.payoutCents ?? 0,
-          isDemo: entry.isDemo,
-        });
+        GameEvents.publish(
+          this.events,
+          GAME_TOPIC,
+          GAME_EVENTS.BET_CASHED_OUT,
+          {
+            // The auto-cashout's whole point is that the player is not watching.
+            // Without their id the client cannot tell the frame is about them, and
+            // the bet panel keeps offering a cash-out that already happened.
+            userId,
+            username: entry.username,
+            multiplier: GameMath.toMultiplier(at),
+            payoutCents: bet.payoutCents ?? 0,
+            isDemo: entry.isDemo,
+          },
+        );
       } catch (error) {
         // Already cashed out by hand, or the round ended underneath us. Neither
         // is worth an error - the bet is settled either way.
@@ -119,5 +122,9 @@ export class AutoCashOutService {
         });
       }
     }
+  }
+  /** One Redis hash per round, so the whole set is dropped in a single `del`. */
+  #key(roundId: string): string {
+    return `game:auto-cashout:${roundId}`;
   }
 }

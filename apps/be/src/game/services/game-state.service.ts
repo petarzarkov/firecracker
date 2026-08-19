@@ -1,6 +1,6 @@
 import { CrashEngineService } from '../engine/crash-engine.service.js';
 import type { GameRoundStatePayload } from '../game.events.js';
-import { toMultiplier } from '../game.math.js';
+import { GameMath } from '../game.math.js';
 import { GameRoundStatus } from '../schema/game-round.schema.js';
 import { GameBetService } from './game-bet.service.js';
 import { GameRoundService } from './game-round.service.js';
@@ -35,7 +35,7 @@ export class GameStateService {
             isDemo: bet.isDemo,
             ...(bet.cashedOutAtX100 === null
               ? {}
-              : { cashedOutAt: toMultiplier(bet.cashedOutAtX100) }),
+              : { cashedOutAt: GameMath.toMultiplier(bet.cashedOutAtX100) }),
             ...(bet.payoutCents === null
               ? {}
               : { payoutCents: bet.payoutCents }),
@@ -54,13 +54,18 @@ export class GameStateService {
       recentCrashes: recent.flatMap((r) =>
         r.crashPointX100 === null
           ? []
-          : [{ roundId: r.id, crashPoint: toMultiplier(r.crashPointX100) }],
+          : [
+              {
+                roundId: r.id,
+                crashPoint: GameMath.toMultiplier(r.crashPointX100),
+              },
+            ],
       ),
       activeBets,
       ...(multiplierX100 === null
         ? {}
         : {
-            multiplier: toMultiplier(multiplierX100),
+            multiplier: GameMath.toMultiplier(multiplierX100),
             elapsed:
               round?.startedAt == null
                 ? 0

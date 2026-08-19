@@ -19,7 +19,6 @@
     "dev": "bun run --filter '*' dev",
     "dev:be": "bun run --filter 'firecracker-be' dev",
     "dev:fe": "bun run --filter 'firecracker-fe' dev",
-    "worker": "bun run --filter 'firecracker-be' worker",
     "build": "bun run --filter '*' build",
     "start": "bun run --filter 'firecracker-be' start",
     "test": "bun run --filter '*' test",

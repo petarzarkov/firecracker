@@ -1,27 +1,19 @@
 import { describe, expect, test } from 'bun:test';
 import { Rng } from '@arkv/rng';
-import {
-  crashPointX100,
-  DEFAULT_RNG_ALGORITHM,
-  fairnessSeed,
-  fromMultiplier,
-  multiplierAtX100,
-  payoutCents,
-  toMultiplier,
-} from './game.math.js';
+import { GameMath } from './game.math.js';
 
 describe('multipliers are integer hundredths', () => {
   test('the two conversions round-trip', () => {
-    expect(toMultiplier(107)).toBe(1.07);
-    expect(fromMultiplier(1.07)).toBe(107);
-    expect(fromMultiplier(toMultiplier(12_345))).toBe(12_345);
+    expect(GameMath.toMultiplier(107)).toBe(1.07);
+    expect(GameMath.fromMultiplier(1.07)).toBe(107);
+    expect(GameMath.fromMultiplier(GameMath.toMultiplier(12_345))).toBe(12_345);
   });
 
   test('the curve starts at 1.00x and only climbs', () => {
-    expect(multiplierAtX100(0, 10_000)).toBe(100);
+    expect(GameMath.multiplierAtX100(0, 10_000)).toBe(100);
     let previous = 0;
     for (let elapsed = 0; elapsed <= 20_000; elapsed += 250) {
-      const now = multiplierAtX100(elapsed, 10_000);
+      const now = GameMath.multiplierAtX100(elapsed, 10_000);
       expect(now).toBeGreaterThanOrEqual(previous);
       previous = now;
     }
@@ -30,27 +22,27 @@ describe('multipliers are integer hundredths', () => {
   test('it truncates rather than rounds, so a shown multiplier was reached', () => {
     // e^(3000/10000) = 1.34985…, which must read 1.34 and never 1.35: a player is
     // paid the number on their screen, and 1.35 was never true.
-    expect(multiplierAtX100(3000, 10_000)).toBe(134);
+    expect(GameMath.multiplierAtX100(3000, 10_000)).toBe(134);
   });
 });
 
 describe('payouts', () => {
   test('a 100-cent bet at 2.00x pays 200', () => {
-    expect(payoutCents(100, 200)).toBe(200);
+    expect(GameMath.payoutCents(100, 200)).toBe(200);
   });
 
   test('integer arithmetic beats the float multiply it replaced', () => {
     // The old code was `Math.floor(bet * multiplier)` against a float. At the
     // hundredths that matter, that lost a cent; this cannot.
-    expect(payoutCents(100, 207)).toBe(207);
-    expect(payoutCents(333, 300)).toBe(999);
-    expect(payoutCents(1, 199)).toBe(1);
+    expect(GameMath.payoutCents(100, 207)).toBe(207);
+    expect(GameMath.payoutCents(333, 300)).toBe(999);
+    expect(GameMath.payoutCents(1, 199)).toBe(1);
   });
 
   test('a payout is never more than the arithmetic allows', () => {
     for (const stake of [1, 7, 100, 12_345]) {
       for (const x100 of [100, 101, 250, 999, 10_000]) {
-        const paid = payoutCents(stake, x100);
+        const paid = GameMath.payoutCents(stake, x100);
         expect(paid).toBeLessThanOrEqual((stake * x100) / 100);
         expect(Number.isInteger(paid)).toBe(true);
       }
@@ -62,20 +54,20 @@ describe('the crash point is provably fair', () => {
   const seed = 'a'.repeat(64);
 
   test('the same inputs always give the same answer', () => {
-    const once = crashPointX100(seed, 'client', 1);
-    const twice = crashPointX100(seed, 'client', 1);
+    const once = GameMath.crashPointX100(seed, 'client', 1);
+    const twice = GameMath.crashPointX100(seed, 'client', 1);
     expect(once).toBe(twice);
   });
 
   test('the nonce changes the outcome, so a seed pair cannot repeat', () => {
-    const first = crashPointX100(seed, 'client', 1);
-    const second = crashPointX100(seed, 'client', 2);
+    const first = GameMath.crashPointX100(seed, 'client', 1);
+    const second = GameMath.crashPointX100(seed, 'client', 2);
     expect(first).not.toBe(second);
   });
 
   test('the client seed changes the outcome, which is the players’ influence', () => {
-    expect(crashPointX100(seed, 'alice', 1)).not.toBe(
-      crashPointX100(seed, 'bob', 1),
+    expect(GameMath.crashPointX100(seed, 'alice', 1)).not.toBe(
+      GameMath.crashPointX100(seed, 'bob', 1),
     );
   });
 
@@ -88,20 +80,22 @@ describe('the crash point is provably fair', () => {
     const clientSeed = 'combined-client-seed';
     const nonce = 42;
 
-    const rngSeed = fairnessSeed(seed, clientSeed, nonce);
+    const rngSeed = GameMath.fairnessSeed(seed, clientSeed, nonce);
     expect(rngSeed).toBe(`${seed}:${clientSeed}:${nonce}`);
 
-    const rng = new Rng(rngSeed, DEFAULT_RNG_ALGORITHM);
+    const rng = new Rng(rngSeed, GameMath.DEFAULT_RNG_ALGORITHM);
     const u = rng.float();
     rng.free();
     const byHand = u < 0.03 ? 100 : Math.max(100, Math.floor(99 / (1 - u)));
 
-    expect(crashPointX100(seed, clientSeed, nonce)).toBe(byHand);
+    expect(GameMath.crashPointX100(seed, clientSeed, nonce)).toBe(byHand);
   });
 
   test('it never returns less than 1.00x', () => {
     for (let nonce = 0; nonce < 2000; nonce += 1) {
-      expect(crashPointX100(seed, 'c', nonce)).toBeGreaterThanOrEqual(100);
+      expect(GameMath.crashPointX100(seed, 'c', nonce)).toBeGreaterThanOrEqual(
+        100,
+      );
     }
   });
 
@@ -120,7 +114,7 @@ describe('the crash point is provably fair', () => {
     let tenPlus = 0;
 
     for (let i = 0; i < N; i += 1) {
-      const x100 = crashPointX100(`server-${i}`, `client-${i}`, i);
+      const x100 = GameMath.crashPointX100(`server-${i}`, `client-${i}`, i);
       if (x100 === 100) instant += 1;
       if (x100 < 200) underTwo += 1;
       if (x100 >= 1000) tenPlus += 1;

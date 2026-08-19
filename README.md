@@ -22,15 +22,13 @@ docker compose up -d          # Redis. Without it, rounds never advance.
 cp .env.example .env                  # compose settings
 cp apps/be/.env.example apps/be/.env  # the app's own settings
 
-bun dev              # API + worker + client
+bun dev              # API + client
 ```
 
 Or one at a time:
 
 ```bash
-bun run dev:be       # API and worker together
-bun run dev:web      # the API alone (rounds will not advance)
-bun run worker       # the worker alone
+bun run dev:be       # the API, which consumes its own queues
 bun run dev:fe       # the client on :5173
 ```
 
@@ -38,7 +36,7 @@ bun run dev:fe       # the client on :5173
 | ------ | ------------------------------------------ |
 | API    | http://localhost:3999/api                  |
 | Docs   | http://localhost:3999/api/docs             |
-| Health | http://localhost:3999/api/service/health   |
+| Health | http://localhost:3999/api/health/ready     |
 | Queues | http://localhost:3999/api/queues _(admin)_ |
 | Socket | ws://localhost:3999/ws                     |
 
@@ -47,17 +45,19 @@ bun run dev:fe       # the client on :5173
 ## How a round works
 
 ```
-     ┌─ web process ──────────────┐        ┌─ worker ─────────────────┐
-     │  CrashEngineService        │        │  GameJobs                │
-     │  · the clock               │        │  · every DB transition   │
-     │  · ticks the multiplier    │        │  · schedule/start/crash  │
-     │  · broadcasts to sockets   │        │  · the stuck-round sweep │
-     └────────────┬───────────────┘        └────────────┬─────────────┘
-                  │       Redis pub/sub + BullMQ        │
-                  └─────────────────────────────────────┘
-                                    │
-                              one SQLite file
+     ┌─ the app process ──────────────────────────┐   ┌─ forked child ──────┐
+     │  CrashEngineService  the clock              │   │  NotificationJobs   │
+     │  GameJobs            schedule/start/crash   │   │  MediaJobs          │
+     │  GameRoundWatchdog   the stuck-round sweep  │   │  · email, Slack     │
+     │  GameGateway         one socket             │   │  · thumbnails       │
+     └───────────────────────┬─────────────────────┘   └──────────┬──────────┘
+                             │        BullMQ over Redis           │
+                             └────────────────────────────────────┘
 ```
+
+One process holds the clock, serves the sockets and consumes the `game` queue. The two
+queues that would stall a 100 ms tick — email and image resizing — are marked
+`background`, so BullMQ forks `src/jobs.processor.ts` for them.
 
 1. **Waiting** — a round is created. A server seed is drawn and its `SHA256` published as a commitment. The crash point does not exist yet. Players bet and contribute client seeds.
 2. **Running** — the window closes, the client seeds are combined, and _only then_ is the crash point drawn. The multiplier climbs `e^(elapsed/10000)`.
@@ -109,7 +109,7 @@ The distribution: **~3%** instant crash (the house edge), **~50%** below 2x, and
 ## Layout
 
 ```
-apps/be     the dunx API, the worker and the socket gateway
+apps/be     the dunx API, the queue consumer and the socket gateway
 apps/fe     the React + Vite client
 ```
 
@@ -118,7 +118,7 @@ apps/fe     the React + Vite client
 | Path                         | What                                                      |
 | ---------------------------- | --------------------------------------------------------- |
 | `game/engine/`               | the clock — ticks, crash detection, restart recovery      |
-| `game/handlers/game.jobs.ts` | the round lifecycle as four BullMQ jobs                   |
+| `game/handlers/game.jobs.ts` | the round lifecycle as three BullMQ jobs                  |
 | `game/game.gateway.ts`       | the only WebSocket: game, chat and notifications          |
 | `game/game.math.ts`          | the curve, the payout, the crash-point draw               |
 | `game/services/`             | rounds, bets, wallets, auto-cashout, the lobby read model |
@@ -141,15 +141,16 @@ apps/fe     the React + Vite client
 
 **Bots are cosmetic.** `GAME_BOTS_ENABLED=true` populates an empty lobby. `GameBotsService` has no repository, by design — a bot placing real bets would contribute entropy to the crash point, which is the house influencing its own outcome.
 
+**Timers are schedules.** `@Interval` and `@Cron` from `@dunx/infra/schedule` replaced the hand-rolled `setInterval` pairs, and the stuck-round sweep replaced a BullMQ job that rescheduled itself with a delayed copy of itself. The two cadences that come from config — the per-round tick and the sweep — arm through `ScheduleRegistry`, because a decorator argument is evaluated before the container exists.
+
 ---
 
 ## Commands
 
 | Command                                 | Does                          |
 | --------------------------------------- | ----------------------------- |
-| `bun dev`                               | API, worker and client        |
-| `bun run worker`                        | the queue consumer alone      |
-| `bun test`                              | 102 unit/integration + 26 e2e |
+| `bun dev`                               | API and client                |
+| `bun test`                              | 119 unit/integration + 38 e2e |
 | `bun run lint` · `format` · `typecheck` | oxlint · oxfmt · tsc          |
 | `bun run mig:gen` · `mig:run`           | drizzle migrations            |
 | `bun run build`                         | production build of both apps |
@@ -160,11 +161,11 @@ apps/fe     the React + Vite client
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-cloudflared, Redis, the API (which also serves the built client) and the worker. Both app containers are the same image with a different command, and both mount the same SQLite volume — WAL plus a busy timeout is what makes one file with two writers safe, which is also why they must stay on one host.
+cloudflared, Redis, and the API — which serves the built client, holds the clock and consumes its own queues. There is no separate worker container: isolation is per handler, through the forked processor.
 
-`APP_ENV=prod` makes `BETTER_AUTH_SECRET` mandatory; the image refuses to boot without one.
+`APP_ENV=prod` makes `BETTER_AUTH_SECRET` mandatory; the image refuses to boot without one. `HEALTH_DRAIN_DELAY_MS` keeps `/api/health/ready` failing for a few seconds after `SIGTERM` while the port still answers, so a balancer stops routing before the socket closes.
 
-> **The `app` service cannot be scaled past one replica.** The tick loop must run in exactly one process — see `GameModule.forRoot({ engine })`.
+> **The `app` service cannot be scaled past one replica.** The tick loop must run in exactly one process, and the schedules are single-node for the same reason — see `crash-engine.service.ts`.
 
 ## License
 

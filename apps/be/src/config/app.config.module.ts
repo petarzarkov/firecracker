@@ -4,7 +4,7 @@ import {
   type DynamicModule,
 } from '@dunx/core';
 import { AppConfigService } from './app.config.service.js';
-import { validateConfig } from './env.validation.js';
+import { EnvConfig } from './env.validation.js';
 
 export interface AppConfigModuleOptions {
   /** Overrides `Bun.env`. Tests pass a literal instead of mutating the process. */
@@ -18,7 +18,7 @@ export interface AppConfigModuleOptions {
  * environment - stays private to it, which is the boundary that matters here.
  *
  * This wrapper therefore needs no `exports` of its own. It exists to keep
- * `validateConfig` and `AppConfigService` paired in one place.
+ * `EnvConfig.validate` and `AppConfigService` paired in one place.
  */
 export class AppConfigModule {
   static forRoot(options: AppConfigModuleOptions = {}): DynamicModule {
@@ -26,7 +26,9 @@ export class AppConfigModule {
       module: AppConfigModule,
       imports: [
         ConfigModule.forRoot({
-          validate: validateConfig,
+          // The static, passed by reference. It touches no instance state, so there
+          // is nothing for `this` to lose on the way in.
+          validate: EnvConfig.validate,
           as: AppConfigService,
           ...(options.source === undefined ? {} : { source: options.source }),
         }),

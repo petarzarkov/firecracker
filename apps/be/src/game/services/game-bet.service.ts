@@ -6,7 +6,7 @@ import type { Page, PageOptions } from '@dunx/infra/pagination';
 import { AppConfigService } from '../../config/app.config.service.js';
 import * as schema from '../../infra/db/schema.js';
 import type { DbHandle } from '../../infra/db/tx.js';
-import { payoutCents } from '../game.math.js';
+import { GameMath } from '../game.math.js';
 import { GameBetStatus, type GameBetRow } from '../schema/game-bet.schema.js';
 import { WalletTransactionType } from '../schema/wallet.schema.js';
 import {
@@ -59,6 +59,27 @@ export class BetRejected extends HttpError {
  * "you already have an active bet in this round".
  */
 export class GameBetService {
+  /**
+   * The unique index refusing a second bet, as opposed to any other constraint.
+   *
+   * The index name is matched rather than just the code, because a
+   * `SQLITE_CONSTRAINT_UNIQUE` from anywhere else in this transaction is a bug and
+   * should not be reported to a player as "you already bet".
+   */
+  static #isDuplicateBet(error: unknown): boolean {
+    return (
+      error instanceof SQLiteError &&
+      error.code === 'SQLITE_CONSTRAINT_UNIQUE' &&
+      error.message.includes('game_bet_round_user_demo_index')
+    );
+  }
+
+  static #alreadyBet(isDemo: boolean): string {
+    return isDemo
+      ? 'You already have an active demo bet in this round'
+      : 'You already have an active bet in this round';
+  }
+
   constructor(
     private readonly bets: GameBetRepository,
     private readonly wallets: WalletService,
@@ -96,7 +117,8 @@ export class GameBetService {
           userId,
           isDemo,
         );
-        if (existing !== undefined) throw new BetRejected(alreadyBet(isDemo));
+        if (existing !== undefined)
+          throw new BetRejected(GameBetService.#alreadyBet(isDemo));
 
         const wallet = walletRepo.findByUserId(userId, isDemo);
         if (wallet === undefined) {
@@ -144,7 +166,8 @@ export class GameBetService {
       // The cross-process race, arriving as the unique index refusing the second
       // insert. The transaction has already rolled back, so the debit went with
       // it - there is nothing to compensate, only a message to translate.
-      if (isDuplicateBet(error)) throw new BetRejected(alreadyBet(isDemo));
+      if (GameBetService.#isDuplicateBet(error))
+        throw new BetRejected(GameBetService.#alreadyBet(isDemo));
       throw error;
     }
   }
@@ -172,7 +195,7 @@ export class GameBetService {
         throw new BetRejected('No active bet found for this round');
       }
 
-      const payout = payoutCents(bet.betAmountCents, multiplierX100);
+      const payout = GameMath.payoutCents(bet.betAmountCents, multiplierX100);
 
       const settled = betRepo.update(bet.id, {
         status: GameBetStatus.CASHED_OUT,
@@ -284,20 +307,3 @@ export class GameBetService {
     return this.bets.listByUser(userId, options);
   }
 }
-
-const alreadyBet = (isDemo: boolean): string =>
-  isDemo
-    ? 'You already have an active demo bet in this round'
-    : 'You already have an active bet in this round';
-
-/**
- * The unique index refusing a second bet, as opposed to any other constraint.
- *
- * The index name is matched rather than just the code, because a
- * `SQLITE_CONSTRAINT_UNIQUE` from anywhere else in this transaction is a bug and
- * should not be reported to a player as "you already bet".
- */
-const isDuplicateBet = (error: unknown): boolean =>
-  error instanceof SQLiteError &&
-  error.code === 'SQLITE_CONSTRAINT_UNIQUE' &&
-  error.message.includes('game_bet_round_user_demo_index');

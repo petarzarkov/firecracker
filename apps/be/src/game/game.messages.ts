@@ -1,17 +1,5 @@
 import { BetRejected } from './services/game-bet.service.js';
 
-/**
- * What a client is allowed to send, and what it becomes.
- *
- * Hand-written rather than a schema, because `@OnMessage` hands the handler a
- * decoded payload and there is no route decorator to hang one off. Three small
- * parsers beat pulling zod onto the socket path for this.
- *
- * Split out of `game.gateway.ts` because that file crossed 500 lines. The split
- * is along a real seam: nothing here touches a service, a socket or Redis, so it
- * is testable on its own.
- */
-
 export interface ParsedBet {
   readonly betAmountCents: number;
   readonly isDemo: boolean;
@@ -79,49 +67,113 @@ export interface JoinChatRequest {
   readonly targetUserId: string | undefined;
 }
 
-/**
- * `{ roomId?, targetUserId? }`, needing at least one.
- *
- * The client sends `targetUserId: ''` alongside a `roomId` when it re-joins, so
- * an empty string has to read as absent rather than as a user whose id is `""`.
- */
-export const parseJoinChat = (data: unknown): JoinChatRequest | null => {
-  if (typeof data !== 'object' || data === null) return null;
-  const { roomId, targetUserId } = data as Record<string, unknown>;
-
-  const room =
-    typeof roomId === 'string' && roomId.length > 0 ? roomId : undefined;
-  const target =
-    typeof targetUserId === 'string' && targetUserId.length > 0
-      ? targetUserId
-      : undefined;
-
-  if (room === undefined && target === undefined) return null;
-  return { roomId: room, targetUserId: target };
-};
-
 export interface PlayerMessageRequest {
   readonly roomId: string;
   readonly message: string;
 }
 
-export const parsePlayerMessage = (
-  data: unknown,
-): PlayerMessageRequest | null => {
-  if (typeof data !== 'object' || data === null) return null;
-  const { roomId, message } = data as Record<string, unknown>;
+/**
+ * What a client is allowed to send, and what it becomes.
+ *
+ * Hand-written rather than a schema: `@OnMessage` hands the handler a decoded payload
+ * and there is no route decorator to hang one off. Nothing here touches a service, a
+ * socket or Redis, so it is testable on its own.
+ *
+ * Every parser returns `null` rather than throwing - a socket handler has no error
+ * mapper behind it, so a rejected frame has to become an ack the client can read.
+ */
+export class GameMessages {
+  /** The ceiling on any free text a client sends. A message is not a file upload. */
+  static readonly #MAX_TEXT = 1000;
+  static readonly #MAX_SEED = 128;
 
-  if (typeof roomId !== 'string' || roomId.length === 0) return null;
-  if (typeof message !== 'string' || message.length === 0) return null;
-  // The same ceiling the global chat uses. A direct message is not a file upload.
-  if (message.length > 1000) return null;
+  static parseBet(data: unknown): ParsedBet | null {
+    if (typeof data !== 'object' || data === null) return null;
+    const { betAmountCents, isDemo, autoCashOutAt } = data as Record<
+      string,
+      unknown
+    >;
 
-  return { roomId, message };
-};
+    if (!Number.isInteger(betAmountCents)) return null;
+    if (autoCashOutAt !== undefined) {
+      if (typeof autoCashOutAt !== 'number' || autoCashOutAt < 1.01) {
+        return null;
+      }
+    }
 
-export const parseRoomId = (data: unknown): string | null => {
-  if (typeof data === 'string' && data.length > 0) return data;
-  if (typeof data !== 'object' || data === null) return null;
-  const { roomId } = data as Record<string, unknown>;
-  return typeof roomId === 'string' && roomId.length > 0 ? roomId : null;
-};
+    return {
+      betAmountCents: betAmountCents as number,
+      isDemo: Boolean(isDemo),
+      autoCashOutAt: autoCashOutAt as number | undefined,
+    };
+  }
+
+  /** Accepts a bare string or `{ seed }`, because both shapes were on the wire. */
+  static parseSeed(data: unknown): string | null {
+    const seed = GameMessages.#text(data, 'seed');
+    if (seed === null || seed.length > GameMessages.#MAX_SEED) return null;
+    return seed;
+  }
+
+  static parseChat(data: unknown): string | null {
+    const text = GameMessages.#text(data, 'message');
+    if (text === null || text.length > GameMessages.#MAX_TEXT) return null;
+    return text;
+  }
+
+  /**
+   * `{ roomId?, targetUserId? }`, needing at least one.
+   *
+   * The client sends `targetUserId: ''` alongside a `roomId` when it re-joins, so
+   * an empty string has to read as absent rather than as a user whose id is `""`.
+   */
+  static parseJoinChat(data: unknown): JoinChatRequest | null {
+    if (typeof data !== 'object' || data === null) return null;
+    const { roomId, targetUserId } = data as Record<string, unknown>;
+
+    const room = GameMessages.#nonEmpty(roomId);
+    const target = GameMessages.#nonEmpty(targetUserId);
+
+    if (room === undefined && target === undefined) return null;
+    return { roomId: room, targetUserId: target };
+  }
+
+  static parsePlayerMessage(data: unknown): PlayerMessageRequest | null {
+    if (typeof data !== 'object' || data === null) return null;
+    const { roomId, message } = data as Record<string, unknown>;
+
+    if (typeof roomId !== 'string' || roomId.length === 0) return null;
+    if (typeof message !== 'string' || message.length === 0) return null;
+    // The same ceiling the global chat uses.
+    if (message.length > GameMessages.#MAX_TEXT) return null;
+
+    return { roomId, message };
+  }
+
+  static parseRoomId(data: unknown): string | null {
+    return GameMessages.#text(data, 'roomId');
+  }
+
+  /**
+   * A message safe to show a player. `BetRejected` is written for them; anything
+   * else is ours and gets a generic line, because an internal error string in a
+   * `betAck` is an information leak on a gambling surface.
+   */
+  static playerFacing(error: unknown, fallback: string): string {
+    return error instanceof BetRejected ? error.message : fallback;
+  }
+
+  /** A bare string, or the named property of an object. Three parsers accept both. */
+  static #text(data: unknown, key: string): string | null {
+    if (typeof data === 'string') {
+      return data.length > 0 ? data : null;
+    }
+    if (typeof data !== 'object' || data === null) return null;
+    const value = (data as Record<string, unknown>)[key];
+    return typeof value === 'string' && value.length > 0 ? value : null;
+  }
+
+  static #nonEmpty(value: unknown): string | undefined {
+    return typeof value === 'string' && value.length > 0 ? value : undefined;
+  }
+}

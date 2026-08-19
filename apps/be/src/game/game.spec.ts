@@ -1,15 +1,16 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { createTestServer, type TestServer } from '@dunx/testing';
 import { AppModule } from '../app.module.js';
-import { validateConfig } from '../config/env.validation.js';
-import { httpOptions } from '../http.options.js';
-import { signUp } from '../test-support/session.js';
+import { EnvConfig } from '../config/env.validation.js';
+import { AppHttpOptions } from '../http.options.js';
+import { TestSession } from '../test-support/session.js';
 import { GameRoundStatus } from './schema/game-round.schema.js';
 import { GameBetStatus } from './schema/game-bet.schema.js';
 import { BetRejected, GameBetService } from './services/game-bet.service.js';
 import { GameRoundService } from './services/game-round.service.js';
 import { WalletService } from './services/wallet.service.js';
 import { GameRoundRepository } from './repos/game-round.repository.js';
+import { GameRoundWatchdog } from './services/game-watchdog.service.js';
 
 /**
  * The money path, against a real in-memory SQLite and the real container.
@@ -23,11 +24,15 @@ let bets: GameBetService;
 let rounds: GameRoundService;
 let wallets: WalletService;
 let roundRepo: GameRoundRepository;
+let watchdog: GameRoundWatchdog;
 let userId: string;
 
 const source = {
   API_PORT: '0',
   SQLITE_DB_PATH: ':memory:',
+  // Off: this graph includes the engine, which enqueues the first round at `onInit`,
+  // so a consuming test server would start the clock under the assertions.
+  QUEUE_CONSUME: 'false',
   THROTTLE_LIMIT: '10000',
   THROTTLE_PREFIX: `test-${crypto.randomUUID()}`,
   // Deterministic money: 100 cents minimum, $50.00 demo balance.
@@ -55,7 +60,7 @@ beforeAll(async () => {
   server = await createTestServer({
     modules: [AppModule.forRoot({ source, logLevel: 'fatal' })],
     prefix: 'api',
-    ...httpOptions(validateConfig(source)),
+    ...AppHttpOptions.for(EnvConfig.validate(source)),
     requestLogging: false,
   });
 
@@ -63,8 +68,13 @@ beforeAll(async () => {
   rounds = server.app.get(GameRoundService);
   wallets = server.app.get(WalletService);
   roundRepo = server.app.get(GameRoundRepository);
+  watchdog = server.app.get(GameRoundWatchdog);
 
-  const player = await signUp(server, 'player@example.com', 'a-password-123');
+  const player = await TestSession.signUp(
+    server,
+    'player@example.com',
+    'a-password-123',
+  );
   userId = player.userId;
 });
 
@@ -261,5 +271,63 @@ describe('provable fairness over HTTP', () => {
   test('a wallet is not', async () => {
     const { status } = await server.json('api/wallet');
     expect(status).toBe(401);
+  });
+});
+
+/**
+ * The watchdog, driven directly rather than through its schedule - waiting out
+ * `GAME_CLEANUP_INTERVAL_MS` would put a clock in a test.
+ *
+ * These are assertions the old `game.round.cleanup` job never had: it rescheduled
+ * itself, so testing it meant a broker and a delay. There is no "nothing stale finds
+ * nothing" case on purpose - this suite shares one database, so the precondition is
+ * false by the time it would run.
+ */
+describe('the stuck-round watchdog', () => {
+  test('a round past the threshold is failed and its stake refunded', async () => {
+    const roundId = await openRound();
+    bets.placeBet(userId, roundId, 250, true);
+    const afterBet = wallets.getWallet(userId, true).balanceCents;
+
+    // Backdated rather than waited out: the same state a round that stalled three
+    // minutes ago is in.
+    roundRepo.transition(roundId, GameRoundStatus.WAITING, {
+      status: GameRoundStatus.RUNNING,
+      clientSeed: 'test',
+      crashPointX100: 500,
+      startedAt: new Date(Date.now() - 10 * 60 * 1000),
+    });
+
+    const { failed } = await watchdog.sweep();
+
+    expect(failed).toBeGreaterThanOrEqual(1);
+    expect(roundRepo.findById(roundId)?.status).toBe(GameRoundStatus.FAILED);
+    expect(wallets.getWallet(userId, true).balanceCents).toBe(afterBet + 250);
+  });
+
+  /**
+   * Two RUNNING rounds at once should be impossible, and the sweep treats the newest
+   * as the real one. Without this the orphan holds its players' bets forever, which
+   * is the failure mode a process dying mid-transition leaves behind.
+   */
+  test('the older of two running rounds is treated as an orphan', async () => {
+    const orphanId = await openRound();
+    // A minute earlier, explicitly: `launch()` stamps `new Date()`, and two rounds in
+    // the same millisecond make the newest-wins tiebreak a coin flip. Real rounds are
+    // separated by a betting window.
+    roundRepo.transition(orphanId, GameRoundStatus.WAITING, {
+      status: GameRoundStatus.RUNNING,
+      clientSeed: 'test',
+      crashPointX100: 400,
+      startedAt: new Date(Date.now() - 60_000),
+    });
+
+    const liveId = await openRound();
+    launch(liveId, 400);
+
+    await watchdog.sweep();
+
+    expect(roundRepo.findById(orphanId)?.status).toBe(GameRoundStatus.FAILED);
+    expect(roundRepo.findById(liveId)?.status).toBe(GameRoundStatus.RUNNING);
   });
 });

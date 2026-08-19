@@ -7,7 +7,7 @@ import {
   JOBS,
   QUEUES,
   TOPICS,
-  userTopic,
+  Topics,
   type PasswordResetJob,
   type UserInvitedJob,
   type UserBannedJob,
@@ -33,7 +33,11 @@ export class NotificationJobs {
     private readonly logger: Logger,
   ) {}
 
-  @JobHandler({ queue: QUEUES.NOTIFICATIONS, name: JOBS.USER_REGISTERED })
+  @JobHandler({
+    queue: QUEUES.NOTIFICATIONS,
+    background: true,
+    name: JOBS.USER_REGISTERED,
+  })
   async registered(job: Job<UserRegisteredJob>): Promise<{ notified: string }> {
     const { userId, email, name } = job.data;
 
@@ -45,7 +49,7 @@ export class NotificationJobs {
 
     // Two topics: the user's own, and the admin room. Written by the worker
     // process, so a browser seeing this is proof the frame crossed processes.
-    this.events.publish(userTopic(userId), EVENTS.NOTIFICATION, {
+    this.events.publish(Topics.user(userId), EVENTS.NOTIFICATION, {
       event: JOBS.USER_REGISTERED,
       payload: { userId, email, name },
     });
@@ -69,7 +73,11 @@ export class NotificationJobs {
    * No socket frame goes with it, unlike the jobs either side. A reset is
    * requested by someone who cannot sign in, so there is no session to notify.
    */
-  @JobHandler({ queue: QUEUES.NOTIFICATIONS, name: JOBS.PASSWORD_RESET })
+  @JobHandler({
+    queue: QUEUES.NOTIFICATIONS,
+    background: true,
+    name: JOBS.PASSWORD_RESET,
+  })
   async passwordReset(job: Job<PasswordResetJob>): Promise<{ sent: string }> {
     const { userId, email, name, url } = job.data;
 
@@ -90,7 +98,11 @@ export class NotificationJobs {
    * which is why the queue is the app's own Redis rather than a third party, and
    * why the invite expires in a week regardless of whether anybody reads it.
    */
-  @JobHandler({ queue: QUEUES.NOTIFICATIONS, name: JOBS.USER_INVITED })
+  @JobHandler({
+    queue: QUEUES.NOTIFICATIONS,
+    background: true,
+    name: JOBS.USER_INVITED,
+  })
   async invited(job: Job<UserInvitedJob>): Promise<{ invited: string }> {
     const { email, role, url, expiresAt } = job.data;
 
@@ -112,7 +124,11 @@ export class NotificationJobs {
     return { invited: email };
   }
 
-  @JobHandler({ queue: QUEUES.NOTIFICATIONS, name: JOBS.USER_BANNED })
+  @JobHandler({
+    queue: QUEUES.NOTIFICATIONS,
+    background: true,
+    name: JOBS.USER_BANNED,
+  })
   async banned(job: Job<UserBannedJob>): Promise<{ notified: string }> {
     const { userId, email, reason } = job.data;
 

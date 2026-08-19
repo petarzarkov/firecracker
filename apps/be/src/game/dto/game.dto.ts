@@ -1,6 +1,6 @@
 import type { RouteSchemas } from '@dunx/http';
 import { z } from 'zod';
-import { paginatedOf, pageOptionsSchema } from '../../core/pagination.dto.js';
+import { Paginated, pageOptionsSchema } from '../../core/pagination.dto.js';
 import { GameBetStatus } from '../schema/game-bet.schema.js';
 import { GameRoundStatus } from '../schema/game-round.schema.js';
 import { WalletTransactionType } from '../schema/wallet.schema.js';
@@ -122,9 +122,9 @@ export const WalletTransaction = z
   .meta({ id: 'WalletTransaction', title: 'One movement on a balance' });
 export type WalletTransaction = z.infer<typeof WalletTransaction>;
 
-export const PaginatedRounds = paginatedOf(GameRound, 'PaginatedRounds');
-export const PaginatedBets = paginatedOf(GameBet, 'PaginatedBets');
-export const PaginatedTransactions = paginatedOf(
+export const PaginatedRounds = Paginated.of(GameRound, 'PaginatedRounds');
+export const PaginatedBets = Paginated.of(GameBet, 'PaginatedBets');
+export const PaginatedTransactions = Paginated.of(
   WalletTransaction,
   'PaginatedTransactions',
 );

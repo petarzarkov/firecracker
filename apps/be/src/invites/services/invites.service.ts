@@ -3,6 +3,7 @@ import { Logger } from '@dunx/core';
 import { HttpError, HttpStatusCode } from '@dunx/http';
 import { JobPublisher } from '@dunx/infra/queue';
 import type { Page } from '@dunx/infra/pagination';
+import { Cron, CronExpression } from '@dunx/infra/schedule';
 import { AppConfigService } from '../../config/app.config.service.js';
 import { JOBS, QUEUES } from '../../notifications/events/events.js';
 import { UsersRepository } from '../../users/repos/users.repository.js';
@@ -148,10 +149,26 @@ export class InvitesService {
     return { email: invite.email, role: invite.role };
   }
 
-  /** Sweeps expired invitations before listing, so the statuses are truthful. */
   list(filters: ListInvitesFilters): Promise<Page<InviteRow>> {
-    this.invites.expireStale(new Date());
     return this.invites.list(filters);
+  }
+
+  /**
+   * Flips `PENDING` invitations past their expiry to `EXPIRED`.
+   *
+   * This ran inside `list()`, which made a read path take SQLite's single writer lock
+   * and only corrected the table when an administrator opened the page.
+   *
+   * Bookkeeping rather than enforcement - `accept()` refuses an expired invitation on
+   * its own `expiresAt`, not on this column - which is why it can be a schedule at all.
+   * `@Cron` over `@Interval` because "on the hour" is a cadence an operator can reason
+   * about, where "every 3600000 ms since boot" drifts with every deploy.
+   */
+  @Cron(CronExpression.HOURLY)
+  expireStale(): { expired: number } {
+    const expired = this.invites.expireStale(new Date());
+    if (expired > 0) this.logger.info('expired stale invitations', { expired });
+    return { expired };
   }
 
   /**

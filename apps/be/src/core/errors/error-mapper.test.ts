@@ -1,12 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 import { HttpError, ValidationError } from '@dunx/http';
-import { errorMapper, toErrorBody } from './error-mapper.js';
+import { ErrorMapper } from './error-mapper.js';
 
 const req = new Request('http://localhost/api/users');
 
-describe('errorMapper', () => {
+describe('ErrorMapper', () => {
   test('an HttpError becomes { error, message, status }', async () => {
-    const response = errorMapper(new HttpError(404, 'No such user'), req);
+    const response = ErrorMapper.toResponseBody(
+      new HttpError(404, 'No such user'),
+      req,
+    );
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({
       error: 'NOT_FOUND',
@@ -20,7 +23,7 @@ describe('errorMapper', () => {
       { message: 'Invalid email address', path: 'email' },
       { message: 'Required' },
     ]);
-    const response = errorMapper(error, req);
+    const response = ErrorMapper.toResponseBody(error, req);
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({
       error: 'BAD_REQUEST',
@@ -34,7 +37,10 @@ describe('errorMapper', () => {
   });
 
   test('an unrecognised error falls through and leaks nothing', async () => {
-    const response = errorMapper(new Error('connection string: hunter2'), req);
+    const response = ErrorMapper.toResponseBody(
+      new Error('connection string: hunter2'),
+      req,
+    );
     expect(response.status).toBe(500);
     const body = (await response.json()) as Record<string, unknown>;
     expect(JSON.stringify(body)).not.toContain('hunter2');
@@ -42,7 +48,7 @@ describe('errorMapper', () => {
   });
 
   test('toErrorBody returns undefined for what it does not own', () => {
-    expect(toErrorBody(new Error('boom'))).toBeUndefined();
-    expect(toErrorBody('a string')).toBeUndefined();
+    expect(ErrorMapper.toErrorBody(new Error('boom'))).toBeUndefined();
+    expect(ErrorMapper.toErrorBody('a string')).toBeUndefined();
   });
 });

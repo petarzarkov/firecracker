@@ -2,7 +2,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import { SyncDatabase } from '@dunx/infra/db';
 import { paginate, type Page, type PageOptions } from '@dunx/infra/pagination';
 import * as schema from '../../infra/db/schema.js';
-import { asHandle, type DbHandle } from '../../infra/db/tx.js';
+import { Tx, type DbHandle } from '../../infra/db/tx.js';
 import { users, type UserRow } from '../../users/schema/user.schema.js';
 import {
   gameBets,
@@ -17,6 +17,15 @@ export interface BetWithPlayer extends GameBetRow {
 }
 
 export class GameBetRepository {
+  /**
+   * What the lobby calls a player. The email local-part is the fallback the NestJS
+   * gateway used inline; it is here so the HTTP and socket paths cannot disagree
+   * about what a given player is called.
+   */
+  static displayName(user: Pick<UserRow, 'name' | 'email' | 'id'>): string {
+    return user.name || user.email.split('@')[0] || user.id;
+  }
+
   constructor(private readonly db: SyncDatabase<typeof schema>) {}
 
   /**
@@ -25,7 +34,7 @@ export class GameBetRepository {
    * and why it is in one place.
    */
   static over(handle: DbHandle): GameBetRepository {
-    return new GameBetRepository(asHandle(handle));
+    return new GameBetRepository(Tx.asHandle(handle));
   }
 
   findActiveByRoundAndUser(
@@ -107,7 +116,7 @@ export class GameBetRepository {
 
     return rows.map(({ bet, user }) => ({
       ...bet,
-      playerName: displayName(user),
+      playerName: GameBetRepository.displayName(user),
     }));
   }
 
@@ -170,7 +179,7 @@ export class GameBetRepository {
       .from(users)
       .where(eq(users.id, userId))
       .get();
-    return row === undefined ? undefined : displayName(row);
+    return row === undefined ? undefined : GameBetRepository.displayName(row);
   }
 
   /** The player's most recent results, for the history panel. */
@@ -184,11 +193,3 @@ export class GameBetRepository {
       .all();
   }
 }
-
-/**
- * What the lobby calls a player. The email local-part is the fallback the NestJS
- * gateway used inline; it is here so the HTTP and socket paths cannot disagree
- * about what a given player is called.
- */
-export const displayName = (user: Pick<UserRow, 'name' | 'email' | 'id'>) =>
-  user.name || user.email.split('@')[0] || user.id;

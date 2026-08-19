@@ -22,6 +22,19 @@ import { InvitesService } from './services/invites.service.js';
 @ApiDoc({ tags: ['invites'], description: 'Invitations to join.' })
 @Controller('invites')
 export class InvitesController {
+  /** Never includes `code` - see the note on the `Invite` schema. */
+  static #mapInvite(row: InviteRow): Invite {
+    return {
+      id: row.id,
+      email: row.email,
+      role: row.role,
+      status: row.status,
+      expiresAt: row.expiresAt.toISOString(),
+      acceptedBy: row.acceptedBy,
+      createdAt: row.createdAt.toISOString(),
+    };
+  }
+
   constructor(private readonly invites: InvitesService) {}
 
   @ApiDoc({ tags: ['invites'], summary: 'List invitations' })
@@ -29,7 +42,7 @@ export class InvitesController {
   @Get('/', listInvites)
   async list(input: Input<typeof listInvites>): Promise<Page<Invite>> {
     const page = await this.invites.list(input.query);
-    return { ...page, data: page.data.map(mapInvite) };
+    return { ...page, data: page.data.map(InvitesController.#mapInvite) };
   }
 
   @ApiDoc({ tags: ['invites'], summary: 'Invite somebody by email' })
@@ -37,7 +50,7 @@ export class InvitesController {
   @Post('/', createInvite)
   async create(input: Input<typeof createInvite>): Promise<Invite> {
     const { email, role } = input.body;
-    return mapInvite(await this.invites.invite(email, role));
+    return InvitesController.#mapInvite(await this.invites.invite(email, role));
   }
 
   @ApiDoc({
@@ -52,14 +65,3 @@ export class InvitesController {
     return this.invites.accept(input.body);
   }
 }
-
-/** Never includes `code` - see the note on the `Invite` schema. */
-const mapInvite = (row: InviteRow): Invite => ({
-  id: row.id,
-  email: row.email,
-  role: row.role,
-  status: row.status,
-  expiresAt: row.expiresAt.toISOString(),
-  acceptedBy: row.acceptedBy,
-  createdAt: row.createdAt.toISOString(),
-});

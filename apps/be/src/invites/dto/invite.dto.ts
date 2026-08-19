@@ -1,6 +1,6 @@
 import type { RouteSchemas } from '@dunx/http';
 import { z } from 'zod';
-import { paginatedOf, pageOptionsSchema } from '../../core/pagination.dto.js';
+import { Paginated, pageOptionsSchema } from '../../core/pagination.dto.js';
 import { UserRole } from '../../users/schema/user.schema.js';
 import { InviteStatus } from '../schema/invite.schema.js';
 
@@ -30,7 +30,7 @@ export const Invite = z
   .meta({ id: 'Invite', title: 'An invitation to join' });
 export type Invite = z.infer<typeof Invite>;
 
-export const PaginatedInvites = paginatedOf(Invite, 'PaginatedInvites');
+export const PaginatedInvites = Paginated.of(Invite, 'PaginatedInvites');
 
 export const CreateInvite = z
   .object({

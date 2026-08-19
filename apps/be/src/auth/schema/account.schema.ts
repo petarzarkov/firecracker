@@ -1,10 +1,5 @@
 import { index, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-import {
-  createdAt,
-  timestampMs,
-  updatedAt,
-  uuidPk,
-} from '../../infra/db/columns.js';
+import { Columns } from '../../infra/db/columns.js';
 import { users } from '../../users/schema/user.schema.js';
 
 /**
@@ -17,7 +12,7 @@ import { users } from '../../users/schema/user.schema.js';
 export const accounts = sqliteTable(
   'account',
   {
-    id: uuidPk(),
+    id: Columns.uuidPk(),
     accountId: text('account_id').notNull(),
     providerId: text('provider_id').notNull(),
     userId: text('user_id')
@@ -26,12 +21,12 @@ export const accounts = sqliteTable(
     accessToken: text('access_token'),
     refreshToken: text('refresh_token'),
     idToken: text('id_token'),
-    accessTokenExpiresAt: timestampMs('access_token_expires_at'),
-    refreshTokenExpiresAt: timestampMs('refresh_token_expires_at'),
+    accessTokenExpiresAt: Columns.timestampMs('access_token_expires_at'),
+    refreshTokenExpiresAt: Columns.timestampMs('refresh_token_expires_at'),
     scope: text('scope'),
     password: text('password'),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
+    createdAt: Columns.createdAt(),
+    updatedAt: Columns.updatedAt(),
   },
   (table) => [
     index('account_user_id_index').on(table.userId),

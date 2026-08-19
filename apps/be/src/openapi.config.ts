@@ -7,8 +7,8 @@
  * this runs with no database and no port.
  */
 import { AppModule } from './app.module.js';
-import { authDocument } from './auth/auth.document.js';
-import { validateConfig } from './config/env.validation.js';
+import { AuthDocument } from './auth/auth.document.js';
+import { EnvConfig } from './config/env.validation.js';
 import pkg from '../package.json' with { type: 'json' };
 
 const source = { API_PORT: '0', SQLITE_DB_PATH: ':memory:' };
@@ -18,5 +18,5 @@ export const openapi = () => ({
   title: pkg.name,
   version: pkg.version,
   description: pkg.description,
-  contribute: [authDocument(validateConfig(source))],
+  contribute: [AuthDocument.for(EnvConfig.validate(source))],
 });

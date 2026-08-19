@@ -16,6 +16,7 @@ export type DbHandle =
 
 /**
  * A transaction handle, narrowed to the injection token's type.
+
  *
  * The cast is real and it is here so that it is in exactly one place. A repository
  * declares its constructor parameter as `SyncDatabase` because that is the token
@@ -26,8 +27,11 @@ export type DbHandle =
  * refusing to return an object in `@dunx/infra@2.0.0`. That is fixed in 2.0.1, so
  * services import `transactionSync` directly and only this cast remains.
  */
-export const asHandle = (handle: DbHandle): SyncDatabase<typeof schema> =>
-  // `as unknown as` because drizzle's transaction handle genuinely lacks
-  // `SyncDatabase`'s marker property. The builder surface is identical, which is
-  // the whole of what a repository uses.
-  handle as unknown as SyncDatabase<typeof schema>;
+export class Tx {
+  static asHandle(handle: DbHandle): SyncDatabase<typeof schema> {
+    // `as unknown as` because drizzle's transaction handle genuinely lacks
+    // `SyncDatabase`'s marker property. The builder surface is identical, which is
+    // the whole of what a repository uses.
+    return handle as unknown as SyncDatabase<typeof schema>;
+  }
+}

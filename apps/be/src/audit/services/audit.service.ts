@@ -6,22 +6,24 @@ import {
   type AuditFilters,
 } from '../repos/audit-log.repository.js';
 
-const present = (row: AuditLogRow): AuditLogEntry => ({
-  id: row.id,
-  actorId: row.actorId,
-  action: row.action,
-  entityName: row.entityName,
-  entityId: row.entityId,
-  oldValues: row.oldValues,
-  newValues: row.newValues,
-  createdAt: row.createdAt.toISOString(),
-});
-
 export class AuditService {
+  static #present(row: AuditLogRow): AuditLogEntry {
+    return {
+      id: row.id,
+      actorId: row.actorId,
+      action: row.action,
+      entityName: row.entityName,
+      entityId: row.entityId,
+      oldValues: row.oldValues,
+      newValues: row.newValues,
+      createdAt: row.createdAt.toISOString(),
+    };
+  }
+
   constructor(private readonly repo: AuditLogRepository) {}
 
   async list(filters: AuditFilters): Promise<Page<AuditLogEntry>> {
     const page = await this.repo.list(filters);
-    return { data: page.data.map(present), meta: page.meta };
+    return { data: page.data.map(AuditService.#present), meta: page.meta };
   }
 }

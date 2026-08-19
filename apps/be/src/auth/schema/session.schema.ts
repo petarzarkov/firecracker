@@ -1,10 +1,5 @@
 import { index, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import {
-  createdAt,
-  timestampMs,
-  updatedAt,
-  uuidPk,
-} from '../../infra/db/columns.js';
+import { Columns } from '../../infra/db/columns.js';
 import { users } from '../../users/schema/user.schema.js';
 
 /**
@@ -18,11 +13,11 @@ import { users } from '../../users/schema/user.schema.js';
 export const sessions = sqliteTable(
   'session',
   {
-    id: uuidPk(),
-    expiresAt: timestampMs('expires_at').notNull(),
+    id: Columns.uuidPk(),
+    expiresAt: Columns.timestampMs('expires_at').notNull(),
     token: text('token').notNull(),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
+    createdAt: Columns.createdAt(),
+    updatedAt: Columns.updatedAt(),
     ipAddress: text('ip_address'),
     userAgent: text('user_agent'),
     userId: text('user_id')

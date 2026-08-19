@@ -1,16 +1,21 @@
 import { Rng } from '@arkv/rng';
-import { Logger, type OnInit, type OnShutdown } from '@dunx/core';
+import { Logger, type OnInit } from '@dunx/core';
+import { Interval } from '@dunx/infra/schedule';
 import { AIService } from '../../ai/services/ai.service.js';
 import { ChatService } from '../../chat/services/chat.service.js';
 import { AppConfigService } from '../../config/app.config.service.js';
 import { EventsPublisher } from '../../notifications/events/events.publisher.js';
 import { EVENTS, TOPICS } from '../../notifications/events/events.js';
 import { CrashEngineService } from '../engine/crash-engine.service.js';
-import { GAME_EVENTS, GAME_TOPIC, publishGame } from '../game.events.js';
-import { toMultiplier } from '../game.math.js';
+import { GAME_EVENTS, GAME_TOPIC, GameEvents } from '../game.events.js';
+import { GameMath } from '../game.math.js';
 import { GameRoundStatus } from '../schema/game-round.schema.js';
 
-/** How often the watcher looks for a phase change. */
+/**
+ * How often the watcher looks for a phase change. A literal, because `@Interval` is a
+ * decorator argument evaluated before the container exists - and a cosmetic poll of two
+ * in-memory fields is not something an operator needs to tune.
+ */
 const WATCH_INTERVAL_MS = 250;
 
 /**
@@ -81,8 +86,8 @@ interface Bot {
  *
  * Off unless `GAME_BOTS_ENABLED=true`.
  */
-export class GameBotsService implements OnInit, OnShutdown {
-  #watcher: ReturnType<typeof setInterval> | null = null;
+export class GameBotsService implements OnInit {
+  #enabled = false;
   #roundId: string | null = null;
   #phase: GameRoundStatus | null = null;
   #bots: Bot[] = [];
@@ -96,31 +101,34 @@ export class GameBotsService implements OnInit, OnShutdown {
     private readonly logger: Logger,
   ) {}
 
+  /**
+   * All that is left of a `setInterval`/`clearInterval` pair and an `onShutdown`.
+   * `GAME_BOTS_ENABLED` cannot move into the decorator's own `enabled` option, because
+   * a decorator argument is evaluated before the validated config exists.
+   */
   onInit(): void {
     const { bots } = this.config.get('game');
-    if (!bots.enabled) return;
+    this.#enabled = bots.enabled;
+    if (!this.#enabled) return;
 
-    this.#watcher = setInterval(() => this.#watch(), WATCH_INTERVAL_MS);
     this.logger.info('lobby bots enabled', {
       minPerRound: bots.minPerRound,
       maxPerRound: bots.maxPerRound,
     });
   }
 
-  onShutdown(): void {
-    if (this.#watcher !== null) clearInterval(this.#watcher);
-    this.#watcher = null;
-  }
-
   /**
    * Polls the engine rather than hooking it.
    *
-   * A callback registration would have coupled the engine to a cosmetic feature,
-   * and the engine is the one class in this app where an extra branch on the tick
-   * path is worth avoiding. A quarter-second poll of two in-memory fields costs
-   * nothing and keeps the dependency pointing one way.
+   * A callback registration would couple the engine to a cosmetic feature, and the
+   * engine is the one class here where an extra branch on the tick path is worth
+   * avoiding. `Overlap.SKIP` - the registry's default - matters too: `#react` fires an
+   * AI call, and a slow model must not have a second poll start behind it.
    */
-  #watch(): void {
+  @Interval(WATCH_INTERVAL_MS)
+  watch(): void {
+    if (!this.#enabled) return;
+
     const roundId = this.engine.roundId;
     const phase = this.engine.phase;
 
@@ -166,7 +174,7 @@ export class GameBotsService implements OnInit, OnShutdown {
     }
 
     for (const bot of this.#bots) {
-      publishGame(this.events, GAME_TOPIC, GAME_EVENTS.BET_PLACED, {
+      GameEvents.publish(this.events, GAME_TOPIC, GAME_EVENTS.BET_PLACED, {
         userId: bot.userId,
         username: bot.username,
         betAmountCents: bot.betAmountCents,
@@ -196,7 +204,7 @@ export class GameBotsService implements OnInit, OnShutdown {
     if (!speaks || speaker === undefined) return;
 
     const won = speaker.cashedOut;
-    const multiplier = toMultiplier(speaker.targetX100).toFixed(2);
+    const multiplier = GameMath.toMultiplier(speaker.targetX100).toFixed(2);
 
     void this.ai
       .line(
@@ -234,10 +242,10 @@ export class GameBotsService implements OnInit, OnShutdown {
       if (bot.cashedOut || bot.targetX100 > multiplierX100) continue;
       bot.cashedOut = true;
 
-      publishGame(this.events, GAME_TOPIC, GAME_EVENTS.BET_CASHED_OUT, {
+      GameEvents.publish(this.events, GAME_TOPIC, GAME_EVENTS.BET_CASHED_OUT, {
         userId: bot.userId,
         username: bot.username,
-        multiplier: toMultiplier(bot.targetX100),
+        multiplier: GameMath.toMultiplier(bot.targetX100),
         payoutCents: Math.floor((bot.betAmountCents * bot.targetX100) / 100),
         isDemo: true,
       });

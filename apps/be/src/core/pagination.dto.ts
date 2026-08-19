@@ -61,7 +61,10 @@ const pageMetaSchema = z.object({
  * with one name doing different things in the same codebase is how someone imports
  * the wrong one and gets a type error three files away.
  */
-export const paginatedOf = <T extends z.ZodType>(item: T, id: string) =>
-  z
-    .object({ data: z.array(item), meta: pageMetaSchema })
-    .meta({ id, title: id });
+export class Paginated {
+  static of<T extends z.ZodType>(item: T, id: string) {
+    return z
+      .object({ data: z.array(item), meta: pageMetaSchema })
+      .meta({ id, title: id });
+  }
+}

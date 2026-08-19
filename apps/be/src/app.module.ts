@@ -13,9 +13,10 @@ import { AppConfigService } from './config/app.config.service.js';
 import { GameModule } from './game/game.module.js';
 import { InvitesModule } from './invites/invites.module.js';
 import { DatabaseModule } from './infra/db/database.module.js';
-import { HealthModule } from './infra/health/health.module.js';
+import { ServiceModule } from './infra/health/health.module.js';
 import { QueuesModule } from './infra/queue/queue.module.js';
 import { RedisCacheModule } from './infra/redis/redis.module.js';
+import { SchedulesModule } from './infra/schedule/schedule.module.js';
 import { ThrottleGuard } from './infra/redis/guards/throttle.guard.js';
 import { EventsPublisherModule } from './notifications/events/events-publisher.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
@@ -29,117 +30,109 @@ export interface AppModuleOptions {
 }
 
 /**
- * Everything shared by the web process and the worker: config, logging, the
- * database, Redis and the queue's publish side.
+ * Everything shared by the serving process and a sandboxed job child.
  *
- * Import order is construction order, and shutdown runs in reverse. Config comes
- * first because everything else reads it, then logging, then the database, whose
- * connection therefore closes last.
- *
- * **Nothing here is conditional on a service being reachable.** Every connection is
- * lazy, so an absent Redis cannot stop the graph from building - what degrades is
- * the route that needs it. The crash engine is the one exception worth naming: with
- * no Redis there is no queue, so rounds never advance. That is a dead game rather
- * than a dead process, and it is visible on the health endpoint.
+ * Import order is construction order and shutdown runs in reverse, so config is
+ * first and the database closes last. Nothing here is conditional on a service being
+ * reachable: an absent Redis degrades a route, never the graph.
  */
-const foundation = (
-  options: AppModuleOptions,
-  publisher: 'socket' | 'relay',
-): readonly ModuleRef[] => [
-  AppConfigModule.forRoot(
-    options.source === undefined ? {} : { source: options.source },
-  ),
-  options.logLevel === undefined
-    ? LoggerModule.forRootAsync(
-        {
-          useFactory: (config: AppConfigService) => {
-            const app = config.get('app');
-            const log = config.get('log');
-            return {
-              name: app.name,
-              version: app.version,
-              env: app.env,
-              level: log.level,
-              isDevelopment: app.nodeEnv !== 'production',
-              maskFields: [...log.maskFields],
-              filterEvents: [...log.filterEvents],
-            };
-          },
-          inject: [AppConfigService] as const,
+class Foundation {
+  static for(
+    options: AppModuleOptions,
+    publisher: 'socket' | 'relay',
+  ): readonly ModuleRef[] {
+    return [
+      AppConfigModule.forRoot(
+        options.source === undefined ? {} : { source: options.source },
+      ),
+      Foundation.#logging(options),
+      DatabaseModule.forRoot(),
+      RedisCacheModule.forRoot(),
+      StorageModule.forRoot(),
+      ImagesConfigModule.forRoot(),
+      // Not armed in a job child: bullmq forks one per burst, so a schedule there
+      // would fire in two or three processes at once.
+      SchedulesModule.forRoot({ enabled: publisher === 'socket' }),
+      // One instance for both graphs: `GoogleService` paces itself against a
+      // per-minute quota, and two clients would each think they had the allowance.
+      AIModule.forRoot({ controllers: publisher === 'socket' }),
+      // The one thing the two graphs configure differently: `socket` publishes
+      // through this server's `PubSub`, `relay` puts the frame on the Redis channel.
+      EventsPublisherModule.forRoot({ publisher }),
+    ];
+  }
+
+  static #logging(options: AppModuleOptions): ModuleRef {
+    if (options.logLevel !== undefined) {
+      return LoggerModule.forRoot({ level: options.logLevel });
+    }
+
+    return LoggerModule.forRootAsync(
+      {
+        useFactory: (config: AppConfigService) => {
+          const app = config.get('app');
+          const log = config.get('log');
+          return {
+            name: app.name,
+            version: app.version,
+            env: app.env,
+            level: log.level,
+            isDevelopment: app.nodeEnv !== 'production',
+            maskFields: [...log.maskFields],
+            filterEvents: [...log.filterEvents],
+          };
         },
-        { captureGlobalErrors: true },
-      )
-    : LoggerModule.forRoot({ level: options.logLevel }),
-  DatabaseModule.forRoot(),
-  RedisCacheModule.forRoot(),
-  StorageModule.forRoot(),
-  ImagesConfigModule.forRoot(),
-  /**
-   * `global: true`, and in `foundation()` so both processes get one instance.
-   *
-   * One matters more than usual here: `GoogleService` paces itself against a
-   * per-minute quota and deranks when it hits one, and two clients would each
-   * think they had the whole allowance.
-   */
-  AIModule.forRoot({ controllers: publisher === 'socket' }),
-  // One binding per process, and the one thing the two processes configure
-  // differently: `socket` publishes through this server's `PubSub`, `relay` puts
-  // the frame straight on the Redis channel every web node is listening to.
-  EventsPublisherModule.forRoot({ publisher }),
-];
+        inject: [AppConfigService] as const,
+      },
+      { captureGlobalErrors: true },
+    );
+  }
+}
 
 /**
- * The web process's graph.
+ * The application. **One process**: it serves HTTP, holds the clock, owns the sockets
+ * and consumes its own queues.
  *
- * **Undecorated, with a static factory** - the same shape every configurable module
- * in dunx uses, `DbModule.forRoot()` and `QueueModule.forRootAsync()` included. It
- * must not *also* carry `@Module`: `resolveRef` in `@dunx/core` concatenates a
- * `DynamicModule`'s options with any decorator metadata on the class it names rather
- * than overriding them, so declaring both registers every import twice.
+ * `src/worker.ts` and `WORKER_MODE` are gone, replaced by
+ * `QueueModule.forRoot({ consume: true })` - the container stops the workers at
+ * `onShutdown`, which runs in reverse construction order and therefore before the
+ * connections the handlers use. Isolation is per handler now: see
+ * `src/jobs.processor.ts`.
  *
- * Decorate or configure, never both. A module that takes **no** options should be
- * decorated instead, as `AccountsModule` is: a class is one reference however many
- * modules import it, and a factory returning a fresh object per call is a fresh
- * scope per call.
+ * **Undecorated, with a static factory**, and it must not *also* carry `@Module` -
+ * `resolveRef` concatenates decorator metadata with a `DynamicModule`'s options
+ * rather than overriding them, so declaring both registers every import twice.
  */
 export class AppModule {
   static forRoot(options: AppModuleOptions = {}): DynamicModule {
-    // Read straight from the environment rather than the container: this decides
-    // whether a *module* is in the graph, and the graph is built before anything
-    // in it can be injected.
+    // Straight from the environment: this decides whether a *module* is in the
+    // graph, and the graph is built before anything in it can be injected.
     const clientDist = (options.source ?? Bun.env)['CLIENT_DIST'];
 
     return {
       module: AppModule,
       imports: [
-        ...foundation(options, 'socket'),
+        ...Foundation.for(options, 'socket'),
         QueuesModule.forRoot(),
         // After DatabaseModule, so better-auth reuses the connection it opened.
         AccountsModule,
         NotificationsModule.forRoot(),
-        HealthModule,
+        ServiceModule.forRoot(),
         UsersModule,
         FilesFeatureModule.forRoot(),
         AuditModule,
         InvitesModule,
         // Last: the engine's `onInit` recovers the in-flight round and needs the
         // queue, the database and Redis all constructed before it runs.
-        GameModule.forRoot(),
+        GameModule,
         ...(typeof clientDist === 'string' && clientDist.length > 0
           ? [ClientModule.forRoot(clientDist)]
           : []),
       ],
       /**
-       * The two **app-level** middlewares.
-       *
-       *  - `ThrottleGuard` limits every route, tuned per route by `@Throttle`
-       *    metadata. Splitting it per feature would mean a rate limiter each
-       *    feature could forget.
-       *  - `AuditContextMiddleware` stamps the actor the trigger records. It looks
-       *    like a feature-scoped concern, but the writes it has to cover include
-       *    better-auth's own sign-up - a controller inside `@dunx/auth` rather than
-       *    inside `AccountsModule` - and module middleware has no ancestor layer.
-       *    Scoping it would silently stamp the *previous* request's id there.
+       * App-level, not per feature. `AuditContextMiddleware` has to cover
+       * better-auth's own sign-up, which lives in `@dunx/auth` where module
+       * middleware cannot reach - scoping it would stamp the *previous* request's id.
        */
       providers: [AuditContextMiddleware, ThrottleGuard],
     };
@@ -147,29 +140,22 @@ export class AppModule {
 }
 
 /**
- * The consuming half. A worker is its own container: it builds only what a handler
- * needs, has no HTTP server and therefore no `PubSub`, which is why the events
- * publisher is the relay one here.
+ * The graph a **sandboxed job child** boots, and nothing else builds it.
  *
- * `QueuesModule` without its controller, because there are no routes to serve, and
- * no `AccountsModule` because a job has no caller.
- *
- * `GameModule.forRoot({ engine: false })` is the load-bearing difference. The round
- * *lifecycle* handlers must exist here - they are the jobs this process consumes -
- * but the tick loop must not: two processes both ticking would publish two crash
- * jobs per round. The web process owns the engine, the worker owns the transitions,
- * and they talk over Redis pub/sub.
+ * No `GameModule`: only the notification and media queues are sandboxed, and a child
+ * that built `CrashEngineService` would be a second clock. No controllers and
+ * `publisher: 'relay'`, because there is no server here to publish a frame through.
+ * No `consume` - the child *is* the consumer.
  */
-export class WorkerModule {
+export class JobsModule {
   static forRoot(options: AppModuleOptions = {}): DynamicModule {
     return {
-      module: WorkerModule,
+      module: JobsModule,
       imports: [
-        ...foundation(options, 'relay'),
+        ...Foundation.for(options, 'relay'),
         QueuesModule.forRoot({ controllers: false }),
         NotificationsModule.forRoot(),
         FilesFeatureModule.forRoot({ controllers: false }),
-        GameModule.forRoot({ engine: false, controllers: false }),
       ],
     };
   }

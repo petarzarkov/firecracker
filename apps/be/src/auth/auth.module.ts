@@ -12,8 +12,8 @@ import { sessions } from './schema/session.schema.js';
 import { verifications } from './schema/verification.schema.js';
 import { JOBS, QUEUES } from '../notifications/events/events.js';
 import { AuditModule } from '../audit/audit.module.js';
-import { registrationHooks } from './auth.hooks.js';
-import { AUTH_MOUNT, baseAuthOptions } from './auth.options.js';
+import { AuthHooks } from './auth.hooks.js';
+import { AUTH_MOUNT, AuthOptions } from './auth.options.js';
 import { ProfileController } from './profile.controller.js';
 import { AuthAdminSeeder } from './services/auth-admin.seeder.js';
 import { AvatarsService } from './services/avatars.service.js';
@@ -46,7 +46,7 @@ const auth = AuthModule.forRootAsync(
       publisher: JobPublisher,
       logger: Logger,
     ) => {
-      const base = baseAuthOptions(config.values);
+      const base = AuthOptions.base(config.values);
       const redisSessions =
         config.get('auth').sessionStore === AuthSessionStore.REDIS;
 
@@ -105,7 +105,7 @@ const auth = AuthModule.forRootAsync(
         }),
         // Every path into the user table, not just the ones this app
         // calls - which is why this is a hook and not a call site.
-        databaseHooks: registrationHooks(publisher, logger),
+        databaseHooks: AuthHooks.registration(publisher, logger),
         // An explicit opt-in, never a side effect of `REDIS_URL` being
         // set. `redisStorage` deliberately does not soften a connection
         // failure - a swallowed `null` from `get` would read as "no

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { csv } from './scalars.js';
+import { Env } from './scalars.js';
 
 /**
  * The one secret Better Auth cannot do without. A fixed, obviously-fake constant
@@ -34,7 +34,7 @@ export const authVarsSchema = z.object({
 
   /** The origin cookies are issued for. Defaults to `http://localhost:$API_PORT`. */
   WEB_URL: z.string().optional(),
-  AUTH_TRUSTED_ORIGINS: csv([]),
+  AUTH_TRUSTED_ORIGINS: Env.csv([]),
 
   AUTH_SESSION_EXPIRATION: z.coerce
     .number()

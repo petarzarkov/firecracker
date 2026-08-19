@@ -5,7 +5,7 @@ import {
   text,
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
-import { createdAt, updatedAt, uuidPk } from '../../infra/db/columns.js';
+import { Columns } from '../../infra/db/columns.js';
 import { users } from '../../users/schema/user.schema.js';
 
 /**
@@ -20,7 +20,7 @@ import { users } from '../../users/schema/user.schema.js';
 export const files = sqliteTable(
   'file',
   {
-    id: uuidPk(),
+    id: Columns.uuidPk(),
     userId: text('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
@@ -31,8 +31,8 @@ export const files = sqliteTable(
     width: integer('width'),
     height: integer('height'),
     thumbnailKey: text('thumbnail_key'),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
+    createdAt: Columns.createdAt(),
+    updatedAt: Columns.updatedAt(),
   },
   (table) => [
     uniqueIndex('UQ_file_key').on(table.key),

@@ -8,6 +8,10 @@
 # That makes `@dunx/transform` a **runtime** dependency, not a build-time one, and
 # makes the root `bunfig.toml` load-bearing in the image. Both are easy to lose to
 # a `--production` install or an allowlist-shaped .dockerignore.
+#
+# It is also why the queue uses `isolation: 'process'`: a fork is a fresh Bun process
+# that reads this `bunfig.toml`, where a worker thread enters through bullmq's prebuilt
+# `main-worker.js` and the preload never matches a `.ts` file.
 
 # ── The client, built once and served by the API ─────────────────────────────
 FROM oven/bun:1.3.14-slim AS client
@@ -37,9 +41,9 @@ RUN apt-get update \
 # boot without one - the development fallback is a constant in the repository and
 # anyone holding it can mint a session. Pass it with `-e BETTER_AUTH_SECRET=...`.
 #
-# `SQLITE_DB_PATH` points into /app/data, which is a volume in the compose file.
-# The web process and the worker mount the **same** volume and open the same file;
-# the WAL and busy-timeout pragmas in `database.module.ts` are what make that safe.
+# `SQLITE_DB_PATH` points into /app/data, a volume in the compose file. A sandboxed job
+# child opens the same file, so the WAL and busy-timeout pragmas in
+# `database.module.ts` are still what make that safe.
 ENV NODE_ENV=production \
     APP_ENV=prod \
     TZ=UTC \
@@ -65,10 +69,11 @@ ENV SERVICE_COMMIT_SHA=$COMMIT_SHA \
 
 EXPOSE 3001
 
-# Readiness, not liveness: it probes the database. A liveness probe that checks a
-# dependency restarts the process when the dependency blinks.
+# Readiness, not liveness: it probes the database, and a liveness probe that checks a
+# dependency restarts the process when that dependency blinks. Only the database can
+# fail this - Redis and the broker report `down` without gating it.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -fsS "http://127.0.0.1:${API_PORT}/api/service/health" || exit 1
+  CMD curl -fsS "http://127.0.0.1:${API_PORT}/api/health/ready" || exit 1
 
 WORKDIR /app/apps/be
 CMD ["bun", "src/main.ts"]

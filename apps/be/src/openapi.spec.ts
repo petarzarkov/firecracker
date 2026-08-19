@@ -3,9 +3,9 @@ import { HttpFactory, type HttpApp } from '@dunx/http';
 import { OpenApiExplorer, OpenApiModule } from '@dunx/openapi';
 import { testRoot } from '@dunx/testing';
 import { AppModule } from './app.module.js';
-import { authDocument } from './auth/auth.document.js';
-import { validateConfig } from './config/env.validation.js';
-import { httpOptions } from './http.options.js';
+import { AuthDocument } from './auth/auth.document.js';
+import { EnvConfig } from './config/env.validation.js';
+import { AppHttpOptions } from './http.options.js';
 
 interface OpenApiDoc {
   openapi: string;
@@ -22,10 +22,13 @@ interface OpenApiDoc {
 const source = {
   API_PORT: '0',
   SQLITE_DB_PATH: ':memory:',
+  // Off: this graph includes the engine, which enqueues the first round at `onInit`,
+  // so a consuming test server would start the clock under the assertions.
+  QUEUE_CONSUME: 'false',
   THROTTLE_PREFIX: `test-${crypto.randomUUID()}`,
   THROTTLE_LIMIT: '10000',
 };
-const config = validateConfig(source);
+const config = EnvConfig.validate(source);
 let app: HttpApp;
 let doc: OpenApiDoc;
 
@@ -35,9 +38,9 @@ beforeAll(async () => {
       title: 'dunx-template',
       version: '0.1.0',
       root: testRoot([AppModule.forRoot({ source, logLevel: 'fatal' })]),
-      contribute: [authDocument(config)],
+      contribute: [AuthDocument.for(config)],
     }),
-    { ...httpOptions(config), requestLogging: false },
+    { ...AppHttpOptions.for(config), requestLogging: false },
   );
   app.setGlobalPrefix('api');
   await app.listen(0);
@@ -63,7 +66,7 @@ describe('the generated OpenAPI document', () => {
     expect(paths).toContain('/api/users');
     expect(paths).toContain('/api/users/{userId}');
     expect(paths).toContain('/api/users/{userId}/ban');
-    expect(paths).toContain('/api/service/health');
+    expect(paths).toContain('/api/service/config');
     // The game's own surface, which is the point of this app.
     expect(paths).toContain('/api/game/state');
     expect(paths).toContain('/api/game/rounds');
@@ -138,8 +141,18 @@ describe('the generated OpenAPI document', () => {
     expect(listUsers?.['security']).toEqual([{ bearer: [] }]);
     expect(listUsers?.['x-required-roles']).toEqual(['admin', 'user']);
 
-    const health = doc.paths['/api/service/health']?.['get'];
-    expect(health?.['security']).toEqual([]);
+    const build = doc.paths['/api/service/config']?.['get'];
+    expect(build?.['security']).toEqual([]);
+  });
+
+  /**
+   * Deliberately absent: `HealthController` carries `@ApiHidden()`, because a probe is
+   * for the orchestrator. Asserted so the omission is not rediscovered as a bug.
+   */
+  test('the health probes are hidden from the document', () => {
+    const paths = Object.keys(doc.paths);
+    expect(paths).not.toContain('/api/health/live');
+    expect(paths).not.toContain('/api/health/ready');
   });
 
   /**

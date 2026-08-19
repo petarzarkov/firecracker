@@ -2,7 +2,7 @@ import type { Middleware, Next, RouteContext } from '@dunx/http';
 import type { BunRequest } from 'bun';
 import { CurrentUser } from '../../auth/services/current-user.service.js';
 import { DatabaseBootstrap } from '../../infra/db/database.module.js';
-import { setAuditActor } from '../../infra/db/triggers.js';
+import { AuditTriggers } from '../../infra/db/triggers.js';
 
 /**
  * Stamps the acting user into the single-row `_audit_ctx` table so the database
@@ -31,7 +31,10 @@ export class AuditContextMiddleware implements Middleware {
   ) {}
 
   handle(_req: BunRequest, _ctx: RouteContext, next: Next): Promise<Response> {
-    setAuditActor(this.database.raw, this.caller.optional()?.id ?? null);
+    AuditTriggers.setActor(
+      this.database.raw,
+      this.caller.optional()?.id ?? null,
+    );
     return next();
   }
 }

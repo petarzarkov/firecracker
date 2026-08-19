@@ -19,41 +19,29 @@ import { RedisConnection } from '@dunx/infra/redis';
 import type { BunRequest } from 'bun';
 import { AppConfigService } from '../config/app.config.service.js';
 import { EventsPublisher } from '../notifications/events/events.publisher.js';
-import { EVENTS, TOPICS, userTopic } from '../notifications/events/events.js';
+import { EVENTS, TOPICS, Topics } from '../notifications/events/events.js';
 import { UserRole } from '../users/schema/user.schema.js';
 import { CrashEngineService } from './engine/crash-engine.service.js';
 import {
   GAME_CLIENT_EVENTS,
   GAME_EVENTS,
   GAME_TOPIC,
-  publishGame,
-  playerChatTopic,
+  GameEvents,
   PLAYER_CHAT_EVENTS,
   type BetAckPayload,
   type CashOutAckPayload,
   type SeedAckPayload,
 } from './game.events.js';
-import { toMultiplier } from './game.math.js';
+import { GameMath } from './game.math.js';
 import { GameRoundStatus } from './schema/game-round.schema.js';
 import { GameBetService } from './services/game-bet.service.js';
-import {
-  clientSeedsKey,
-  GameRoundService,
-} from './services/game-round.service.js';
+import { GameRoundService } from './services/game-round.service.js';
 import { ChatService } from '../chat/services/chat.service.js';
 import { AutoCashOutService } from './services/auto-cashout.service.js';
 import { PlayerChatService } from './services/player-chat.service.js';
 import { GameStateService } from './services/game-state.service.js';
 import { WalletService } from './services/wallet.service.js';
-import {
-  parseBet,
-  parseChat,
-  parseJoinChat,
-  parsePlayerMessage,
-  parseRoomId,
-  parseSeed,
-  playerFacing,
-} from './game.messages.js';
+import { GameMessages } from './game.messages.js';
 
 /** Who is on the far end of a socket. `null` for a spectator. */
 export interface SocketPlayer {
@@ -94,6 +82,21 @@ export interface GameSocketContext {
  */
 @Gateway('/ws')
 export class GameGateway {
+  /**
+   * The upgrade's headers, with `?token=` promoted to `Authorization` when the
+   * header is not already there. The cookie path is untouched.
+   */
+  static #authHeaders(req: BunRequest): Headers {
+    if (req.headers.has('authorization')) return req.headers;
+
+    const token = new URL(req.url).searchParams.get('token');
+    if (token === null || token.length === 0) return req.headers;
+
+    const headers = new Headers(req.headers);
+    headers.set('authorization', `Bearer ${token}`);
+    return headers;
+  }
+
   constructor(
     private readonly auth: Auth,
     private readonly engine: CrashEngineService,
@@ -164,7 +167,7 @@ export class GameGateway {
   @OnUpgrade()
   async upgrade(req: BunRequest): Promise<GameSocketContext> {
     const principal = await this.auth.api
-      .getSession({ headers: authHeaders(req) })
+      .getSession({ headers: GameGateway.#authHeaders(req) })
       .catch(() => null);
 
     if (principal === null) return { player: null };
@@ -188,7 +191,7 @@ export class GameGateway {
     socket.subscribe(GAME_TOPIC);
     socket.subscribe(TOPICS.CHAT);
     if (player !== null) {
-      socket.subscribe(userTopic(player.userId));
+      socket.subscribe(Topics.user(player.userId));
       if (player.roles.includes(UserRole.ADMIN))
         socket.subscribe(TOPICS.ADMINS);
     }
@@ -285,7 +288,7 @@ export class GameGateway {
       return { success: false, error: 'Login required to place bets' };
     }
 
-    const parsed = parseBet(data);
+    const parsed = GameMessages.parseBet(data);
     if (parsed === null) {
       return { success: false, error: 'Invalid bet' };
     }
@@ -316,7 +319,7 @@ export class GameGateway {
       // submitted through `submitClientSeed` is never overwritten by this.
       await this.redis
         .send('HSETNX', [
-          clientSeedsKey(roundId),
+          GameRoundService.clientSeedsKey(roundId),
           player.userId,
           this.rounds.autoClientSeed(),
         ])
@@ -333,13 +336,13 @@ export class GameGateway {
       }
 
       const wallet = this.wallets.getWallet(player.userId, isDemo);
-      publishGame(
+      GameEvents.publish(
         this.events,
-        userTopic(player.userId),
+        Topics.user(player.userId),
         GAME_EVENTS.WALLET_UPDATED,
         { balanceCents: wallet.balanceCents, isDemo },
       );
-      publishGame(this.events, GAME_TOPIC, GAME_EVENTS.BET_PLACED, {
+      GameEvents.publish(this.events, GAME_TOPIC, GAME_EVENTS.BET_PLACED, {
         userId: player.userId,
         username: player.username,
         betAmountCents: bet.betAmountCents,
@@ -355,7 +358,7 @@ export class GameGateway {
     } catch (error) {
       return {
         success: false,
-        error: playerFacing(error, 'Failed to place bet'),
+        error: GameMessages.playerFacing(error, 'Failed to place bet'),
       };
     }
   }
@@ -425,15 +428,15 @@ export class GameGateway {
         isDemo,
       );
       const wallet = this.wallets.getWallet(player.userId, isDemo);
-      const multiplier = toMultiplier(multiplierX100);
+      const multiplier = GameMath.toMultiplier(multiplierX100);
 
-      publishGame(
+      GameEvents.publish(
         this.events,
-        userTopic(player.userId),
+        Topics.user(player.userId),
         GAME_EVENTS.WALLET_UPDATED,
         { balanceCents: wallet.balanceCents, isDemo },
       );
-      publishGame(this.events, GAME_TOPIC, GAME_EVENTS.BET_CASHED_OUT, {
+      GameEvents.publish(this.events, GAME_TOPIC, GAME_EVENTS.BET_CASHED_OUT, {
         userId: player.userId,
         username: player.username,
         multiplier,
@@ -449,7 +452,7 @@ export class GameGateway {
     } catch (error) {
       return {
         success: false,
-        error: playerFacing(error, 'Failed to cash out'),
+        error: GameMessages.playerFacing(error, 'Failed to cash out'),
       };
     }
   }
@@ -470,7 +473,7 @@ export class GameGateway {
     data: unknown,
     socket: Socket<GameSocketContext>,
   ): Promise<SeedAckPayload> {
-    const seed = parseSeed(data);
+    const seed = GameMessages.parseSeed(data);
     if (seed === null) {
       return { success: false, error: 'A seed is 1 to 128 characters' };
     }
@@ -487,7 +490,7 @@ export class GameGateway {
     // one seed per socket. A spectator still contributes, keyed by connection.
     const { player } = socket.data.context;
     const field = player?.userId ?? crypto.randomUUID();
-    const key = clientSeedsKey(roundId);
+    const key = GameRoundService.clientSeedsKey(roundId);
 
     await this.redis.hset(key, { [field]: seed });
     await this.redis.expire(
@@ -514,7 +517,7 @@ export class GameGateway {
     const { player } = socket.data.context;
     if (player === null) return;
 
-    const request = parseJoinChat(data);
+    const request = GameMessages.parseJoinChat(data);
     if (request === null) return;
 
     const room =
@@ -536,7 +539,7 @@ export class GameGateway {
 
     // Subscribing is per-socket, which is why this lives in the gateway and not
     // in the service: the service owns the room, the gateway owns the connection.
-    socket.subscribe(playerChatTopic(room.roomId));
+    socket.subscribe(GameEvents.playerChatTopic(room.roomId));
 
     // To this socket: the room it now belongs to. To the other participant's own
     // topic: the same room, so their client opens a window without polling.
@@ -544,7 +547,7 @@ export class GameGateway {
     for (const participant of room.participants) {
       if (participant === player.userId) continue;
       this.events.publish(
-        userTopic(participant),
+        Topics.user(participant),
         PLAYER_CHAT_EVENTS.ROOM_CREATED,
         room,
       );
@@ -560,7 +563,7 @@ export class GameGateway {
     const { player } = socket.data.context;
     if (player === null) return;
 
-    const request = parsePlayerMessage(data);
+    const request = GameMessages.parsePlayerMessage(data);
     if (request === null) return;
 
     // `send` re-checks membership against Redis rather than trusting that this
@@ -574,10 +577,10 @@ export class GameGateway {
     const { player } = socket.data.context;
     if (player === null) return;
 
-    const roomId = parseRoomId(data);
+    const roomId = GameMessages.parseRoomId(data);
     if (roomId === null) return;
 
-    socket.unsubscribe(playerChatTopic(roomId));
+    socket.unsubscribe(GameEvents.playerChatTopic(roomId));
     this.playerChat.announce(roomId, player.username, 'leave');
   }
 
@@ -590,7 +593,7 @@ export class GameGateway {
     const { player } = socket.data.context;
     if (player === null) return { error: 'Login required to chat' };
 
-    const text = parseChat(data);
+    const text = GameMessages.parseChat(data);
     if (text === null) {
       return { error: 'a chat message is a string of 1 to 1000 characters' };
     }
@@ -644,18 +647,3 @@ export class GameGateway {
     return this.pubsub.subscriberCount(GAME_TOPIC);
   }
 }
-
-/**
- * The upgrade's headers, with `?token=` promoted to `Authorization` when the
- * header is not already there. The cookie path is untouched.
- */
-const authHeaders = (req: BunRequest): Headers => {
-  if (req.headers.has('authorization')) return req.headers;
-
-  const token = new URL(req.url).searchParams.get('token');
-  if (token === null || token.length === 0) return req.headers;
-
-  const headers = new Headers(req.headers);
-  headers.set('authorization', `Bearer ${token}`);
-  return headers;
-};

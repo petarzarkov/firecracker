@@ -4,12 +4,7 @@ import {
   text,
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
-import {
-  createdAt,
-  timestampMs,
-  updatedAt,
-  uuidPk,
-} from '../../infra/db/columns.js';
+import { Columns } from '../../infra/db/columns.js';
 import { UserRole } from '@firecracker/contracts';
 
 /**
@@ -35,7 +30,7 @@ export { UserRole } from '@firecracker/contracts';
 export const users = sqliteTable(
   'user',
   {
-    id: uuidPk(),
+    id: Columns.uuidPk(),
     email: text('email').notNull(),
     emailVerified: integer('email_verified', { mode: 'boolean' })
       .notNull()
@@ -56,9 +51,9 @@ export const users = sqliteTable(
       .notNull()
       .default(false),
     banReason: text('ban_reason'),
-    banExpires: timestampMs('ban_expires'),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
+    banExpires: Columns.timestampMs('ban_expires'),
+    createdAt: Columns.createdAt(),
+    updatedAt: Columns.updatedAt(),
   },
   (table) => [uniqueIndex('UQ_user_email').on(table.email)],
 );

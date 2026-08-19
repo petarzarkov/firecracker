@@ -41,7 +41,18 @@ export const TOPICS = Object.freeze({
   CHAT: 'chat',
 } as const);
 
-export const userTopic = (userId: string): string => `user_${userId}`;
+/**
+ * The topics that are computed rather than named.
+ *
+ * `TOPICS` above is a frozen map of literals because those two are fixed rooms;
+ * these take an argument, so they are statics. Keeping them apart is the useful
+ * distinction: a constant can be compared, a computed topic can only be built.
+ */
+export class Topics {
+  static user(userId: string): string {
+    return `user_${userId}`;
+  }
+}
 
 export interface UserRegisteredJob {
   readonly userId: string;

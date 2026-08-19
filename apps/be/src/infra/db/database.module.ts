@@ -12,7 +12,7 @@ import {
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator';
 import { AppConfigService } from '../../config/app.config.service.js';
 import * as schema from './schema.js';
-import { applyAuditTriggers } from './triggers.js';
+import { AuditTriggers } from './triggers.js';
 
 export const MIGRATIONS_FOLDER = join(import.meta.dir, 'migrations');
 
@@ -33,7 +33,7 @@ export class DatabaseBootstrap {
     }
 
     migrate(this.connection.db, { migrationsFolder: MIGRATIONS_FOLDER });
-    applyAuditTriggers(this.connection.raw);
+    AuditTriggers.apply(this.connection.raw);
   }
 
   /** The raw `bun:sqlite` handle, for health probes and `BEGIN IMMEDIATE`. */

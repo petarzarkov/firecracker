@@ -36,18 +36,21 @@ export const redisVarsSchema = z.object({
   THROTTLE_WINDOW_SECONDS: z.coerce.number().int().min(1).max(3600).default(60),
 
   /**
-   * Where the queue is consumed.
+   * Whether this process consumes its queues. **On, and there is one process.**
    *
-   * `inline` - one process serves HTTP **and** works the queues, through
-   * `WorkerFactory.attach`. This is the default and what development wants: the
-   * game is a round loop driven by jobs, so a web process with nobody consuming
-   * is an app that boots, serves, and then sits on `Starting...` forever.
+   * `WORKER_MODE=separate` and `src/worker.ts` are gone: isolation is a sandboxed
+   * child per queue now, which is per handler and needs no second entrypoint.
    *
-   * `separate` - the web process does not consume, and `bun run worker` is a
-   * second process. That is the shape to deploy when the two need to scale or
-   * restart independently, and it is what docker-compose.prod.yml runs.
+   * `false` is for the integration suites, which build the engine too - a consuming
+   * test server would start the round loop underneath their assertions. Not a
+   * deployment shape.
    */
-  WORKER_MODE: z.enum(['inline', 'separate']).default('inline'),
+  QUEUE_CONSUME: z.stringbool().default(true),
+  /**
+   * Namespaces every bullmq key. Two deployments on one Redis need two values or each
+   * consumes the other's jobs - and so does a test run, now that a test server
+   * consumes unless told not to.
+   */
   QUEUE_PREFIX: z.string().default('firecracker'),
   QUEUE_MAX_RETRIES: z.coerce.number().int().min(1).max(10).default(3),
   QUEUE_RETRY_DELAY_MS: z.coerce

@@ -5,11 +5,7 @@ import { RedisConnection } from '@dunx/infra/redis';
 import type { Page, PageOptions } from '@dunx/infra/pagination';
 import { AppConfigService } from '../../config/app.config.service.js';
 import * as schema from '../../infra/db/schema.js';
-import {
-  crashPointX100,
-  DEFAULT_RNG_ALGORITHM,
-  fairnessSeed,
-} from '../game.math.js';
+import { GameMath } from '../game.math.js';
 import {
   GameRoundStatus,
   type GameRoundRow,
@@ -19,10 +15,6 @@ import { GameBetService } from './game-bet.service.js';
 
 /** Where the monotonic per-round nonce lives. One `INCR`, no contention. */
 const NONCE_KEY = 'game:round:nonce';
-
-/** Per-round hash of player-submitted client seeds, written during WAITING. */
-export const clientSeedsKey = (roundId: string): string =>
-  `game:client-seeds:${roundId}`;
 
 /**
  * The lifecycle of a round, and the provably-fair record that goes with it.
@@ -35,6 +27,11 @@ export const clientSeedsKey = (roundId: string): string =>
  * any later would mean we chose it knowing the bets.
  */
 export class GameRoundService {
+  /** Per-round hash of player-submitted client seeds, written during WAITING. */
+  static clientSeedsKey(roundId: string): string {
+    return `game:client-seeds:${roundId}`;
+  }
+
   constructor(
     private readonly rounds: GameRoundRepository,
     private readonly bets: GameBetService,
@@ -125,7 +122,7 @@ export class GameRoundService {
       nonce,
       clientSeed: null,
       crashPointX100: null,
-      rngAlgorithm: DEFAULT_RNG_ALGORITHM,
+      rngAlgorithm: GameMath.DEFAULT_RNG_ALGORITHM,
       status: GameRoundStatus.WAITING,
       waitingEndsAt,
     });
@@ -154,22 +151,22 @@ export class GameRoundService {
     }
 
     const submitted = await this.redis
-      .hgetall(clientSeedsKey(roundId))
+      .hgetall(GameRoundService.clientSeedsKey(roundId))
       .catch(() => ({}) as Record<string, string>);
     const clientSeed = this.combineClientSeeds(Object.values(submitted));
 
-    const crashPoint = crashPointX100(
+    const crashPoint = GameMath.crashPointX100(
       round.seed,
       clientSeed,
       round.nonce,
-      DEFAULT_RNG_ALGORITHM,
+      GameMath.DEFAULT_RNG_ALGORITHM,
     );
 
     const started = this.rounds.transition(roundId, GameRoundStatus.WAITING, {
       status: GameRoundStatus.RUNNING,
       clientSeed,
       crashPointX100: crashPoint,
-      rngAlgorithm: DEFAULT_RNG_ALGORITHM,
+      rngAlgorithm: GameMath.DEFAULT_RNG_ALGORITHM,
       startedAt: new Date(),
     });
 
@@ -229,7 +226,10 @@ export class GameRoundService {
         crashedAt: new Date(),
       });
 
-      this.logger.warn('game round failed and refunded', {
+      // `debug`, not `warn`: the caller knows whether one failed round is news.
+      // `GameRoundWatchdog` sweeps a backlog and reports it as one line, and this
+      // was the second half of the two-per-round pair that made that unreadable.
+      this.logger.debug('game round failed and refunded', {
         roundId,
         refunded: refunds.length,
       });
@@ -277,7 +277,7 @@ export class GameRoundService {
       clientSeed: round.clientSeed,
       nonce: round.nonce,
       algorithm: round.rngAlgorithm,
-      rngSeed: fairnessSeed(round.seed, round.clientSeed, round.nonce),
+      rngSeed: GameMath.fairnessSeed(round.seed, round.clientSeed, round.nonce),
       crashPointX100: round.crashPointX100,
     };
   }

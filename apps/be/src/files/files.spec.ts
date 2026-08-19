@@ -4,11 +4,14 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { Images } from '@dunx/infra/images';
 import { createTestServer, type TestServer } from '@dunx/testing';
+import { UnrecoverableError, type Job } from 'bullmq';
 import { AppModule } from '../app.module.js';
-import { validateConfig } from '../config/env.validation.js';
-import { httpOptions } from '../http.options.js';
-import { bearer, signIn, signUp } from '../test-support/session.js';
+import { EnvConfig } from '../config/env.validation.js';
+import { AppHttpOptions } from '../http.options.js';
+import { TestSession } from '../test-support/session.js';
 import type { FileMetadata } from './dto/file.dto.js';
+import { MediaJobs } from './handlers/media.jobs.js';
+import type { FileThumbnailJob } from '../notifications/events/events.js';
 
 /**
  * Uploads over the real `LocalStorage` backend, into a temp directory that is
@@ -41,7 +44,7 @@ const upload = async (file: File, token: string, context = 'uploads') => {
   form.set('context', context);
   return server.json<FileMetadata>('api/files', {
     method: 'POST',
-    headers: bearer(token),
+    headers: TestSession.bearer(token),
     body: form,
   });
 };
@@ -51,6 +54,9 @@ beforeAll(async () => {
   const source = {
     API_PORT: '0',
     SQLITE_DB_PATH: ':memory:',
+    // Off: this graph includes the engine, which enqueues the first round at
+    // `onInit`, so a consuming test server would start the clock under the assertions.
+    QUEUE_CONSUME: 'false',
     STORAGE_LOCAL_ROOT: root,
     THROTTLE_LIMIT: '10000',
     // A fresh namespace, so a rerun within the window does not inherit counters
@@ -64,11 +70,15 @@ beforeAll(async () => {
   server = await createTestServer({
     modules: [AppModule.forRoot({ source, logLevel: 'fatal' })],
     prefix: 'api',
-    ...httpOptions(validateConfig(source)),
+    ...AppHttpOptions.for(EnvConfig.validate(source)),
     requestLogging: false,
   });
 
-  adminToken = await signIn(server, 'admin@local.dev', 'admin-password');
+  adminToken = await TestSession.signIn(
+    server,
+    'admin@local.dev',
+    'admin-password',
+  );
 });
 
 afterAll(async () => {
@@ -119,7 +129,7 @@ describe('multipart upload', () => {
   test('a JSON body against a multipart route is a 400 from the schema', async () => {
     const { status } = await server.json('api/files', {
       method: 'POST',
-      headers: bearer(adminToken),
+      headers: TestSession.bearer(adminToken),
       json: { file: 'not-a-file' },
     });
     expect(status).toBe(400);
@@ -141,7 +151,7 @@ describe('reading objects back', () => {
     const uploaded = await upload(png(), adminToken);
     const response = await server.request(
       `api/files/${uploaded.body.id}/download`,
-      { headers: bearer(adminToken) },
+      { headers: TestSession.bearer(adminToken) },
     );
 
     expect(response.status).toBe(200);
@@ -160,13 +170,13 @@ describe('reading objects back', () => {
   test('presigning on the local backend is a 501', async () => {
     const uploaded = await upload(png(), adminToken);
     const { status } = await server.json(`api/files/${uploaded.body.id}/link`, {
-      headers: bearer(adminToken),
+      headers: TestSession.bearer(adminToken),
     });
     expect(status).toBe(501);
   });
 
   test('a non-admin sees only its own files', async () => {
-    const other = await signUp(
+    const other = await TestSession.signUp(
       server,
       'uploader@example.com',
       'a-password-123',
@@ -174,13 +184,13 @@ describe('reading objects back', () => {
     await upload(png(), other.token, 'private');
 
     const mine = await server.json<{ data: FileMetadata[] }>('api/files', {
-      headers: bearer(other.token),
+      headers: TestSession.bearer(other.token),
     });
     expect(mine.body.data).toHaveLength(1);
     expect(mine.body.data[0]?.userId).toBe(other.userId);
 
     const all = await server.json<{ data: FileMetadata[] }>('api/files', {
-      headers: bearer(adminToken),
+      headers: TestSession.bearer(adminToken),
     });
     expect(all.body.data.length).toBeGreaterThan(1);
   });
@@ -190,12 +200,12 @@ describe('reading objects back', () => {
 
     const response = await server.request(`api/files/${uploaded.body.id}`, {
       method: 'DELETE',
-      headers: bearer(adminToken),
+      headers: TestSession.bearer(adminToken),
     });
     expect(response.status).toBe(204);
 
     const gone = await server.json(`api/files/${uploaded.body.id}`, {
-      headers: bearer(adminToken),
+      headers: TestSession.bearer(adminToken),
     });
     expect(gone.status).toBe(404);
   });
@@ -225,5 +235,39 @@ describe('@dunx/infra/images over Bun.Image', () => {
     expect(images.supports(new TextEncoder().encode('not an image'))).toBe(
       false,
     );
+  });
+});
+
+describe('the thumbnail job', () => {
+  /**
+   * A source that is not there can never succeed, so it must not consume the retry
+   * budget. Without `UnrecoverableError` this logged the same `FileNotFoundError`
+   * three times over an exponential backoff - six lines, since a sandboxed handler
+   * reports in the child and again in the parent.
+   */
+  test('a missing source fails unrecoverably rather than retrying', async () => {
+    const media = server.app.get(MediaJobs);
+    const job = {
+      data: { fileId: crypto.randomUUID(), key: 'nope/missing.png', width: 8 },
+    } as Job<FileThumbnailJob>;
+
+    await expect(media.thumbnail(job)).rejects.toBeInstanceOf(
+      UnrecoverableError,
+    );
+  });
+
+  test('a present source renders and records the thumbnail key', async () => {
+    const uploaded = await upload(png(), adminToken);
+    expect(uploaded.status).toBe(201);
+
+    const media = server.app.get(MediaJobs);
+    const job = {
+      data: { fileId: uploaded.body.id, key: uploaded.body.key, width: 4 },
+    } as Job<FileThumbnailJob>;
+
+    const result = await media.thumbnail(job);
+    expect(result.key).toBe(`${uploaded.body.key}.thumb.webp`);
+    expect(result.width).toBe(4);
+    expect(result.bytes).toBeGreaterThan(0);
   });
 });

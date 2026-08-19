@@ -6,7 +6,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 import { users } from '../../users/schema/user.schema.js';
-import { createdAt, updatedAt, uuidPk } from '../../infra/db/columns.js';
+import { Columns } from '../../infra/db/columns.js';
 import { TRANSACTION_TYPES } from '@firecracker/contracts';
 import { gameBets } from './game-bet.schema.js';
 
@@ -24,15 +24,15 @@ export {
 export const wallets = sqliteTable(
   'wallet',
   {
-    id: uuidPk(),
+    id: Columns.uuidPk(),
     userId: text('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     /** Current balance in cents. The debit is guarded so it cannot go negative. */
     balanceCents: integer('balance_cents').notNull().default(0),
     isDemo: integer('is_demo', { mode: 'boolean' }).notNull().default(false),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
+    createdAt: Columns.createdAt(),
+    updatedAt: Columns.updatedAt(),
   },
   (table) => [
     uniqueIndex('wallet_user_id_is_demo_index').on(table.userId, table.isDemo),
@@ -51,7 +51,7 @@ export const wallets = sqliteTable(
 export const walletTransactions = sqliteTable(
   'wallet_transaction',
   {
-    id: uuidPk(),
+    id: Columns.uuidPk(),
     walletId: text('wallet_id')
       .notNull()
       .references(() => wallets.id, { onDelete: 'cascade' }),
@@ -64,7 +64,7 @@ export const walletTransactions = sqliteTable(
       onDelete: 'set null',
     }),
     description: text('description'),
-    createdAt: createdAt(),
+    createdAt: Columns.createdAt(),
   },
   (table) => [
     index('wallet_transaction_wallet_id_index').on(table.walletId),

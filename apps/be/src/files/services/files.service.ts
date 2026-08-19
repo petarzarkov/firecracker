@@ -18,21 +18,23 @@ import {
 } from '../repos/files.repository.js';
 import { ThumbnailsService } from './thumbnails.service.js';
 
-const present = (row: FileRow): FileMetadata => ({
-  id: row.id,
-  userId: row.userId,
-  key: row.key,
-  name: row.name,
-  mimeType: row.mimeType,
-  size: row.size,
-  width: row.width,
-  height: row.height,
-  thumbnailKey: row.thumbnailKey,
-  createdAt: row.createdAt.toISOString(),
-  updatedAt: row.updatedAt.toISOString(),
-});
-
 export class FilesService {
+  static #present(row: FileRow): FileMetadata {
+    return {
+      id: row.id,
+      userId: row.userId,
+      key: row.key,
+      name: row.name,
+      mimeType: row.mimeType,
+      size: row.size,
+      width: row.width,
+      height: row.height,
+      thumbnailKey: row.thumbnailKey,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  }
+
   constructor(
     private readonly storage: Storage,
     private readonly repo: FilesRepository,
@@ -44,7 +46,7 @@ export class FilesService {
 
   async list(filters: ListFilesFilters): Promise<Page<FileMetadata>> {
     const page = await this.repo.list(filters);
-    return { data: page.data.map(present), meta: page.meta };
+    return { data: page.data.map(FilesService.#present), meta: page.meta };
   }
 
   row(id: string): FileRow {
@@ -56,7 +58,7 @@ export class FilesService {
   }
 
   metadata(id: string): FileMetadata {
-    return present(this.row(id));
+    return FilesService.#present(this.row(id));
   }
 
   /**
@@ -109,7 +111,7 @@ export class FilesService {
       size: row.size,
       hasDimensions: dimensions !== undefined,
     });
-    return present(row);
+    return FilesService.#present(row);
   }
 
   async download(id: string): Promise<Response> {

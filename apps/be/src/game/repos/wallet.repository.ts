@@ -2,7 +2,7 @@ import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import { SyncDatabase } from '@dunx/infra/db';
 import { paginate, type Page, type PageOptions } from '@dunx/infra/pagination';
 import * as schema from '../../infra/db/schema.js';
-import { asHandle, type DbHandle } from '../../infra/db/tx.js';
+import { Tx, type DbHandle } from '../../infra/db/tx.js';
 import {
   wallets,
   walletTransactions,
@@ -20,7 +20,7 @@ export class WalletRepository {
    * and why it is in one place.
    */
   static over(handle: DbHandle): WalletRepository {
-    return new WalletRepository(asHandle(handle));
+    return new WalletRepository(Tx.asHandle(handle));
   }
 
   findByUserId(userId: string, isDemo: boolean): WalletRow | undefined {

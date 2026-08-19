@@ -1,35 +1,33 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import type { Subprocess } from 'bun';
 import { JobPublisher } from '@dunx/infra/queue';
 import { createTestServer, type TestServer } from '@dunx/testing';
 import { AppModule } from '../../app.module.js';
-import { validateConfig } from '../../config/env.validation.js';
-import { httpOptions } from '../../http.options.js';
-import { bearer, signIn } from '../../test-support/session.js';
+import { EnvConfig } from '../../config/env.validation.js';
+import { AppHttpOptions } from '../../http.options.js';
+import { TestSession } from '../../test-support/session.js';
 import { JOBS, QUEUES } from '../../notifications/events/events.js';
 
 /**
- * The queue is the one area this app cannot demonstrate in a single process: a
- * worker is its own container with its own connections, so `bun run worker` is a
- * second process and this suite spawns it.
+ * Publish here, consume in a **forked child**.
  *
- * Every assertion that needs a broker is skipped when Redis is unreachable, because
- * `bun test` has to pass on a machine with nothing running - the degraded side of the
- * same contract is asserted in `src/infra/redis/redis.spec.ts`.
+ * This suite used to spawn `bun src/worker.ts` and wait 2.5 seconds for it. There is no
+ * such entrypoint now: `notifications` and `media` are `background`, so bullmq forks
+ * `src/jobs.processor.ts` from this very test server - `consume` is on here, unlike
+ * every other spec, which is the whole subject. The result is still computed in another
+ * process and read back through Redis, and the fork is the mechanism the deployed app
+ * uses.
  *
- * **Jobs are published and read through `JobPublisher`, not over the routes.** The
- * routes are asserted separately, above. Driving bullmq's own `Queue` for the
- * round-trip is the better test: it asserts the queue rather than an HTTP shape
- * wrapped around it, and it keeps the publish/consume test independent of whether
- * this app happens to expose queue endpoints at all.
+ * Broker assertions are skipped when Redis is unreachable, because `bun test` has to
+ * pass on a machine with nothing running; the degraded side is in `redis.spec.ts`.
+ *
+ * Jobs go through `JobPublisher` rather than the routes, so this asserts the queue
+ * rather than an HTTP shape wrapped around it.
  */
-const APP_DIR = new URL('../../..', import.meta.url).pathname;
 const PREFIX = `test-${crypto.randomUUID()}`;
 const DB_PATH = `./.tmp/queue-spec-${crypto.randomUUID()}.db`;
 
 let server: TestServer;
 let publisher: JobPublisher;
-let worker: Subprocess | undefined;
 let token = '';
 let queueUp = false;
 
@@ -41,9 +39,12 @@ interface JobView {
 
 const source = {
   API_PORT: '0',
-  // A file rather than `:memory:`, because the worker is a second process and has
-  // to see the same rows. It is removed with the rest of `.tmp`.
+  // A file, not `:memory:`: the sandbox child is a separate process with its own
+  // container, so in-memory would give it an empty database.
   SQLITE_DB_PATH: DB_PATH,
+  // On, and this is the only suite that turns it on.
+  QUEUE_CONSUME: 'true',
+  // Its own namespace, or this run consumes whatever else is on the same Redis.
   QUEUE_PREFIX: PREFIX,
   THROTTLE_PREFIX: `test-${crypto.randomUUID()}`,
   THROTTLE_LIMIT: '10000',
@@ -81,12 +82,9 @@ const settled = async (id: string): Promise<JobView> => {
     if (last.result !== null || last.failedReason !== null) return last;
     await Bun.sleep(150);
   }
-  const output =
-    worker === undefined
-      ? '(no worker spawned)'
-      : await new Response(worker.stderr as ReadableStream).text();
+  // The child's stdout is this process's, so whatever it logged is already above.
   throw new Error(
-    `job ${id} never produced a result. last=${JSON.stringify(last)}\nworker stderr:\n${output.slice(0, 2000)}`,
+    `job ${id} never produced a result. last=${JSON.stringify(last)}`,
   );
 };
 
@@ -97,11 +95,11 @@ beforeAll(async () => {
     // The same options production passes, `SessionGuard` included - which is what
     // makes the authorization assertions below meaningful. A suite that omitted
     // them would get a server with no guards that still boots and still answers.
-    ...httpOptions(validateConfig(source)),
+    ...AppHttpOptions.for(EnvConfig.validate(source)),
     requestLogging: false,
   });
   publisher = server.app.get(JobPublisher);
-  token = await signIn(server, 'admin@local.dev', 'admin-password');
+  token = await TestSession.signIn(server, 'admin@local.dev', 'admin-password');
 
   // One operation decides it: with `maxRetries: 0` and a connection timeout, an
   // enqueue against a down Redis rejects in milliseconds rather than hanging, which
@@ -112,22 +110,11 @@ beforeAll(async () => {
   } catch {
     queueUp = false;
   }
-
-  if (queueUp) {
-    worker = Bun.spawn(['bun', 'src/worker.ts'], {
-      cwd: APP_DIR,
-      env: { ...process.env, ...source, NODE_ENV: 'production' },
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-    // The worker opens its own container and one bullmq Worker per queue.
-    await Bun.sleep(2500);
-  }
 });
 
 afterAll(async () => {
-  worker?.kill('SIGKILL');
-  await worker?.exited;
+  // Stops the bullmq workers before the connections they use, in reverse construction
+  // order. The forked children are bullmq's to retire.
   await server.close();
 });
 
@@ -142,7 +129,7 @@ describe('the queue routes', () => {
     const { status, body } = await server.json<{
       broker: string;
       queues: { name: string; counts: Record<string, number> }[];
-    }>('api/queues', { headers: bearer(token) });
+    }>('api/queues', { headers: TestSession.bearer(token) });
 
     expect(status).toBe(200);
     expect(body.queues.map((q) => q.name).sort()).toEqual([
@@ -157,7 +144,7 @@ describe('the queue routes', () => {
   test('an unknown queue name is a 400 from the params schema', async () => {
     if (!queueUp) return;
     const { status } = await server.json('api/queues/nope/jobs/1', {
-      headers: bearer(token),
+      headers: TestSession.bearer(token),
     });
     expect(status).toBe(400);
   });
@@ -166,7 +153,7 @@ describe('the queue routes', () => {
     if (!queueUp) return;
     const { status } = await server.json(
       `api/queues/${QUEUES.NOTIFICATIONS}/jobs/999999`,
-      { headers: bearer(token) },
+      { headers: TestSession.bearer(token) },
     );
     expect(status).toBe(404);
   });
@@ -188,8 +175,8 @@ describe('the queue routes', () => {
   });
 });
 
-describe('publish here, consume in the worker', () => {
-  test('a job enqueued by the web process is completed by the worker', async () => {
+describe('publish here, consume in a forked child', () => {
+  test('a job enqueued by this process is completed in a child', async () => {
     if (!queueUp) return;
 
     const id = await enqueue(JOBS.USER_REGISTERED, {
@@ -200,7 +187,7 @@ describe('publish here, consume in the worker', () => {
     const finished = await settled(id);
 
     expect(finished.state).toBe('completed');
-    // The result was computed in another process and read back through Redis,
+    // The result was computed in a forked process and read back through Redis,
     // which is the only thing this test is really asserting.
     expect(finished.result).toMatchObject({ notified: expect.any(String) });
   }, 40_000);
@@ -208,8 +195,8 @@ describe('publish here, consume in the worker', () => {
   test('a handler that throws is retried and then reported failed', async () => {
     if (!queueUp) return;
 
-    // No handler is registered for this name on this queue, so the dispatcher
-    // rejects it - which is the same path a throwing handler takes.
+    // No handler for this name, so the child's dispatcher rejects it - the same path a
+    // throwing handler takes, and it proves the rejection crosses the fork.
     const id = await enqueue('no.such.job', {});
     const finished = await settled(id);
 

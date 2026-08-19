@@ -1,9 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import type { HealthReport } from '@dunx/http';
 import { createTestServer, type TestServer } from '@dunx/testing';
 import { AppModule } from '../../app.module.js';
-import { validateConfig } from '../../config/env.validation.js';
-import { httpOptions } from '../../http.options.js';
-import { bearer, signIn } from '../../test-support/session.js';
+import { EnvConfig } from '../../config/env.validation.js';
+import { AppHttpOptions } from '../../http.options.js';
+import { TestSession } from '../../test-support/session.js';
 import { CacheService } from './services/cache.service.js';
 
 /**
@@ -19,6 +20,8 @@ const DEAD_REDIS = 'redis://127.0.0.1:1';
 const base = (over: Record<string, string>): Record<string, string> => ({
   API_PORT: '0',
   SQLITE_DB_PATH: ':memory:',
+  // Off: this suite asserts what degrades without a broker.
+  QUEUE_CONSUME: 'false',
   THROTTLE_PREFIX: `test-${crypto.randomUUID()}`,
   SEED_ADMIN_EMAIL: 'admin@local.dev',
   SEED_ADMIN_PASSWORD: 'admin-password',
@@ -29,7 +32,7 @@ const boot = async (source: Record<string, string>): Promise<TestServer> =>
   createTestServer({
     modules: [AppModule.forRoot({ source, logLevel: 'fatal' })],
     prefix: 'api',
-    ...httpOptions(validateConfig(source)),
+    ...AppHttpOptions.for(EnvConfig.validate(source)),
     requestLogging: false,
   });
 
@@ -58,7 +61,11 @@ describe('with a broker that will not answer', () => {
     // Sessions are in the database by default, so authentication is unaffected by
     // an unreachable Redis. That is the whole reason `AUTH_SESSION_STORE` is an
     // opt-in rather than something `REDIS_URL` switches on.
-    token = await signIn(server, 'admin@local.dev', 'admin-password');
+    token = await TestSession.signIn(
+      server,
+      'admin@local.dev',
+      'admin-password',
+    );
   });
 
   afterAll(async () => {
@@ -69,23 +76,33 @@ describe('with a broker that will not answer', () => {
     expect(token.length).toBeGreaterThan(0);
   });
 
-  test('health reports the cache and the queue degraded, and still passes', async () => {
-    const { status, body } = await server.json<{
-      status: string;
-      degraded: Record<string, { status: string }>;
-    }>('api/service/health');
+  /**
+   * Redis and the broker are both unreachable, and readiness still answers 200 - both
+   * are `critical: false`, because no other replica has a Redis this one does not. The
+   * database is the only check that can fail this probe.
+   */
+  test('readiness stays up with the cache and the broker unreachable', async () => {
+    const { status, body } =
+      await server.json<HealthReport>('api/health/ready');
 
     expect(status).toBe(200);
-    expect(body.status).toBe('ok');
-    expect(body.degraded['cache']?.status).toBe('degraded');
-    expect(body.degraded['queue']?.status).toBe('degraded');
+    expect(body.status).toBe('up');
+    expect(body.draining).toBe(false);
+
+    const byName = new Map(body.checks.map((check) => [check.name, check]));
+    expect(byName.get('database')?.state).toBe('up');
+    // Down and non-critical: the pair the old `degraded` bucket meant to express.
+    expect(byName.get('redis')?.state).toBe('down');
+    expect(byName.get('redis')?.critical).toBe(false);
+    expect(byName.get('queue')?.state).toBe('down');
+    expect(byName.get('queue')?.critical).toBe(false);
   });
 
   test('the queue routes answer 503 rather than hanging', async () => {
     const started = Bun.nanoseconds();
     const { status, body } = await server.json<{ message: string }>(
       'api/queues',
-      { headers: bearer(token) },
+      { headers: TestSession.bearer(token) },
     );
     const elapsedMs = (Bun.nanoseconds() - started) / 1e6;
 
@@ -103,7 +120,7 @@ describe('with a broker that will not answer', () => {
   test('the throttler stops counting instead of refusing', async () => {
     for (const _ of [1, 2, 3]) {
       const { status } = await server.json('api/profile', {
-        headers: bearer(token),
+        headers: TestSession.bearer(token),
       });
       expect(status).toBe(200);
     }
@@ -132,7 +149,11 @@ describe('with a live broker', () => {
     live = await redisUp();
     if (!live) return;
     server = await boot(base({ THROTTLE_LIMIT: '2' }));
-    token = await signIn(server, 'admin@local.dev', 'admin-password');
+    token = await TestSession.signIn(
+      server,
+      'admin@local.dev',
+      'admin-password',
+    );
   });
 
   afterAll(async () => {
@@ -173,18 +194,19 @@ describe('with a live broker', () => {
     const statuses: number[] = [];
     for (const _ of [1, 2, 3]) {
       const { status } = await (server as TestServer).json('api/profile', {
-        headers: bearer(token),
+        headers: TestSession.bearer(token),
       });
       statuses.push(status);
     }
     expect(statuses).toEqual([200, 200, 429]);
   });
 
-  test('health reports the cache live', async () => {
+  test('readiness reports the cache up', async () => {
     if (!live) return;
-    const { body } = await (server as TestServer).json<{
-      info: Record<string, { status: string }>;
-    }>('api/service/health');
-    expect(body.info['cache']?.status).toBe('up');
+    const { body } = await (server as TestServer).json<HealthReport>(
+      'api/health/ready',
+    );
+    const redis = body.checks.find((check) => check.name === 'redis');
+    expect(redis?.state).toBe('up');
   });
 });

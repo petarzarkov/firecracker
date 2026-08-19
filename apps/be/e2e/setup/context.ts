@@ -40,6 +40,9 @@ const DEFAULTS: Record<string, string> = {
   NODE_ENV: 'test',
   LOG_LEVEL: 'fatal',
   SQLITE_DB_PATH: './.tmp/e2e.db',
+  // Its own bullmq namespace, which matters now a server consumes by default: on the
+  // shared prefix this suite would pull anything else's jobs off the same Redis.
+  QUEUE_PREFIX: 'firecracker-e2e',
   STORAGE_LOCAL_ROOT: './.tmp/e2e-uploads',
   E2E_API_URL: 'http://127.0.0.1:3999/api',
   // The credential `AuthAdminSeeder` creates at boot, and what the suite signs in
@@ -107,7 +110,7 @@ const waitForReady = async (
 ): Promise<void> => {
   for (let attempt = 0; attempt < 60; attempt++) {
     try {
-      const response = await fetch(`${url}/service/up`);
+      const response = await fetch(`${url}/health/live`);
       if (response.ok) return;
     } catch {
       // not listening yet
@@ -151,7 +154,7 @@ const drain = (
  * helper three files away. The port is the actual problem, so it says so.
  */
 const assertPortFree = async (url: string): Promise<void> => {
-  const reachable = await fetch(`${url}/service/up`)
+  const reachable = await fetch(`${url}/health/live`)
     .then((response) => response.ok)
     .catch(() => false);
   if (!reachable) return;

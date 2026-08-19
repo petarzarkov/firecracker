@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { csv } from './scalars.js';
+import { Env } from './scalars.js';
 
 export const StorageDriver = Object.freeze({
   LOCAL: 'local',
@@ -37,7 +37,7 @@ export const storageVarsSchema = z.object({
     .int()
     .min(1024)
     .default(10 * 1024 * 1024),
-  UPLOAD_ALLOWED_TYPES: csv([
+  UPLOAD_ALLOWED_TYPES: Env.csv([
     'image/jpeg',
     'image/png',
     'image/gif',

@@ -47,8 +47,6 @@ export const GAME_JOBS = Object.freeze({
   START: 'game.round.start',
   /** Settle every open bet and reveal the seed. */
   CRASH: 'game.round.crash',
-  /** Periodic sweep for rounds that stalled. */
-  CLEANUP: 'game.round.cleanup',
 } as const);
 export type GameJobName = (typeof GAME_JOBS)[keyof typeof GAME_JOBS];
 
@@ -78,11 +76,21 @@ export interface RoundJob {
  * by a compiler. With `@firecracker/contracts` on both sides, the missing field is
  * now an error here *and* at the handler that would have read it.
  */
-export const publishGame = <E extends keyof GamePayloads>(
-  events: { publish: (topic: string, event: string, data: unknown) => void },
-  topic: string,
-  event: E,
-  data: GamePayloads[E],
-): void => {
-  events.publish(topic, event, data);
-};
+export class GameEvents {
+  /**
+   * One-to-one chat. A topic per room rather than one topic filtered on the client,
+   * because a client that receives a message it then hides has still received it.
+   */
+  static playerChatTopic(roomId: string): string {
+    return `player_chat_${roomId}`;
+  }
+
+  static publish<E extends keyof GamePayloads>(
+    events: { publish: (topic: string, event: string, data: unknown) => void },
+    topic: string,
+    event: E,
+    data: GamePayloads[E],
+  ): void {
+    events.publish(topic, event, data);
+  }
+}

@@ -5,20 +5,37 @@ import { QueueUnavailableMiddleware } from './queue-unavailable.middleware.js';
 import { QueuesController } from './queues.controller.js';
 
 export interface QueueModuleOptions {
-  /** `false` in the worker process, which has no HTTP routes. */
+  /** `false` in a sandboxed job child, which serves no HTTP. */
   readonly controllers?: boolean;
 }
 
 /**
- * `QueueModule.forRoot` binds the **publish** side only - `QueueOptions`,
- * `QueueConnection` and `JobPublisher` - so importing it never opens a worker and a
- * web process cannot start consuming by accident. The consuming half is
- * `WorkerFactory`, in src/worker.ts.
+ * The queue, publish **and** consume, in one process.
  *
- * Imported by both processes, which is the whole shape of a queue: they agree on
- * this module and on nothing else.
+ * `consume` replaced `src/worker.ts` and the `WorkerFactory.attach` branch that came
+ * after it: the container starts the workers at `onInit` and stops them at
+ * `onShutdown`, which runs before the database and Redis connections the handlers use.
+ * An entrypoint cannot express that ordering.
+ *
+ * `processor` is where the child processes come from. A queue with any handler marked
+ * `@JobHandler({ background: true })` is given this **file path** instead of a
+ * function and bullmq forks it - that is `notifications` and `media`. The game queue is
+ * deliberately not marked: a round transition is latency-critical and the engine
+ * reading its result is in this process.
+ *
+ * The path must be absolute, because bullmq resolves it in the child against the
+ * child's cwd. `isolation: 'process'` and not `'thread'`: a fork reads `bunfig.toml`
+ * so `@dunx/transform/preload` records constructor types, where a thread enters
+ * through bullmq's prebuilt `main-worker.js` and the preload never matches a `.ts`
+ * file - the first provider with a constructor parameter then fails at boot.
  */
 export class QueuesModule {
+  /** Absolute, and computed rather than written out, so moving the file cannot lie. */
+  static readonly PROCESSOR = new URL(
+    '../../jobs.processor.ts',
+    import.meta.url,
+  ).pathname;
+
   static forRoot(options: QueueModuleOptions = {}): DynamicModule {
     const queues = QueueModule.forRootAsync({
       useFactory: (config: AppConfigService) => {
@@ -27,10 +44,8 @@ export class QueuesModule {
         return {
           ...(url === undefined ? {} : { url }),
           prefix: queue.prefix,
-          // `maxRetries: 0` is what makes an enqueue against a down Redis
-          // answer in milliseconds instead of hanging, and what lets the
-          // process exit. It is also `@dunx/infra/queue`'s own default; it is
-          // spelled out because `connectionTimeout` next to it is not.
+          // `maxRetries: 0` is what makes an enqueue against a down Redis answer in
+          // milliseconds instead of hanging, and what lets the process exit.
           connection: {
             connectionTimeout: connectTimeoutMs,
             maxRetries: 0,
@@ -48,9 +63,15 @@ export class QueuesModule {
               duration: queue.rateLimitDurationMs,
             },
           },
-          // Not a bullmq feature: bullmq's `lockDuration` answers "did the
-          // worker die", not "is this handler stuck".
+          // Not a bullmq feature: `lockDuration` answers "did the worker die", not
+          // "is this handler stuck".
           jobTimeoutMs: queue.jobTimeoutMs,
+          // `QueueRunner` turns this off by itself in a sandbox child - it checks
+          // `DUNX_JOB_WORKER` - and a broker that is down degrades rather than
+          // failing the boot.
+          consume: queue.consume,
+          processor: QueuesModule.PROCESSOR,
+          isolation: 'process' as const,
         };
       },
       inject: [AppConfigService] as const,
@@ -60,22 +81,15 @@ export class QueuesModule {
       module: QueuesModule,
       global: true,
       imports: [queues],
-      // `JobPublisher` and `QueueOptions`, through the module that binds them.
-      // Every feature that enqueues reads this, which is what global is for.
+      // Every feature that enqueues reads `JobPublisher`, which is what global is for.
       exports: [queues],
-      // Not in the worker: it has no HTTP server, so there are no routes to serve,
-      // and therefore nothing for the middleware to wrap either.
       ...(options.controllers === false
         ? {}
         : {
             controllers: [QueuesController],
-            /**
-             * The module-scoped filter, covering exactly the routes
-             * `QueuesController` declares. It replaced a private `degrades()`
-             * helper the controller wrapped around all five route bodies - which is
-             * a per-controller `@Catch` filter written by hand, and the one thing
-             * `HttpOptions.middleware` could not express.
-             */
+            // Module-scoped, covering exactly the routes `QueuesController` declares.
+            // It replaced a private `degrades()` helper wrapped around all five route
+            // bodies - the one thing `HttpOptions.middleware` could not express.
             middleware: [QueueUnavailableMiddleware],
             providers: [QueueUnavailableMiddleware],
           }),

@@ -3,15 +3,13 @@ import { RedisConnection } from '@dunx/infra/redis';
 import { EventsPublisher } from '../../notifications/events/events.publisher.js';
 import { GameBetRepository } from '../repos/game-bet.repository.js';
 import {
-  playerChatTopic,
+  GameEvents,
   PLAYER_CHAT_EVENTS,
   type PlayerChatRoom,
 } from '../game.events.js';
 
 /** How long a room's membership survives with nobody touching it. */
 const ROOM_TTL_SECONDS = 24 * 60 * 60;
-
-const roomKey = (roomId: string): string => `game:player-chat:${roomId}`;
 
 /**
  * One-to-one chat between two players.
@@ -83,7 +81,7 @@ export class PlayerChatService {
       creatorName: callerName,
     };
 
-    const key = roomKey(roomId);
+    const key = this.#roomKey(roomId);
     await this.redis.hset(key, {
       participants: JSON.stringify(room.participants),
       participantNames: JSON.stringify(room.participantNames),
@@ -100,7 +98,7 @@ export class PlayerChatService {
     // The `catch` fallback needs the same type as the success path, or the union
     // with `{}` makes every index below an implicit `any`.
     const stored = await this.redis
-      .hgetall(roomKey(roomId))
+      .hgetall(this.#roomKey(roomId))
       .catch((): Record<string, string> => ({}));
     if (stored['participants'] === undefined) return null;
 
@@ -138,20 +136,24 @@ export class PlayerChatService {
     const room = await this.find(roomId, senderId);
     if (room === null) return false;
 
-    this.events.publish(playerChatTopic(roomId), PLAYER_CHAT_EVENTS.MESSAGE, {
-      roomId,
-      senderId,
-      senderName: room.participantNames[senderId] ?? 'player',
-      message,
-      timestamp: new Date().toISOString(),
-    });
+    this.events.publish(
+      GameEvents.playerChatTopic(roomId),
+      PLAYER_CHAT_EVENTS.MESSAGE,
+      {
+        roomId,
+        senderId,
+        senderName: room.participantNames[senderId] ?? 'player',
+        message,
+        timestamp: new Date().toISOString(),
+      },
+    );
     return true;
   }
 
   /** Tell the room somebody arrived or left. */
   announce(roomId: string, name: string, type: 'join' | 'leave'): void {
     this.events.publish(
-      playerChatTopic(roomId),
+      GameEvents.playerChatTopic(roomId),
       PLAYER_CHAT_EVENTS.SYSTEM_MESSAGE,
       {
         roomId,
@@ -161,5 +163,9 @@ export class PlayerChatService {
       },
     );
     this.logger.debug('player chat announcement', { roomId, type });
+  }
+  /** One Redis hash per room. Scrollback is not a record, so it does not go in SQLite. */
+  #roomKey(roomId: string): string {
+    return `game:player-chat:${roomId}`;
   }
 }

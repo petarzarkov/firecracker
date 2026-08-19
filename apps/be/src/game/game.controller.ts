@@ -19,7 +19,7 @@ import {
   type GameRound,
 } from './dto/game.dto.js';
 import { CrashEngineService } from './engine/crash-engine.service.js';
-import { toMultiplier } from './game.math.js';
+import { GameMath } from './game.math.js';
 import {
   GameRoundStatus,
   type GameRoundRow,
@@ -46,6 +46,52 @@ const HOW_TO_VERIFY = [
 })
 @Controller('game')
 export class GameController {
+  static #mapBet(bet: GameBetRow): GameBet {
+    return {
+      id: bet.id,
+      roundId: bet.roundId,
+      userId: bet.userId,
+      betAmountCents: bet.betAmountCents,
+      status: bet.status,
+      cashedOutAt:
+        bet.cashedOutAtX100 === null
+          ? null
+          : GameMath.toMultiplier(bet.cashedOutAtX100),
+      payoutCents: bet.payoutCents,
+      isDemo: bet.isDemo,
+      createdAt: bet.createdAt.toISOString(),
+    };
+  }
+
+  /**
+   * A row as a client may see it.
+   *
+   * `seed` and `crashPoint` are attached **only** once the round has crashed. That
+   * conditional is the fairness guarantee expressed in one place - every route that
+   * returns a round goes through here, so none of them can leak it by forgetting.
+   */
+  static #mapRound(round: GameRoundRow): GameRound {
+    return {
+      id: round.id,
+      status: round.status,
+      seedHash: round.seedHash,
+      clientSeed: round.clientSeed,
+      nonce: round.nonce,
+      rngAlgorithm: round.rngAlgorithm,
+      waitingEndsAt: round.waitingEndsAt?.toISOString() ?? null,
+      startedAt: round.startedAt?.toISOString() ?? null,
+      crashedAt: round.crashedAt?.toISOString() ?? null,
+      createdAt: round.createdAt.toISOString(),
+      ...(round.status === GameRoundStatus.CRASHED &&
+      round.crashPointX100 !== null
+        ? {
+            seed: round.seed,
+            crashPoint: GameMath.toMultiplier(round.crashPointX100),
+          }
+        : {}),
+    };
+  }
+
   constructor(
     private readonly rounds: GameRoundService,
     private readonly bets: GameBetService,
@@ -69,13 +115,13 @@ export class GameController {
       );
     }
 
-    const view = mapRound(round);
+    const view = GameController.#mapRound(round);
     const multiplierX100 = this.engine.currentMultiplierX100();
     if (multiplierX100 === null) return view;
 
     return {
       ...view,
-      multiplier: toMultiplier(multiplierX100),
+      multiplier: GameMath.toMultiplier(multiplierX100),
       elapsed:
         round.startedAt === null ? 0 : Date.now() - round.startedAt.getTime(),
     };
@@ -86,7 +132,7 @@ export class GameController {
   @Get('/rounds', listRounds)
   async list(input: Input<typeof listRounds>): Promise<Page<GameRound>> {
     const page = await this.rounds.list(input.query);
-    return { ...page, data: page.data.map(mapRound) };
+    return { ...page, data: page.data.map(GameController.#mapRound) };
   }
 
   @ApiDoc({ tags: ['game'], summary: 'One round by id' })
@@ -97,7 +143,7 @@ export class GameController {
     if (round === undefined) {
       throw new HttpError(HttpStatusCode.NOT_FOUND, 'Round not found');
     }
-    return mapRound(round);
+    return GameController.#mapRound(round);
   }
 
   /**
@@ -127,7 +173,7 @@ export class GameController {
       nonce: proof.nonce,
       algorithm: proof.algorithm,
       rngSeed: proof.rngSeed,
-      crashPoint: toMultiplier(proof.crashPointX100),
+      crashPoint: GameMath.toMultiplier(proof.crashPointX100),
       howToVerify: HOW_TO_VERIFY,
     };
   }
@@ -139,42 +185,6 @@ export class GameController {
       this.caller.require().id,
       input.query,
     );
-    return { ...page, data: page.data.map(mapBet) };
+    return { ...page, data: page.data.map(GameController.#mapBet) };
   }
 }
-
-/**
- * A row as a client may see it.
- *
- * `seed` and `crashPoint` are attached **only** once the round has crashed. That
- * conditional is the fairness guarantee expressed in one place - every route that
- * returns a round goes through here, so none of them can leak it by forgetting.
- */
-const mapRound = (round: GameRoundRow): GameRound => ({
-  id: round.id,
-  status: round.status,
-  seedHash: round.seedHash,
-  clientSeed: round.clientSeed,
-  nonce: round.nonce,
-  rngAlgorithm: round.rngAlgorithm,
-  waitingEndsAt: round.waitingEndsAt?.toISOString() ?? null,
-  startedAt: round.startedAt?.toISOString() ?? null,
-  crashedAt: round.crashedAt?.toISOString() ?? null,
-  createdAt: round.createdAt.toISOString(),
-  ...(round.status === GameRoundStatus.CRASHED && round.crashPointX100 !== null
-    ? { seed: round.seed, crashPoint: toMultiplier(round.crashPointX100) }
-    : {}),
-});
-
-const mapBet = (bet: GameBetRow): GameBet => ({
-  id: bet.id,
-  roundId: bet.roundId,
-  userId: bet.userId,
-  betAmountCents: bet.betAmountCents,
-  status: bet.status,
-  cashedOutAt:
-    bet.cashedOutAtX100 === null ? null : toMultiplier(bet.cashedOutAtX100),
-  payoutCents: bet.payoutCents,
-  isDemo: bet.isDemo,
-  createdAt: bet.createdAt.toISOString(),
-});

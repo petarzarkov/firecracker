@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, lt, or } from 'drizzle-orm';
 import { SyncDatabase } from '@dunx/infra/db';
 import { paginate, type Page, type PageOptions } from '@dunx/infra/pagination';
 import * as schema from '../../infra/db/schema.js';
-import { asHandle, type DbHandle } from '../../infra/db/tx.js';
+import { Tx, type DbHandle } from '../../infra/db/tx.js';
 import {
   gameRounds,
   GameRoundStatus,
@@ -28,7 +28,7 @@ export class GameRoundRepository {
    * and why it is in one place.
    */
   static over(handle: DbHandle): GameRoundRepository {
-    return new GameRoundRepository(asHandle(handle));
+    return new GameRoundRepository(Tx.asHandle(handle));
   }
 
   findById(id: string): GameRoundRow | undefined {

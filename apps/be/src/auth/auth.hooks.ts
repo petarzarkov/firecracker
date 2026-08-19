@@ -15,26 +15,34 @@ import { JOBS, QUEUES } from '../notifications/events/events.js';
  * sign-up. An unreachable queue must not stop a user registering - the welcome
  * email is the part that degrades, not the account.
  */
-export const registrationHooks = (
-  publisher: JobPublisher,
-  logger: Logger,
-): BetterAuthOptions['databaseHooks'] => ({
-  user: {
-    create: {
-      after: async (user) => {
-        try {
-          await publisher.publish(QUEUES.NOTIFICATIONS, JOBS.USER_REGISTERED, {
-            userId: user.id,
-            email: user.email,
-            name: user.name,
-          });
-        } catch (error) {
-          logger.warn('welcome notification not queued', {
-            userId: user.id,
-            reason: (error as Error).message,
-          });
-        }
+export class AuthHooks {
+  static registration(
+    publisher: JobPublisher,
+    logger: Logger,
+  ): BetterAuthOptions['databaseHooks'] {
+    return {
+      user: {
+        create: {
+          after: async (user) => {
+            try {
+              await publisher.publish(
+                QUEUES.NOTIFICATIONS,
+                JOBS.USER_REGISTERED,
+                {
+                  userId: user.id,
+                  email: user.email,
+                  name: user.name,
+                },
+              );
+            } catch (error) {
+              logger.warn('welcome notification not queued', {
+                userId: user.id,
+                reason: (error as Error).message,
+              });
+            }
+          },
+        },
       },
-    },
-  },
-});
+    };
+  }
+}

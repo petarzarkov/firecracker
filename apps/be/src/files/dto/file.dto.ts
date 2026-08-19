@@ -1,6 +1,6 @@
 import type { RouteSchemas } from '@dunx/http';
 import { z } from 'zod';
-import { paginatedOf, pageOptionsSchema } from '../../core/pagination.dto.js';
+import { Paginated, pageOptionsSchema } from '../../core/pagination.dto.js';
 
 export const FileMetadata = z
   .object({
@@ -23,7 +23,7 @@ export const FileMetadata = z
 
 export type FileMetadata = z.infer<typeof FileMetadata>;
 
-export const PaginatedFiles = paginatedOf(FileMetadata, 'PaginatedFiles');
+export const PaginatedFiles = Paginated.of(FileMetadata, 'PaginatedFiles');
 
 export const FileIdParams = z.object({ fileId: z.uuid() });
 

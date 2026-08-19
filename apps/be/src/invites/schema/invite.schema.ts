@@ -1,12 +1,7 @@
 import { index, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { INVITE_STATUSES, InviteStatus } from '@firecracker/contracts';
 import { UserRole } from '../../users/schema/user.schema.js';
-import {
-  createdAt,
-  timestampMs,
-  updatedAt,
-  uuidPk,
-} from '../../infra/db/columns.js';
+import { Columns } from '../../infra/db/columns.js';
 
 /** The invite states, from `@firecracker/contracts`. */
 export { InviteStatus } from '@firecracker/contracts';
@@ -29,7 +24,7 @@ export { InviteStatus } from '@firecracker/contracts';
 export const invites = sqliteTable(
   'invite',
   {
-    id: uuidPk(),
+    id: Columns.uuidPk(),
     email: text('email').notNull(),
     code: text('code').notNull(),
     role: text('role', { enum: [UserRole.ADMIN, UserRole.USER] })
@@ -38,11 +33,11 @@ export const invites = sqliteTable(
     status: text('status', { enum: INVITE_STATUSES })
       .notNull()
       .default(InviteStatus.PENDING),
-    expiresAt: timestampMs('expires_at').notNull(),
+    expiresAt: Columns.timestampMs('expires_at').notNull(),
     /** Who accepted it, once somebody has. */
     acceptedBy: text('accepted_by'),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
+    createdAt: Columns.createdAt(),
+    updatedAt: Columns.updatedAt(),
   },
   (table) => [
     uniqueIndex('UQ_invite_email').on(table.email),

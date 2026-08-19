@@ -11,18 +11,20 @@ import {
   type ListUsersFilters,
 } from '../repos/users.repository.js';
 
-const sanitize = (row: UserRow): SanitizedUser => ({
-  id: row.id,
-  email: row.email,
-  name: row.name,
-  role: row.role,
-  banned: row.banned,
-  emailVerified: row.emailVerified,
-  createdAt: row.createdAt.toISOString(),
-  updatedAt: row.updatedAt.toISOString(),
-});
-
 export class UsersService {
+  static #sanitize(row: UserRow): SanitizedUser {
+    return {
+      id: row.id,
+      email: row.email,
+      name: row.name,
+      role: row.role,
+      banned: row.banned,
+      emailVerified: row.emailVerified,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  }
+
   constructor(
     private readonly repo: UsersRepository,
     private readonly auth: Auth,
@@ -32,7 +34,7 @@ export class UsersService {
 
   async list(filters: ListUsersFilters): Promise<Page<SanitizedUser>> {
     const page = await this.repo.list(filters);
-    return { data: page.data.map(sanitize), meta: page.meta };
+    return { data: page.data.map(UsersService.#sanitize), meta: page.meta };
   }
 
   findById(id: string): SanitizedUser {
@@ -40,7 +42,7 @@ export class UsersService {
     if (row === undefined) {
       throw new HttpError(HttpStatusCode.NOT_FOUND, `No user with id ${id}`);
     }
-    return sanitize(row);
+    return UsersService.#sanitize(row);
   }
 
   /**
@@ -78,7 +80,7 @@ export class UsersService {
     }
 
     this.logger.info('user created', { userId: row.id, role: row.role });
-    return sanitize(row);
+    return UsersService.#sanitize(row);
   }
 
   update(id: string, input: UpdateUser): SanitizedUser {
@@ -90,7 +92,7 @@ export class UsersService {
       userId: id,
       fields: Object.keys(input),
     });
-    return sanitize(row);
+    return UsersService.#sanitize(row);
   }
 
   async setBanned(id: string, banned: boolean): Promise<SanitizedUser> {

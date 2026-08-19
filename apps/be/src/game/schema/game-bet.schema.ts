@@ -6,7 +6,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 import { users } from '../../users/schema/user.schema.js';
-import { createdAt, updatedAt, uuidPk } from '../../infra/db/columns.js';
+import { Columns } from '../../infra/db/columns.js';
 import { BET_STATUSES, GameBetStatus } from '@firecracker/contracts';
 import { gameRounds } from './game-round.schema.js';
 
@@ -36,7 +36,7 @@ export { BET_STATUSES, GameBetStatus } from '@firecracker/contracts';
 export const gameBets = sqliteTable(
   'game_bet',
   {
-    id: uuidPk(),
+    id: Columns.uuidPk(),
 
     roundId: text('round_id')
       .notNull()
@@ -69,8 +69,8 @@ export const gameBets = sqliteTable(
      */
     isDemo: integer('is_demo', { mode: 'boolean' }).notNull().default(false),
 
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
+    createdAt: Columns.createdAt(),
+    updatedAt: Columns.updatedAt(),
   },
   (table) => [
     index('game_bet_round_id_index').on(table.roundId),

@@ -8,9 +8,19 @@
  */
 export const SERVICE_ROUTES = Object.freeze({
   BASE: 'service',
-  HEALTH: 'health',
-  LIVENESS: 'up',
   CONFIG: 'config',
+} as const);
+
+/**
+ * Where `@dunx/http`'s `HealthController` mounts, relative to the global prefix.
+ *
+ * Restated rather than imported: its paths are literals in the package's own
+ * decorators. The request log's ignore list and the boot banner read these.
+ */
+export const HEALTH_ROUTES = Object.freeze({
+  BASE: 'health',
+  LIVENESS: 'live',
+  READINESS: 'ready',
 } as const);
 
 /**

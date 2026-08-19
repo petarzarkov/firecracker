@@ -1,27 +1,20 @@
-# The deployed shape: the tunnel, Redis, the API (which also serves the built
-# client) and the queue worker.
+# The deployed shape: the tunnel, Redis, and the API - which serves the built
+# client, holds the clock and consumes its own queues.
 #
 # `docker compose -f docker-compose.prod.yml up -d --build`
 #
-# ## Two app containers, one image
+# ## One app container, and it used to be two
 #
-# `app` and `app-worker` are the same image with a different command, which is the
-# split `src/main.ts` and `src/worker.ts` already describe. It is not an
-# optimisation - the crash engine's tick loop must run in exactly one process, and
-# `WorkerModule` is built with `engine: false` for precisely that reason. Scaling
-# `app` to more than one replica is therefore **not** safe today: see the note in
-# `app.module.ts`.
+# `app-worker` and `WORKER_MODE: separate` are gone. `consume: true` opens the workers
+# inside the running container, and the queues that must not share its event loop -
+# email and image resizing - are `background`, so bullmq forks `src/jobs.processor.ts`
+# per burst. Isolation is per handler now, and one fewer thing to deploy.
 #
-# ## One SQLite file, two writers
+# **`app` still cannot be scaled past one replica.** The crash engine's tick loop must
+# run in exactly one process, and the schedules are single-node for the same reason.
 #
-# Both mount `app-data` and open the same database. WAL plus a busy timeout is
-# what makes that work, and both are set in `infra/db/database.module.ts`. This is
-# also the reason the two containers must stay on the same host: a SQLite file
-# over a network filesystem is a corrupted database waiting to happen.
-#
-# pm2 is gone. Docker restarts these, and running a process manager inside a
-# container that already has one is two supervisors disagreeing about who owns the
-# process.
+# pm2 is gone. Docker restarts these, and a process manager inside a container that
+# already has one is two supervisors disagreeing about who owns the process.
 services:
   cloudflared:
     image: cloudflare/cloudflared:latest
@@ -79,9 +72,15 @@ services:
     env_file:
       - .env
     environment:
-      # The worker is its own container here, so the API must not also consume -
-      # see `WORKER_MODE` in apps/be/.env.example.
-      WORKER_MODE: separate
+      # On SIGTERM, keep answering while readiness reports 503 for six seconds, then
+      # close the socket - `Readiness` implements `OnBeforeShutdown`, which runs before
+      # `server.stop()`. Nothing here polls readiness to decide routing, so the value
+      # is modest; it is set at all because a shape only configured in production is a
+      # shape nobody has run.
+      HEALTH_DRAIN_DELAY_MS: 6000
+    # The drain plus teardown. Explicit next to the number it depends on, because
+    # Docker's 10s default would not survive raising it.
+    stop_grace_period: 20s
     ports:
       - '${API_PORT:-3001}:3001'
     volumes:
@@ -89,34 +88,6 @@ services:
     depends_on:
       app-redis:
         condition: service_healthy
-    networks:
-      - app
-
-  app-worker:
-    container_name: app-worker
-    restart: unless-stopped
-    build:
-      context: .
-      dockerfile: apps/be/Dockerfile
-      args:
-        COMMIT_SHA: ${COMMIT_SHA:-}
-        COMMIT_MESSAGE: ${COMMIT_MESSAGE:-}
-    command: ['bun', 'src/worker.ts']
-    env_file:
-      - .env
-    volumes:
-      - app-data:/app/data
-    depends_on:
-      app-redis:
-        condition: service_healthy
-      # Not `service_healthy`: the web container runs the migrations at boot, and
-      # a worker that opened the file first would see no tables. Waiting for
-      # "started" is not strictly enough either, which is why the worker's own
-      # DatabaseBootstrap runs `migrate()` too - it is idempotent.
-      app:
-        condition: service_started
-    # No healthcheck: a worker serves no HTTP. Its liveness is whether it is
-    # consuming, which the queue's own depth reports better than a probe here.
     networks:
       - app
 

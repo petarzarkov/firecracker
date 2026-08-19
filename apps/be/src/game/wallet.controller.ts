@@ -32,6 +32,27 @@ import { WalletService } from './services/wallet.service.js';
 })
 @Controller('wallet')
 export class WalletController {
+  static #mapTransaction(row: WalletTransactionRow): WalletTransaction {
+    return {
+      id: row.id,
+      type: row.type,
+      amountCents: row.amountCents,
+      balanceAfterCents: row.balanceAfterCents,
+      gameBetId: row.gameBetId,
+      description: row.description,
+      createdAt: row.createdAt.toISOString(),
+    };
+  }
+
+  static #mapWallet(wallet: WalletRow): Wallet {
+    return {
+      id: wallet.id,
+      balanceCents: wallet.balanceCents,
+      isDemo: wallet.isDemo,
+      updatedAt: wallet.updatedAt.toISOString(),
+    };
+  }
+
   constructor(
     private readonly wallets: WalletService,
     private readonly caller: CurrentUser,
@@ -40,7 +61,7 @@ export class WalletController {
   @ApiDoc({ tags: ['wallet'], summary: 'The caller’s balance' })
   @Get('/', walletQuery)
   balance(input: Input<typeof walletQuery>): Wallet {
-    return mapWallet(
+    return WalletController.#mapWallet(
       this.wallets.getWallet(this.caller.require().id, input.query.isDemo),
     );
   }
@@ -55,7 +76,7 @@ export class WalletController {
       input.query.isDemo,
       input.query,
     );
-    return { ...page, data: page.data.map(mapTransaction) };
+    return { ...page, data: page.data.map(WalletController.#mapTransaction) };
   }
 
   @ApiDoc({
@@ -64,23 +85,8 @@ export class WalletController {
   })
   @Post('/demo/reset')
   resetDemo(): Wallet {
-    return mapWallet(this.wallets.resetDemoWallet(this.caller.require().id));
+    return WalletController.#mapWallet(
+      this.wallets.resetDemoWallet(this.caller.require().id),
+    );
   }
 }
-
-const mapWallet = (wallet: WalletRow): Wallet => ({
-  id: wallet.id,
-  balanceCents: wallet.balanceCents,
-  isDemo: wallet.isDemo,
-  updatedAt: wallet.updatedAt.toISOString(),
-});
-
-const mapTransaction = (row: WalletTransactionRow): WalletTransaction => ({
-  id: row.id,
-  type: row.type,
-  amountCents: row.amountCents,
-  balanceAfterCents: row.balanceAfterCents,
-  gameBetId: row.gameBetId,
-  description: row.description,
-  createdAt: row.createdAt.toISOString(),
-});
