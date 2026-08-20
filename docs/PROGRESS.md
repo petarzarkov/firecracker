@@ -6,13 +6,13 @@ Status vocabulary: `research` → `planned` → `in progress` → `done` / `bloc
 
 | # | Workstream | Status | Notes |
 |---|-----------|--------|-------|
-| 01 | Contracts | planned | **3 live drift bugs found, 2 shipped**; 12-step plan; 11 raw `publish` holes |
-| 02 | Game module | planned | 6 sub-modules + facade; 3 of 4 proposed merges rejected; 7 steps |
-| 03 | Module hygiene | in progress | SPA fallback fixed; audit + invites + dead routes **deleted** (1244 lines) |
-| 04 | Data layer | planned | BaseRepository design typechecked at exit 0; migrations already correct |
+| 01 | Contracts | next | **3 live drift bugs found, 2 shipped**; 12-step plan; 11 raw `publish` holes |
+| 02 | Game module | next; bet-path gate now satisfied | 6 sub-modules + facade; 3 of 4 proposed merges rejected; 7 steps |
+| 03 | Module hygiene | done | SPA fallback fixed; audit + invites + dead routes **deleted** (1244 lines) |
+| 04 | Data layer | done | BaseRepository design typechecked at exit 0; migrations already correct |
 | 05 | Noise reduction | planned | **3 secret-leak sites, fixed**; 27 info -> 5 survive; comments 22.4% |
 | 06 | Multi-replica | done | design doc delivered; found 2 single-replica bugs + a stale prefix |
-| 07 | dunx framework | in progress | separate repo, prerelease target |
+| 07 | dunx framework | **released as 2.2.0** | published, tagged, consumed here |
 | 08 | dunx docs | done | 17 docs + README rewritten; **52 docs-vs-code discrepancies**, 4 likely code bugs |
 
 ## Live bugs found during research
@@ -80,6 +80,15 @@ Related: `CLIENT_DIST=''` is a boot failure. `app.module.ts:128` gates the modul
 empty string registers `SpaFallback` without the module that provides it.
 
 ## Landed so far
+
+- dunx **2.2.0** published, tagged and released; firecracker consumes it.
+- Repositories are fully synchronous - `paginate` follows its driver now (831958f).
+- The hand-rolled throttle is gone, 119 lines, replaced by `@dunx/http`'s (eebfa61).
+- The bet path has coverage for the first time: 15 cases, row counts not balances
+  (cebf7b3). It found a live defect on the way - see below.
+- Wallet is its own top-level module with a required-`DbHandle` seam (348d020).
+- Five of six hoisted-`const` module workarounds retired (7eec13b).
+- The module graph is asserted to register nothing twice (4cf8496).
 
 - Audit module, invites feature, dead AI controller and two dead profile routes
   deleted: **1244 code lines, 17 files**, two verified migrations

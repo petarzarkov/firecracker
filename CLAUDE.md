@@ -64,7 +64,7 @@ Hard rules:
 
 - **Every relative import ends in `.js`.** Not `.ts`, not extensionless.
 - **A parameter typed as an interface or a primitive is a boot error**, not `undefined`. Constructor parameter types must name a runtime value — a class or a `Token`.
-- **A module is decorated _or_ configured, never both.** `@Module` on a class that also has a `static forRoot()` registers every import twice.
+- **A decorated module and a `static forRoot()` compose** as of dunx 2.2.0: the option lists union, and a configured provider overrides the decorator's binding for the same token. Before 2.2.0 they concatenated, so a class carrying both registered every import twice - if you are reading older code that avoids the combination, that is why.
 - **`Module.forRoot()` returns a new object per call**, so calling it twice creates two scopes with two instances. If two feature modules need the same binding, give it its own `global: true` module — that is exactly why `EventsPublisherModule` exists.
 
 ### Custom parameter decorators do not exist
@@ -129,6 +129,28 @@ Isolation is **per handler**. `notifications` and `media` carry `@JobHandler({ b
 
 `EngineCommand` on a Redis channel is still how the clock is told what a round became. It is a loopback publish now, kept because it is also the recovery path.
 
+### Repositories are synchronous, without exception
+
+Every read is synchronous now, `list` included. `paginate` used to force it async
+because it also served `Bun.SQL`; since dunx 2.2.0 its return type follows the
+driver, so a `bun:sqlite` handle gets a `Page` rather than a promise for one. The
+one documented exception to the synchrony rule is gone, which matters because the
+synchrony *is* the atomicity argument - `transactionSync` cannot yield.
+
+All repositories extend `BaseRepository` or `CrudRepository` from
+`infra/db/base.repository.ts`. **No repository declares a constructor**: dunx's
+`readDeps` is a prototype-chain lookup, so the DI record is inherited, and a
+subclass adding a constructor parameter stops satisfying `over()`'s `this`
+constraint - a compile error, which is the right failure. `table` is an abstract
+field for that reason. `WalletRepository` extends the read tier only: a generic
+`update(id, { balanceCents })` would be exactly the JavaScript balance write this
+file forbids.
+
+`Db` and `AppSchema` in `infra/db/tx.ts` name the handle. The **token and the type
+cannot share a name** - the transform slices the head of a parameter's annotation,
+so `db: Db` records an unresolved parameter and fails at *boot*, not at typecheck.
+Annotate with `SyncDatabase<AppSchema>`; the alias is for generics and `over()`.
+
 ### Timers are schedules, not `setInterval`
 
 `ScheduleModule` from `@dunx/infra/schedule`, wrapped as `SchedulesModule` so it is `global: true` — `ScheduleRegistry` has two injectors and a second `forRootAsync()` call would mean two registries and two copies of every schedule.
@@ -160,6 +182,19 @@ Drawing earlier would mean the players could not have influenced it. Drawing lat
 
 `rngAlgorithm` is stored on every round, so changing the default cannot retroactively invalidate history.
 
+### The wallet is its own module
+
+`src/wallet/` — schema, repository, service, controller. It left `src/game/` because
+a crash game is not the only thing that can move money, and `game/` naming a
+`WalletRepository` made the bet path look like wallet internals.
+
+The seam is deliberate: `findWallet`, `debit` and `credit` take the caller's
+`DbHandle` as a **required first argument** and are synchronous. The
+`transactionSync` stays in `GameBetService`, so one transaction spans the debit and
+the bet insert. There is no `scoped()` convenience and no defaulted handle - both
+let a caller move money outside the caller's transaction, which is the bug the
+required argument makes unwriteable.
+
 ### There is no advisory lock, and none is needed
 
 The Postgres version wrapped bets in `pg_try_advisory_xact_lock`. Three things replace it:
@@ -169,6 +204,14 @@ The Postgres version wrapped bets in `pg_try_advisory_xact_lock`. Three things r
 3. **`game_bet_round_user_demo_index` is unique** — which catches the cross-process double bet.
 
 Never "simplify" the debit into a JavaScript balance check followed by an update.
+
+Point 3 only *answers* correctly if the catch recognises the violation. bun:sqlite
+names the **columns**, never the index: `UNIQUE constraint failed: game_bet.round_id,
+game_bet.user_id, game_bet.is_demo`. `GameBetService` matched on the index name for
+months, so the predicate was always false and a double bet surfaced as a raw 500
+rather than "you already have an active bet in this round". Money was never at risk -
+the transaction rolled back - but match on the column list, and let
+`bet-actions.test.ts` keep proving it.
 
 ### Auth is cookie-first, and dev is same-origin
 
