@@ -2,17 +2,11 @@ import type { DynamicModule } from '@dunx/core';
 import { HttpModule } from '@dunx/http/client';
 import { AppConfigService } from '../config/app.config.service.js';
 import { AI_HTTP_CLIENT } from './ai.provider.js';
-import { AIController } from './ai.controller.js';
 import { AIProviderService } from './services/ai-provider.service.js';
 import { AIService } from './services/ai.service.js';
 import { GoogleService } from './services/google.service.js';
 import { GroqService } from './services/groq.service.js';
 import { OpenRouterService } from './services/openrouter.service.js';
-
-export interface AIModuleOptions {
-  /** `false` in the worker, which serves no HTTP. */
-  readonly controllers?: boolean;
-}
 
 /**
  * The model providers.
@@ -25,9 +19,12 @@ export interface AIModuleOptions {
  * Every provider is constructed whether or not it has a key. They report
  * `configured` instead of failing, so an app with no AI configured still boots,
  * still serves, and simply has quieter bots.
+ *
+ * No controller and therefore no options: this module is reached only from
+ * `GameBotsService` and `AvatarsService`, both of which inject it.
  */
 export class AIModule {
-  static forRoot(options: AIModuleOptions = {}): DynamicModule {
+  static forRoot(): DynamicModule {
     /**
      * The providers' own HTTP client. `forRootAsync` because the timeout is a
      * config value, and a model call is slow enough that the default would cut it
@@ -53,7 +50,6 @@ export class AIModule {
       module: AIModule,
       global: true,
       imports: [http],
-      ...(options.controllers === false ? {} : { controllers: [AIController] }),
       providers: [
         GoogleService,
         GroqService,

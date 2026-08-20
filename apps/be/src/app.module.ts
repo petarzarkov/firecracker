@@ -52,7 +52,7 @@ class Foundation {
       SchedulesModule.forRoot({ enabled: publisher === 'socket' }),
       // One instance for both graphs: `GoogleService` paces itself against a
       // per-minute quota, and two clients would each think they had the allowance.
-      AIModule.forRoot({ controllers: publisher === 'socket' }),
+      AIModule.forRoot(),
       // The one thing the two graphs configure differently: `socket` publishes
       // through this server's `PubSub`, `relay` puts the frame on the Redis channel.
       EventsPublisherModule.forRoot({ publisher }),
