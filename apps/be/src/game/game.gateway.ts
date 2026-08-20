@@ -1,10 +1,3 @@
-/* oxlint-disable max-lines -- This is the app's entire realtime surface, and dunx
-   mounts one gateway per path: the game, global chat and player DMs share a single
-   connection, so their handlers share a single class. Splitting it would mean a
-   second WebSocket, which is the thing the class comment explains we do not want.
-   The logic is already out - see game.messages.ts, game-state.service.ts,
-   auto-cashout.service.ts and player-chat.service.ts. What is left is transport. */
-import { Auth, rolesOf } from '@dunx/auth';
 import { Logger } from '@dunx/core';
 import {
   Gateway,
@@ -15,7 +8,9 @@ import {
   PubSub,
   type Socket,
 } from '@dunx/http';
+import type { ServerPayloads } from '@firecracker/contracts';
 import type { BunRequest } from 'bun';
+import { ChatService } from '../chat/services/chat.service.js';
 import { EventsPublisher } from '../notifications/events/events.publisher.js';
 import {
   CLIENT_EVENTS,
@@ -24,47 +19,28 @@ import {
   TOPICS,
   Topics,
   type ChatAckPayload,
-  type ChatLine,
 } from '../notifications/events/events.js';
 import { UserRole } from '../users/schema/user.schema.js';
 import { CrashEngineService } from './engine/crash-engine.service.js';
+import { ClientSeedService } from './fairness/client-seed.service.js';
 import {
   GAME_CLIENT_EVENTS,
   GAME_EVENTS,
   GAME_TOPIC,
   PLAYER_CHAT_EVENTS,
   playerChatTopic,
-  publishGame,
-  publishPlayerChat,
-  type BetAckPayload,
-  type CashOutAckPayload,
   type SeedAckPayload,
 } from './game.events.js';
-import type { ServerPayloads } from '@firecracker/contracts';
-import { ClientSeedService } from './fairness/client-seed.service.js';
-import { GameMath } from './game.math.js';
-import { GameRoundStatus } from './schema/game-round.schema.js';
-import { GameBetService } from './services/game-bet.service.js';
-import { ChatService } from '../chat/services/chat.service.js';
-import { AutoCashOutService } from './services/auto-cashout.service.js';
-import { PlayerChatService } from './services/player-chat.service.js';
-import { GameStateService } from './services/game-state.service.js';
-import { WalletService } from '../wallet/services/wallet.service.js';
 import { GameMessages } from './game.messages.js';
-
-/** Who is on the far end of a socket. `null` for a spectator. */
-export interface SocketPlayer {
-  readonly userId: string;
-  readonly email: string;
-  readonly username: string;
-  /** better-auth calls it `image`; the client has always called it `picture`. */
-  readonly picture: string | null;
-  readonly roles: readonly string[];
-}
-
-export interface GameSocketContext {
-  readonly player: SocketPlayer | null;
-}
+import { GameRoundStatus } from './schema/game-round.schema.js';
+import { AutoCashOutService } from './services/auto-cashout.service.js';
+import { GameStateService } from './services/game-state.service.js';
+import { PlayerChatService } from './services/player-chat.service.js';
+import { BetActionsService } from './surface/bet-actions.service.js';
+import {
+  SocketAuthService,
+  type GameSocketContext,
+} from './surface/socket-auth.service.js';
 
 /**
  * The one socket. Chat, notifications and the game all arrive here.
@@ -77,45 +53,30 @@ export interface GameSocketContext {
  * two classes means two paths, two connections, and two upgrades to authenticate.
  * A path claimed by two gateways is a boot error rather than a merge.
  *
- * One connection is the behaviour worth keeping, so this is one class. The
- * template's `EventsGateway` was folded into it and deleted; what stops this from
- * becoming a god object is that it holds no logic - every handler validates, calls
- * a service, and publishes.
+ * One connection is the behaviour worth keeping, so this is one class - and the
+ * only way to make it smaller is to keep every `@OnX` here and move the bodies
+ * out. What is left is transport: subscribe, parse, delegate, send. The upgrade is
+ * `SocketAuthService`, a bet and a cash-out are `BetActionsService`, the connect
+ * frames are `GameStateService`, and the seed pool is `ClientSeedService`.
  *
  * ## The upgrade does not refuse anonymous callers
  *
- * `EventsGateway` returned a 401 from `@OnUpgrade` when there was no session. This
- * one must not: watching the rocket climb is what a visitor does before signing up,
- * and the crash history and the lobby are public. A spectator gets
- * `context.player === null`, and every handler that spends money checks for it.
+ * The template's `EventsGateway` returned a 401 from `@OnUpgrade` when there was no
+ * session. This one must not: watching the rocket climb is what a visitor does
+ * before signing up, and the crash history and the lobby are public. A spectator
+ * gets `context.player === null`, and every handler that spends money checks it.
  */
 @Gateway('/ws')
 export class GameGateway {
-  /**
-   * The upgrade's headers, with `?token=` promoted to `Authorization` when the
-   * header is not already there. The cookie path is untouched.
-   */
-  static #authHeaders(req: BunRequest): Headers {
-    if (req.headers.has('authorization')) return req.headers;
-
-    const token = new URL(req.url).searchParams.get('token');
-    if (token === null || token.length === 0) return req.headers;
-
-    const headers = new Headers(req.headers);
-    headers.set('authorization', `Bearer ${token}`);
-    return headers;
-  }
-
   constructor(
-    private readonly auth: Auth,
+    private readonly sessions: SocketAuthService,
     private readonly engine: CrashEngineService,
-    private readonly bets: GameBetService,
-    private readonly wallets: WalletService,
+    private readonly actions: BetActionsService,
     private readonly autoCashOut: AutoCashOutService,
     private readonly state: GameStateService,
+    private readonly clientSeeds: ClientSeedService,
     private readonly playerChat: PlayerChatService,
     private readonly chat: ChatService,
-    private readonly clientSeeds: ClientSeedService,
     private readonly events: EventsPublisher,
     private readonly pubsub: PubSub,
     private readonly logger: Logger,
@@ -129,7 +90,7 @@ export class GameGateway {
    * where today its only game dependency is `GameRoundRepository`.
    *
    * It is registered *after* the engine's own `onInit` has run its boot recovery,
-   * because providers construct in declaration order - so a round that was
+   * because providers construct in dependency order - so a round that was
    * mid-flight resumes ticking a moment before this sweep is armed. Survivable
    * rather than overlooked: the engine reads the handler per tick, and `sweep`
    * claims each entry with `hdel` before it pays, so the cost is a couple of ticks
@@ -150,50 +111,12 @@ export class GameGateway {
 
   /**
    * The session, if there is one. Returning a `Response` here would refuse the
-   * upgrade, and this gateway never does - see the class note.
-   *
-   * ## Why a token can arrive in the query string
-   *
-   * A browser's `WebSocket` constructor takes a URL and nothing else: there is no
-   * way to set an `Authorization` header on the handshake. That leaves the cookie,
-   * and better-auth issues its session cookie `SameSite=Lax`, which a browser sends
-   * on top-level navigations and **not** on a cross-origin WebSocket upgrade. In
-   * development the client is on Vite's port and the API is on its own, so the
-   * cookie never arrives and every socket would be anonymous.
-   *
-   * So `?token=` is read as a fallback and turned into the `Authorization` header
-   * better-auth's `bearer()` plugin already understands. The cookie is still
-   * preferred and is what production uses, where the client is served same-origin.
-   *
-   * The token must be **percent-encoded** by the caller: better-auth issues base64,
-   * which routinely contains `/`, `+` and `=`, and an unencoded `+` arrives here as
-   * a space. `URL.searchParams.set` does this for free, which is what the client
-   * shim uses.
-   *
-   * A token in a query string is worth being uncomfortable about - it lands in
-   * server access logs and in `Referer` on any request the page makes afterwards.
-   * It is acceptable here because it is only reached for cross-origin development,
-   * and because the alternative is developing against an app where nobody is ever
-   * logged in. It is **not** a pattern to copy onto an HTTP route.
+   * upgrade, and this gateway never does - see `SocketAuthService`, which also
+   * explains why a token may arrive in the query string.
    */
   @OnUpgrade()
-  async upgrade(req: BunRequest): Promise<GameSocketContext> {
-    const principal = await this.auth.api
-      .getSession({ headers: GameGateway.#authHeaders(req) })
-      .catch(() => null);
-
-    if (principal === null) return { player: null };
-
-    const { user } = principal;
-    return {
-      player: {
-        userId: user.id,
-        email: user.email,
-        username: user.name || user.email.split('@')[0] || user.id,
-        picture: user.image ?? null,
-        roles: rolesOf(user),
-      },
-    };
+  upgrade(req: BunRequest): Promise<GameSocketContext> {
+    return this.sessions.context(req);
   }
 
   /**
@@ -252,177 +175,14 @@ export class GameGateway {
     data: unknown,
     socket: Socket<GameSocketContext>,
   ): Promise<void> {
-    this.#send(socket, GAME_EVENTS.BET_ACK, await this.#placeBet(data, socket));
+    const ack = await this.actions.place(socket.data.context.player, data);
+    this.#send(socket, GAME_EVENTS.BET_ACK, ack);
   }
 
-  async #placeBet(
-    data: unknown,
-    socket: Socket<GameSocketContext>,
-  ): Promise<BetAckPayload> {
-    const { player } = socket.data.context;
-    if (player === null) {
-      return { success: false, error: 'Login required to place bets' };
-    }
-
-    const parsed = GameMessages.parseBet(data);
-    if (parsed === null) {
-      return { success: false, error: 'Invalid bet' };
-    }
-
-    if (this.engine.phase !== GameRoundStatus.WAITING) {
-      return {
-        success: false,
-        error: 'Bets are only accepted during the waiting phase',
-      };
-    }
-
-    const roundId = this.engine.roundId;
-    if (roundId === null) {
-      return { success: false, error: 'No active round' };
-    }
-
-    const { betAmountCents, isDemo, autoCashOutAt } = parsed;
-
-    try {
-      const bet = this.bets.placeBet(
-        player.userId,
-        roundId,
-        betAmountCents,
-        isDemo,
-      );
-
-      await this.clientSeeds.contributeIfAbsent(roundId, player.userId);
-
-      if (autoCashOutAt !== undefined) {
-        await this.autoCashOut.store(
-          roundId,
-          player.userId,
-          player.username,
-          autoCashOutAt,
-          isDemo,
-        );
-      }
-
-      const wallet = this.wallets.getWallet(player.userId, isDemo);
-      publishGame(
-        this.events,
-        Topics.user(player.userId),
-        GAME_EVENTS.WALLET_UPDATED,
-        { balanceCents: wallet.balanceCents, isDemo },
-      );
-      publishGame(this.events, GAME_TOPIC, GAME_EVENTS.BET_PLACED, {
-        userId: player.userId,
-        username: player.username,
-        betAmountCents: bet.betAmountCents,
-        isDemo,
-      });
-
-      return {
-        success: true,
-        userId: player.userId,
-        username: player.username,
-        betAmountCents: bet.betAmountCents,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: GameMessages.playerFacing(error, 'Failed to place bet'),
-      };
-    }
-  }
-
-  /**
-   * The multiplier is read **before** anything async, which is the whole point of
-   * the ordering here. `currentMultiplierX100` is a synchronous read of the
-   * engine's clock; re-reading it after the write would pay whatever the curve had
-   * climbed to in the meantime rather than what the player saw.
-   */
   @OnMessage(GAME_CLIENT_EVENTS.CASH_OUT)
   cashOut(data: unknown, socket: Socket<GameSocketContext>): void {
-    this.#send(socket, GAME_EVENTS.CASH_OUT_ACK, this.#cashOut(data, socket));
-  }
-
-  #cashOut(
-    data: unknown,
-    socket: Socket<GameSocketContext>,
-  ): CashOutAckPayload {
-    const { player } = socket.data.context;
-    if (player === null) {
-      return { success: false, error: 'Login required to cash out' };
-    }
-
-    const roundId = this.engine.roundId;
-    if (roundId === null) {
-      return { success: false, error: 'No active round' };
-    }
-
-    const multiplierX100 =
-      this.engine.currentMultiplierX100() ?? this.engine.graceMultiplierX100();
-    if (multiplierX100 === null) {
-      return { success: false, error: 'Round is not currently running' };
-    }
-
-    /**
-     * Which wallet, decided by the **bet**, not by the client.
-     *
-     * `BetPanel` sends a bare `socket.emit('cashOut')` with no payload, so
-     * defaulting to real money here meant looking for a bet that did not exist
-     * and rejecting every demo cash-out - silently, because a rejection is an ack
-     * rather than an error. That shipped, and only a browser caught it.
-     *
-     * The old gateway kept `client.data.isDemo` on the socket. Reading the bet row
-     * is better than that was: it survives a reconnect, it cannot drift from the
-     * database, and it is right when a player has bets in both modes.
-     */
-    const requested =
-      typeof data === 'object' && data !== null && 'isDemo' in data
-        ? Boolean((data as { isDemo?: unknown }).isDemo)
-        : undefined;
-
-    const open = this.bets.findActiveByRoundAndUserAnyMode(
-      roundId,
-      player.userId,
-    );
-    if (open === undefined) {
-      return { success: false, error: 'No active bet found for this round' };
-    }
-    const isDemo = requested ?? open.isDemo;
-
-    try {
-      const bet = this.bets.cashOut(
-        player.userId,
-        roundId,
-        multiplierX100,
-        isDemo,
-      );
-      const wallet = this.wallets.getWallet(player.userId, isDemo);
-      const multiplier = GameMath.toMultiplier(multiplierX100);
-
-      publishGame(
-        this.events,
-        Topics.user(player.userId),
-        GAME_EVENTS.WALLET_UPDATED,
-        { balanceCents: wallet.balanceCents, isDemo },
-      );
-      publishGame(this.events, GAME_TOPIC, GAME_EVENTS.BET_CASHED_OUT, {
-        userId: player.userId,
-        username: player.username,
-        multiplier,
-        payoutCents: bet.payoutCents ?? 0,
-        isDemo,
-      });
-
-      return {
-        success: true,
-        multiplier,
-        payoutCents: bet.payoutCents ?? 0,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: GameMessages.playerFacing(error, 'Failed to cash out'),
-      };
-    }
+    const ack = this.actions.cashOut(socket.data.context.player, data);
+    this.#send(socket, GAME_EVENTS.CASH_OUT_ACK, ack);
   }
 
   @OnMessage(GAME_CLIENT_EVENTS.SUBMIT_CLIENT_SEED)
@@ -506,19 +266,10 @@ export class GameGateway {
     // in the service: the service owns the room, the gateway owns the connection.
     socket.subscribe(playerChatTopic(room.roomId));
 
-    // To this socket: the room it now belongs to. To the other participant's own
-    // topic: the same room, so their client opens a window without polling.
+    // To this socket: the room it now belongs to. Telling the other participant
+    // is the service's, because it goes to their own topic rather than a socket.
     this.#send(socket, PLAYER_CHAT_EVENTS.ROOM_JOINED, room);
-    for (const participant of room.participants) {
-      if (participant === player.userId) continue;
-      publishPlayerChat(
-        this.events,
-        Topics.user(participant),
-        PLAYER_CHAT_EVENTS.ROOM_CREATED,
-        room,
-      );
-    }
-    this.playerChat.announce(room.roomId, player.username, 'join');
+    this.playerChat.joined(room, player.userId, player.username);
   }
 
   @OnMessage(GAME_CLIENT_EVENTS.SEND_PLAYER_CHAT)
@@ -575,23 +326,7 @@ export class GameGateway {
       return { error: 'a chat message is a string of 1 to 1000 characters' };
     }
 
-    // Recorded before it is published, so a client that reloads immediately after
-    // sending still sees its own line. The write is synchronous, so "before" is
-    // real rather than a race that usually wins.
-    const line: ChatLine = {
-      username: player.username,
-      message: text,
-      timestamp: new Date().toISOString(),
-      // The client renders this as the avatar and falls back to an initial. The
-      // NestJS version sent it and this migration dropped it, so every line showed
-      // a letter where a face had been.
-      picture: player.picture,
-    };
-
-    publishSocket(this.events, TOPICS.CHAT, EVENTS.MESSAGE, line);
-    // After the broadcast: everyone watching has it, and a failed write costs the
-    // scrollback rather than the message.
-    this.chat.record(line);
+    this.chat.say(player, text);
     return { delivered: 1 };
   }
 

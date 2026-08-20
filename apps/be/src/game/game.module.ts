@@ -4,6 +4,8 @@ import { WalletModule } from '../wallet/wallet.module.js';
 import { GameBotsService } from './bots/game-bots.service.js';
 import { CrashEngineService } from './engine/crash-engine.service.js';
 import { ClientSeedService } from './fairness/client-seed.service.js';
+import { BetActionsService } from './surface/bet-actions.service.js';
+import { SocketAuthService } from './surface/socket-auth.service.js';
 import { GameController } from './game.controller.js';
 import { GameGateway } from './game.gateway.js';
 import { GameJobs } from './handlers/game.jobs.js';
@@ -53,6 +55,8 @@ import { GameRoundService } from './services/game-round.service.js';
     AutoCashOutService,
     GameStateService,
     PlayerChatService,
+    SocketAuthService,
+    BetActionsService,
     GameGateway,
     GameBotsService,
     GameRoundWatchdog,

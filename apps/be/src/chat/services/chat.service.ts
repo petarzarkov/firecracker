@@ -1,6 +1,12 @@
 import { Logger } from '@dunx/core';
 import { RedisConnection } from '@dunx/infra/redis';
 import type { ChatLine } from '@firecracker/contracts';
+import { EventsPublisher } from '../../notifications/events/events.publisher.js';
+import {
+  EVENTS,
+  publishSocket,
+  TOPICS,
+} from '../../notifications/events/events.js';
 
 /**
  * The key the NestJS version used, kept deliberately.
@@ -44,8 +50,33 @@ export type { ChatLine };
 export class ChatService {
   constructor(
     private readonly redis: RedisConnection,
+    private readonly events: EventsPublisher,
     private readonly logger: Logger,
   ) {}
+
+  /**
+   * Say one line in the lobby: broadcast it, then keep it.
+   *
+   * **Broadcast first.** Everyone watching has the line, and a failed write then
+   * costs the scrollback rather than the message. It was two statements and a
+   * hand-built `ChatLine` in `GameGateway.#globalChat` and again in
+   * `GameBotsService.#react`, with a comment above the first claiming the opposite
+   * order to the one the code used.
+   */
+  say(author: Pick<ChatLine, 'username' | 'picture'>, message: string): void {
+    const line: ChatLine = {
+      username: author.username,
+      message,
+      timestamp: new Date().toISOString(),
+      // The client renders this as the avatar and falls back to an initial. The
+      // NestJS version sent it and this migration dropped it, so every line
+      // showed a letter where a face had been.
+      picture: author.picture,
+    };
+
+    publishSocket(this.events, TOPICS.CHAT, EVENTS.MESSAGE, line);
+    this.record(line);
+  }
 
   /** The newest messages, oldest first - the order the client renders them in. */
   async history(): Promise<ChatLine[]> {

@@ -5,12 +5,6 @@ import { AIService } from '../../ai/services/ai.service.js';
 import { ChatService } from '../../chat/services/chat.service.js';
 import { AppConfigService } from '../../config/app.config.service.js';
 import { EventsPublisher } from '../../notifications/events/events.publisher.js';
-import {
-  EVENTS,
-  publishSocket,
-  TOPICS,
-  type ChatLine,
-} from '../../notifications/events/events.js';
 import { CrashEngineService } from '../engine/crash-engine.service.js';
 import { GAME_EVENTS, GAME_TOPIC, publishGame } from '../game.events.js';
 import { GameMath } from '../game.math.js';
@@ -222,14 +216,10 @@ export class GameBotsService implements OnInit {
         if (text === null) return;
         // Trimmed hard: a model that ignores the word limit must not be able to
         // paste an essay into a lobby.
-        const line: ChatLine = {
-          username: speaker.username,
-          message: text.slice(0, 140),
-          timestamp: new Date().toISOString(),
-          picture: null,
-        };
-        publishSocket(this.events, TOPICS.CHAT, EVENTS.MESSAGE, line);
-        this.chat.record(line);
+        this.chat.say(
+          { username: speaker.username, picture: null },
+          text.slice(0, 140),
+        );
       })
       .catch((error: unknown) =>
         this.logger.debug('bot chatter failed', {

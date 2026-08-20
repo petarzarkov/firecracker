@@ -1,6 +1,7 @@
 import { Logger } from '@dunx/core';
 import { RedisConnection } from '@dunx/infra/redis';
 import { EventsPublisher } from '../../notifications/events/events.publisher.js';
+import { Topics } from '../../notifications/events/events.js';
 import { GameBetRepository } from '../repos/game-bet.repository.js';
 import {
   PLAYER_CHAT_EVENTS,
@@ -150,6 +151,29 @@ export class PlayerChatService {
       },
     );
     return true;
+  }
+
+  /**
+   * Tell everyone else in the room that somebody joined it.
+   *
+   * The other participant is told on **their own topic**, not the room's: they are
+   * not subscribed to the room until their client joins it, so a frame on the room
+   * topic would reach nobody and their window would never open.
+   *
+   * The joiner's own `roomJoined` frame is the gateway's, because it goes down one
+   * socket rather than to a topic.
+   */
+  joined(room: PlayerChatRoom, callerId: string, callerName: string): void {
+    for (const participant of room.participants) {
+      if (participant === callerId) continue;
+      publishPlayerChat(
+        this.events,
+        Topics.user(participant),
+        PLAYER_CHAT_EVENTS.ROOM_CREATED,
+        room,
+      );
+    }
+    this.announce(room.roomId, callerName, 'join');
   }
 
   /** Tell the room somebody arrived or left. */
