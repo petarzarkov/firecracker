@@ -1,6 +1,7 @@
 import type { ConfigSource, DynamicModule, ModuleRef } from '@dunx/core';
 import { LoggerModule } from '@dunx/infra/logger';
 import { AccountsModule } from './auth/auth.module.js';
+import { ProfileModule } from './auth/profile.module.js';
 import { AIModule } from './ai/ai.module.js';
 import { AppConfigModule } from './config/app.config.module.js';
 import { ClientModule } from './client/client.module.js';
@@ -113,6 +114,7 @@ export class AppModule {
         QueuesModule.forRoot(),
         // After DatabaseModule, so better-auth reuses the connection it opened.
         AccountsModule,
+        ProfileModule,
         NotificationsModule,
         ServiceModule,
         UsersModule,

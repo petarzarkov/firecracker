@@ -1,5 +1,4 @@
 import { Module } from '@dunx/core';
-import { AccountsModule } from '../auth/auth.module.js';
 import { ChatModule } from '../chat/chat.module.js';
 import { GameBotsService } from './bots/game-bots.service.js';
 import { CrashEngineService } from './engine/crash-engine.service.js';
@@ -29,13 +28,14 @@ import { WalletController } from './wallet.controller.js';
  * scope is keyed on the module reference, so two callers meant two engines - which is
  * what `engine: false` was guarding against.
  *
- * `AccountsModule` because the socket upgrade resolves a session, `ChatModule` because
- * the gateway carries the lobby chat. No `NotificationsModule`: both reach
+ * `ChatModule` because the gateway carries the lobby chat, and that is the whole list.
+ * The socket upgrade resolves a session, but `AccountsModule` is `global: true` and
+ * naming it here bought nothing. No `NotificationsModule` either: both reach
  * `EventsPublisher` through the `global: true` `EventsPublisherModule`, and importing
  * it would call its `forRoot()` again and bind a second publisher.
  */
 @Module({
-  imports: [AccountsModule, ChatModule],
+  imports: [ChatModule],
   controllers: [GameController, WalletController],
   providers: [
     GameRoundRepository,

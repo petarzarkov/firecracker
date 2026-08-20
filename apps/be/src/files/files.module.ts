@@ -1,5 +1,4 @@
 import type { DynamicModule } from '@dunx/core';
-import { AccountsModule } from '../auth/auth.module.js';
 import { FilesController } from './files.controller.js';
 import { MediaJobs } from './handlers/media.jobs.js';
 import { FilesRepository } from './repos/files.repository.js';
@@ -20,10 +19,10 @@ export interface FilesModuleOptions {
  * `ImagesConfigModule` and `QueuesModule`, which are `global: true` - one of each
  * per process, built by `foundation()`, so there is nothing to import.
  *
- * `AccountsModule` is imported rather than global, because `CurrentUser` is a
- * feature's service and not infrastructure - and it is imported **only with the
- * controller**, because that is the one thing here that has a caller. The worker
- * takes `controllers: false` and must not pull better-auth in behind it.
+ * `CurrentUser` comes from the `global: true` `AccountsModule`, which is in the
+ * serving graph and deliberately not in a job child's - so the `controllers: false`
+ * branch is still what keeps better-auth out of the worker: `FilesController` is the
+ * only thing here that reads a caller, and it is not built there.
  *
  * Nothing is exported. Uploads are reached over HTTP or through the queue, never
  * by another module calling `FilesService`.
@@ -38,7 +37,7 @@ export class FilesFeatureModule {
       providers: [FilesService, FilesRepository, ThumbnailsService, MediaJobs],
       ...(options.controllers === false
         ? {}
-        : { imports: [AccountsModule], controllers: [FilesController] }),
+        : { controllers: [FilesController] }),
     };
   }
 }

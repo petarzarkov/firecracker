@@ -13,9 +13,7 @@ import { verifications } from './schema/verification.schema.js';
 import { JOBS, QUEUES } from '../notifications/events/events.js';
 import { AuthHooks } from './auth.hooks.js';
 import { AUTH_MOUNT, AuthOptions } from './auth.options.js';
-import { ProfileController } from './profile.controller.js';
 import { AuthAdminSeeder } from './services/auth-admin.seeder.js';
-import { AvatarsService } from './services/avatars.service.js';
 import { CurrentUser } from './services/current-user.service.js';
 
 /**
@@ -128,7 +126,10 @@ const auth = AuthModule.forRootAsync(
 
 /**
  * Named for the feature rather than the package, so `AuthModule` still means
- * `@dunx/auth`'s.
+ * `@dunx/auth`'s. **The better-auth root and nothing else** - the profile routes and
+ * the BetterTTV avatar proxy that used to ride along are in `ProfileModule` now,
+ * because neither is authentication and both made this file a dependency of anything
+ * that wanted one 30-line service.
  *
  * **A decorated class rather than a `forRoot()` that took no arguments.** Under
  * module scoping the identity of a module reference is what a scope is keyed on, and
@@ -136,15 +137,23 @@ const auth = AuthModule.forRootAsync(
  * `AccountsModule.forRoot()` would have built a *second* better-auth, against a
  * second session store. A class is one reference however many modules import it,
  * which is the only shape that composes.
+ *
+ * **`global: true`**, which is what the paragraph above was always arguing for. This
+ * is a one-per-process root like `DatabaseModule` and `QueuesModule`, and every
+ * feature that wanted `CurrentUser` - users, files, the game - was hand-threading
+ * `imports: [AccountsModule]` to reach it, importing a 90-line better-auth
+ * configuration as a side effect. There is one of these per process by construction;
+ * making three features name it bought no boundary.
  */
 @Module({
+  global: true,
   imports: [auth],
-  controllers: [ProfileController],
-  providers: [CurrentUser, AuthAdminSeeder, AvatarsService],
+  providers: [CurrentUser, AuthAdminSeeder],
   /**
-   * `AuthModule` re-exported by reference, so an importer sees `Auth`,
-   * `AuthContext` and `SessionGuard` without naming any of them. `CurrentUser` is
-   * this module's own read of that context and is what every feature actually
+   * `AuthModule` re-exported by reference, so a consumer sees `Auth`,
+   * `AuthContext` and `SessionGuard` without naming any of them - and because this
+   * module is global, the export set is what becomes globally visible. `CurrentUser`
+   * is this module's own read of that context and is what every feature actually
    * injects.
    *
    * `AuthAdminSeeder` is not exported. It runs once at boot and has no caller.
