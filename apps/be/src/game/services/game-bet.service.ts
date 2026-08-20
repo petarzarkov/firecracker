@@ -11,6 +11,7 @@ import { GameMath } from '../game.math.js';
 import { GameBetStatus, type GameBetRow } from '../schema/game-bet.schema.js';
 import {
   GameBetRepository,
+  type BetWithCrash,
   type BetWithPlayer,
 } from '../repos/game-bet.repository.js';
 import type { RefundedBet } from './game-round.service.js';
@@ -314,7 +315,7 @@ export class GameBetService {
     return this.bets.recentByUser(userId, limit);
   }
 
-  listByUser(userId: string, options: PageOptions): Page<GameBetRow> {
+  listByUser(userId: string, options: PageOptions): Page<BetWithCrash> {
     return this.bets.listByUser(userId, options);
   }
 }

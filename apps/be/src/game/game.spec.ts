@@ -6,6 +6,7 @@ import { AppHttpOptions } from '../http.options.js';
 import { TestSession } from '../test-support/session.js';
 import { GameRoundStatus } from './schema/game-round.schema.js';
 import { GameBetStatus } from './schema/game-bet.schema.js';
+import type { GameBet } from './dto/game.dto.js';
 import { BetRejected, GameBetService } from './services/game-bet.service.js';
 import { GameRoundService } from './services/game-round.service.js';
 import { WalletService } from '../wallet/services/wallet.service.js';
@@ -30,6 +31,7 @@ let wallets: WalletService;
 let roundRepo: GameRoundRepository;
 let watchdog: GameRoundWatchdog;
 let userId: string;
+let userToken: string;
 
 const source = {
   API_PORT: '0',
@@ -80,6 +82,7 @@ beforeAll(async () => {
     'a-password-123',
   );
   userId = player.userId;
+  userToken = player.token;
 });
 
 afterAll(async () => {
@@ -333,6 +336,56 @@ describe('the stuck-round watchdog', () => {
 
     expect(roundRepo.findById(orphanId)?.status).toBe(GameRoundStatus.FAILED);
     expect(roundRepo.findById(liveId)?.status).toBe(GameRoundStatus.RUNNING);
+  });
+});
+
+/**
+ * The history panel's own read, over HTTP, because the bug it covers was in the
+ * mapper rather than in the money: `/api/game/my-bets` never sent `crashPoint`, the
+ * client rendered `(bet.crashPoint ?? 0).toFixed(2)`, and every lost row said
+ * `x0.00x`.
+ */
+describe('my bet history', () => {
+  const myBets = async (): Promise<GameBet[]> => {
+    const { body } = await server.json<{ data: GameBet[] }>(
+      'api/game/my-bets?take=20',
+      { headers: TestSession.bearer(userToken) },
+    );
+    return body.data;
+  };
+
+  test('a settled bet carries the multiplier its round crashed at', async () => {
+    const roundId = await openRound();
+    bets.placeBet(userId, roundId, 100, true);
+    launch(roundId, 742);
+
+    // While it is running the crash point exists in the row already - drawn at the
+    // transition - so this assertion is the one that stops it leaking.
+    const open = (await myBets()).find((bet) => bet.roundId === roundId);
+    expect(open?.status).toBe(GameBetStatus.ACTIVE);
+    expect(open?.crashPoint).toBeUndefined();
+
+    rounds.settleCrash(roundId);
+
+    const settled = (await myBets()).find((bet) => bet.roundId === roundId);
+    expect(settled?.status).toBe(GameBetStatus.LOST);
+    expect(settled?.crashPoint).toBe(7.42);
+  });
+
+  test('a page of bets from many rounds gets each round its own crash point', async () => {
+    const first = await openRound();
+    bets.placeBet(userId, first, 100, true);
+    launch(first, 250);
+    rounds.settleCrash(first);
+
+    const second = await openRound();
+    bets.placeBet(userId, second, 100, true);
+    launch(second, 1099);
+    rounds.settleCrash(second);
+
+    const page = await myBets();
+    expect(page.find((bet) => bet.roundId === first)?.crashPoint).toBe(2.5);
+    expect(page.find((bet) => bet.roundId === second)?.crashPoint).toBe(10.99);
   });
 });
 

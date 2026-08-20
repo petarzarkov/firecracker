@@ -24,7 +24,7 @@ import {
   GameRoundStatus,
   type GameRoundRow,
 } from './schema/game-round.schema.js';
-import type { GameBetRow } from './schema/game-bet.schema.js';
+import type { BetWithCrash } from './repos/game-bet.repository.js';
 import { GameBetService } from './services/game-bet.service.js';
 import { GameRoundService } from './services/game-round.service.js';
 
@@ -46,7 +46,14 @@ const HOW_TO_VERIFY = [
 })
 @Controller('game')
 export class GameController {
-  static #mapBet(bet: GameBetRow): GameBet {
+  /**
+   * A bet as its owner may see it.
+   *
+   * `crashPoint` is spread in only when the repository found one, which it does
+   * only for a round that has crashed - the same conditional `#mapRound` applies to
+   * a round's own seed, for the same reason.
+   */
+  static #mapBet(bet: BetWithCrash): GameBet {
     return {
       id: bet.id,
       roundId: bet.roundId,
@@ -60,6 +67,9 @@ export class GameController {
       payoutCents: bet.payoutCents,
       isDemo: bet.isDemo,
       createdAt: bet.createdAt.toISOString(),
+      ...(bet.crashPointX100 === null
+        ? {}
+        : { crashPoint: GameMath.toMultiplier(bet.crashPointX100) }),
     };
   }
 

@@ -50,6 +50,14 @@ export const CurrentRound = GameRound.extend({
   elapsed: z.number().int().optional(),
 }).meta({ id: 'CurrentRound', title: 'The round in progress' });
 
+/**
+ * A stake as its owner sees it.
+ *
+ * `crashPoint` is the round's, not the bet's, and it is optional for the same
+ * reason it is optional on `GameRound`: it appears once that round has crashed and
+ * not a moment earlier. The history panel renders it on every row that is not a
+ * win, so a missing one showed as `x0.00x` for months - see `listByUser`.
+ */
 export const GameBet = z
   .object({
     id: z.uuid(),
@@ -59,6 +67,7 @@ export const GameBet = z
     status: z.enum(BET_STATUSES),
     cashedOutAt: z.number().nullable(),
     payoutCents: z.number().int().nullable(),
+    crashPoint: z.number().optional(),
     isDemo: z.boolean(),
     createdAt: z.iso.datetime(),
   })

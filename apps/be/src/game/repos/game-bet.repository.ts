@@ -1,5 +1,5 @@
 import type { Page, PageOptions } from '@dunx/infra/pagination';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { CrudRepository } from '../../infra/db/base.repository.js';
 import { users, type UserRow } from '../../users/schema/user.schema.js';
 import {
@@ -8,10 +8,23 @@ import {
   type GameBetRow,
   type NewGameBetRow,
 } from '../schema/game-bet.schema.js';
+import { gameRounds, GameRoundStatus } from '../schema/game-round.schema.js';
 
 /** A bet with the display name the lobby shows next to it. */
 export interface BetWithPlayer extends GameBetRow {
   readonly playerName: string;
+}
+
+/**
+ * A bet with the multiplier its round exploded at.
+ *
+ * `null` while that round is anything but CRASHED, which is not the same as "not
+ * drawn yet": `crash_point_x100` is written at the transition to RUNNING, so a read
+ * that did not filter on the status would hand a player the outcome of the round
+ * they are currently betting in.
+ */
+export interface BetWithCrash extends GameBetRow {
+  readonly crashPointX100: number | null;
 }
 
 export class GameBetRepository extends CrudRepository<
@@ -132,8 +145,56 @@ export class GameBetRepository extends CrudRepository<
       .all().length;
   }
 
-  listByUser(userId: string, options: PageOptions): Page<GameBetRow> {
-    return this.page(options, eq(gameBets.userId, userId));
+  /**
+   * The player's own history, with the crash point of every round that has one.
+   *
+   * Two statements rather than the join `findByRoundWithPlayers` uses, and that is
+   * `paginate`'s shape rather than a preference: the keyset seek runs over
+   * `game_bet` alone - its cursor is a `created_at`/`id` pair from that table - and
+   * there is no hook to widen the select. So a page is read, then the rounds behind
+   * it, which is one `IN` bounded by `take`.
+   *
+   * "MY BETS" renders the crash multiplier on every row that is not a win. Without
+   * this, every loss rendered `x0.00x` - a crash point the game cannot produce.
+   */
+  listByUser(userId: string, options: PageOptions): Page<BetWithCrash> {
+    const page = this.page(options, eq(gameBets.userId, userId));
+    return { ...page, data: this.#withCrashPoints(page.data) };
+  }
+
+  /**
+   * The crash points for a page of bets - **only** from rounds that have crashed.
+   *
+   * The status filter is the fairness rule, in SQL: a RUNNING round already holds
+   * its `crash_point_x100`, so selecting it unconditionally would tell a player
+   * where the rocket stops while their bet is still open.
+   */
+  #withCrashPoints(bets: readonly GameBetRow[]): BetWithCrash[] {
+    if (bets.length === 0) return [];
+
+    const crashed = new Map(
+      this.db
+        .select({
+          id: gameRounds.id,
+          crashPointX100: gameRounds.crashPointX100,
+        })
+        .from(gameRounds)
+        .where(
+          and(
+            inArray(gameRounds.id, [
+              ...new Set(bets.map((bet) => bet.roundId)),
+            ]),
+            eq(gameRounds.status, GameRoundStatus.CRASHED),
+          ),
+        )
+        .all()
+        .map((round) => [round.id, round.crashPointX100] as const),
+    );
+
+    return bets.map((bet) => ({
+      ...bet,
+      crashPointX100: crashed.get(bet.roundId) ?? null,
+    }));
   }
 
   /**
