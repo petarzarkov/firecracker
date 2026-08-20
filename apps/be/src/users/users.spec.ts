@@ -149,12 +149,17 @@ describe('SessionGuard', () => {
     expect(response.headers.get('set-auth-token')).toBeNull();
   });
 
+  /**
+   * `api/service/config` rather than the `api/profile/anonymous` this used to
+   * call: that route existed only to be this assertion's target, and the guard's
+   * behaviour is the same on any route carrying the metadata.
+   */
   test('@Public() on a route skips the session lookup entirely', async () => {
-    const { status, body } = await server.json<{ caller: string | null }>(
-      'api/profile/anonymous',
+    const { status, body } = await server.json<{ name: string }>(
+      'api/service/config',
     );
     expect(status).toBe(200);
-    expect(body.caller).toBeNull();
+    expect(body.name).toBeDefined();
   });
 
   test('a user role cannot reach an admin-only route', async () => {

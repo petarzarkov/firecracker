@@ -42,22 +42,4 @@ export class ProfileController {
   async trendingAvatars(): Promise<{ avatars: readonly string[] }> {
     return { avatars: await this.avatars.trending() };
   }
-
-  /**
-   * The guard reads this and skips: no session lookup, no rejection. A public
-   * route that wants to *adapt* to an optional caller asks `CurrentUser` and gets
-   * `undefined`.
-   *
-   * The game leans on exactly this: an anonymous visitor watches rounds and holds
-   * a demo wallet, and only a bet needs a session.
-   */
-  @ApiDoc({
-    tags: ['profile'],
-    summary: 'Whether this request carried a session',
-  })
-  @Public()
-  @Get('/anonymous')
-  anonymous(): { caller: string | null } {
-    return { caller: this.caller.optional()?.email ?? null };
-  }
 }
