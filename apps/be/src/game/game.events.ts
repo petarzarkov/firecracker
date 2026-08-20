@@ -35,7 +35,8 @@ export type {
   WalletUpdatedPayload,
 } from '@firecracker/contracts';
 
-import type { GamePayloads } from '@firecracker/contracts';
+import type { GamePayloads, PlayerChatPayloads } from '@firecracker/contracts';
+import type { EventsPublisher } from '../notifications/events/events.publisher.js';
 
 /** The game's own queue. Its own so round transitions cannot queue behind email. */
 export const GAME_QUEUE = 'game' as const;
@@ -76,21 +77,40 @@ export interface RoundJob {
  * by a compiler. With `@firecracker/contracts` on both sides, the missing field is
  * now an error here *and* at the handler that would have read it.
  */
-export class GameEvents {
-  /**
-   * One-to-one chat. A topic per room rather than one topic filtered on the client,
-   * because a client that receives a message it then hides has still received it.
-   */
-  static playerChatTopic(roomId: string): string {
-    return `player_chat_${roomId}`;
-  }
-
-  static publish<E extends keyof GamePayloads>(
-    events: { publish: (topic: string, event: string, data: unknown) => void },
-    topic: string,
-    event: E,
-    data: GamePayloads[E],
-  ): void {
-    events.publish(topic, event, data);
-  }
+export function publishGame<E extends keyof GamePayloads>(
+  events: EventsPublisher,
+  topic: string,
+  event: E,
+  data: GamePayloads[E],
+): void {
+  events.publish(topic, event, data);
 }
+
+/**
+ * The same, for a one-to-one room.
+ *
+ * `topic` rather than a room id, because `playerChatRoomCreated` is addressed to
+ * the *other* participant's own topic - they are not subscribed to the room until
+ * their client joins it.
+ */
+export function publishPlayerChat<E extends keyof PlayerChatPayloads>(
+  events: EventsPublisher,
+  topic: string,
+  event: E,
+  data: PlayerChatPayloads[E],
+): void {
+  events.publish(topic, event, data);
+}
+
+/**
+ * The static face of {@link publishGame} and {@link playerChatTopic}.
+ *
+ * Only here while `engine/crash-engine.service.ts`, `services/auto-cashout.service.ts`
+ * and `services/game-watchdog.service.ts` still call `GameEvents.publish`. It is an
+ * alias table, not a second implementation - delete it with their last call site,
+ * and write new code against the functions.
+ */
+export const GameEvents = Object.freeze({
+  publish: publishGame,
+  playerChatTopic,
+});

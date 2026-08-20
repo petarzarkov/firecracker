@@ -100,3 +100,58 @@ export interface PlayerChatSystemPayload {
   readonly timestamp: string;
   readonly type: 'join' | 'leave';
 }
+
+/**
+ * What a notification is about.
+ *
+ * Its own wire value rather than the name of the job that produced it: a job name
+ * is the server talking to itself, and a name a browser can read is a name somebody
+ * will send. So `user.registered` stays server-side and this is what crosses.
+ */
+export const NotificationKind = Object.freeze({
+  USER_REGISTERED: 'userRegistered',
+  USER_BANNED: 'userBanned',
+} as const);
+export type NotificationKind =
+  (typeof NotificationKind)[keyof typeof NotificationKind];
+
+/**
+ * One notice, sent to a user's own topic or to the admin room.
+ *
+ * The text is written **by the publisher**, because a browser cannot be expected to
+ * know what a job meant. It is also the whole reason this type exists: the four
+ * publishes it replaces carried `{userId,email,name}`, `{userId,email}`,
+ * `{email,role}` and `{userId,reason}` under one event name - four shapes for one
+ * frame, which is what an unchecked `Record<string, unknown>` permits - and nothing
+ * on the client read any of them.
+ */
+export interface NotificationPayload {
+  readonly kind: NotificationKind;
+  readonly title: string;
+  readonly message: string;
+}
+
+/**
+ * Every server-sent event that is not the game's, with the payload it carries.
+ *
+ * The counterpart of `GamePayloads`, and it did not exist: these six went out
+ * through a publisher that takes `unknown`, which is the hole all four historical
+ * drift bugs came through.
+ */
+export interface SocketPayloads {
+  readonly [SOCKET_EVENTS.CONNECTED]: ConnectedPayload;
+  readonly [SOCKET_EVENTS.NOTIFICATION]: NotificationPayload;
+  readonly [SOCKET_EVENTS.MESSAGE]: ChatLine;
+  readonly [SOCKET_EVENTS.CHAT_HISTORY]: readonly ChatLine[];
+  /** Subscribers on the node that sent it - see the gateway on why per-node. */
+  readonly [SOCKET_EVENTS.USER_COUNT]: number;
+  readonly [SOCKET_EVENTS.CHAT_ACK]: ChatAckPayload;
+}
+
+/** The one-to-one rooms. `ROOM_CREATED` reaches the other participant's own topic. */
+export interface PlayerChatPayloads {
+  readonly [PLAYER_CHAT_EVENTS.ROOM_CREATED]: PlayerChatRoom;
+  readonly [PLAYER_CHAT_EVENTS.ROOM_JOINED]: PlayerChatRoom;
+  readonly [PLAYER_CHAT_EVENTS.MESSAGE]: PlayerChatMessagePayload;
+  readonly [PLAYER_CHAT_EVENTS.SYSTEM_MESSAGE]: PlayerChatSystemPayload;
+}

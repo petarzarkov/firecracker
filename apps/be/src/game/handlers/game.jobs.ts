@@ -9,7 +9,7 @@ import {
   GAME_JOBS,
   GAME_QUEUE,
   GAME_TOPIC,
-  GameEvents,
+  publishGame,
   type RoundJob,
 } from '../game.events.js';
 import { GameMath } from '../game.math.js';
@@ -65,7 +65,7 @@ export class GameJobs {
 
     const round = await this.rounds.createNextRound();
 
-    GameEvents.publish(this.events, GAME_TOPIC, GAME_EVENTS.PHASE_CHANGE, {
+    publishGame(this.events, GAME_TOPIC, GAME_EVENTS.PHASE_CHANGE, {
       phase: 'waiting',
       roundId: round.id,
       seedHash: round.seedHash,
@@ -113,7 +113,7 @@ export class GameJobs {
       .del(GameRoundService.clientSeedsKey(roundId))
       .catch(() => 0);
 
-    GameEvents.publish(this.events, GAME_TOPIC, GAME_EVENTS.PHASE_CHANGE, {
+    publishGame(this.events, GAME_TOPIC, GAME_EVENTS.PHASE_CHANGE, {
       phase: 'running',
       roundId: round.id,
       seedHash: round.seedHash,
@@ -145,7 +145,7 @@ export class GameJobs {
 
     await this.#command({ action: 'crash' });
 
-    GameEvents.publish(this.events, GAME_TOPIC, GAME_EVENTS.CRASHED, {
+    publishGame(this.events, GAME_TOPIC, GAME_EVENTS.CRASHED, {
       roundId: round.id,
       crashPoint: GameMath.toMultiplier(round.crashPointX100),
       crashedAt: (round.crashedAt ?? new Date()).toISOString(),

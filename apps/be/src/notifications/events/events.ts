@@ -6,13 +6,38 @@
  * also has to know belongs. Queues, jobs and their payloads stay here: they are
  * how the web process talks to the worker, and nothing outside this app sends one.
  */
+import type { SocketPayloads } from '@firecracker/contracts';
+import type { EventsPublisher } from './events.publisher.js';
+
 export {
   /** What the server sends. The envelope on the wire is `{"event":..,"data":..}`. */
   SOCKET_EVENTS as EVENTS,
   /** What a client sends. */
   SOCKET_CLIENT_EVENTS as CLIENT_EVENTS,
+  NotificationKind,
 } from '@firecracker/contracts';
-export type { ChatAckPayload, ChatLine } from '@firecracker/contracts';
+export type {
+  ChatAckPayload,
+  ChatLine,
+  NotificationPayload,
+} from '@firecracker/contracts';
+
+/**
+ * Publish one of the non-game frames, with the payload checked against the name.
+ *
+ * The counterpart of `publishGame`, and it exists for the same reason: the
+ * publisher's own `publish` takes `unknown`, which is the hole every drift bug in
+ * this repo's history came through. A `notification` published from a job handler
+ * had four different shapes before this.
+ */
+export function publishSocket<E extends keyof SocketPayloads>(
+  events: EventsPublisher,
+  topic: string,
+  event: E,
+  data: SocketPayloads[E],
+): void {
+  events.publish(topic, event, data);
+}
 
 export const QUEUES = Object.freeze({
   /** User-facing side effects: emails, socket notifications. */
@@ -77,9 +102,4 @@ export interface FileThumbnailJob {
   readonly fileId: string;
   readonly key: string;
   readonly width: number;
-}
-
-export interface Notification {
-  readonly event: JobName;
-  readonly payload: Record<string, unknown>;
 }

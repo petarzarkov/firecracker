@@ -3,8 +3,9 @@ import { RedisConnection } from '@dunx/infra/redis';
 import { EventsPublisher } from '../../notifications/events/events.publisher.js';
 import { GameBetRepository } from '../repos/game-bet.repository.js';
 import {
-  GameEvents,
   PLAYER_CHAT_EVENTS,
+  playerChatTopic,
+  publishPlayerChat,
   type PlayerChatRoom,
 } from '../game.events.js';
 
@@ -136,8 +137,9 @@ export class PlayerChatService {
     const room = await this.find(roomId, senderId);
     if (room === null) return false;
 
-    this.events.publish(
-      GameEvents.playerChatTopic(roomId),
+    publishPlayerChat(
+      this.events,
+      playerChatTopic(roomId),
       PLAYER_CHAT_EVENTS.MESSAGE,
       {
         roomId,
@@ -152,8 +154,9 @@ export class PlayerChatService {
 
   /** Tell the room somebody arrived or left. */
   announce(roomId: string, name: string, type: 'join' | 'leave'): void {
-    this.events.publish(
-      GameEvents.playerChatTopic(roomId),
+    publishPlayerChat(
+      this.events,
+      playerChatTopic(roomId),
       PLAYER_CHAT_EVENTS.SYSTEM_MESSAGE,
       {
         roomId,

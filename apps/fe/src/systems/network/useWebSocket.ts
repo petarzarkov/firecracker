@@ -3,6 +3,8 @@ import {
   type ChatLine,
   GAME_CLIENT_EVENTS,
   type ConnectedPayload,
+  NotificationKind,
+  type NotificationPayload,
   PLAYER_CHAT_EVENTS,
   type PlayerChatMessagePayload,
   type PlayerChatRoom,
@@ -239,6 +241,22 @@ export function useWebSocket() {
           notify('Message not sent', ack.error, 'error');
       });
 
+      /**
+       * Notices published by the worker process - a sign-up, a suspension - onto
+       * this user's own topic and, for an administrator, the admin room.
+       *
+       * The text arrives written: the server knows which job produced it, and a
+       * browser reading a job name off the wire is a browser coupled to the queue.
+       * `kind` only decides how the toast looks.
+       */
+      newSocket.on(SOCKET_EVENTS.NOTIFICATION, (data: NotificationPayload) => {
+        notify(
+          data.title,
+          data.message,
+          data.kind === NotificationKind.USER_BANNED ? 'error' : 'success',
+        );
+      });
+
       // Expose socket to context — this setState triggers re-render so
       // SocketContext.Provider propagates the value to all consumers.
       setSocket(newSocket);
@@ -258,6 +276,7 @@ export function useWebSocket() {
         activeSocket.off(SOCKET_EVENTS.MESSAGE);
         activeSocket.off(SOCKET_EVENTS.USER_COUNT);
         activeSocket.off(SOCKET_EVENTS.CHAT_ACK);
+        activeSocket.off(SOCKET_EVENTS.NOTIFICATION);
         activeSocket.io.off('reconnect_failed');
         activeSocket.disconnect();
         setSocket(null);

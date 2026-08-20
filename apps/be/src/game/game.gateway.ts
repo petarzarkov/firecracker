@@ -22,9 +22,11 @@ import { EventsPublisher } from '../notifications/events/events.publisher.js';
 import {
   CLIENT_EVENTS,
   EVENTS,
+  publishSocket,
   TOPICS,
   Topics,
   type ChatAckPayload,
+  type ChatLine,
 } from '../notifications/events/events.js';
 import { UserRole } from '../users/schema/user.schema.js';
 import { CrashEngineService } from './engine/crash-engine.service.js';
@@ -32,12 +34,15 @@ import {
   GAME_CLIENT_EVENTS,
   GAME_EVENTS,
   GAME_TOPIC,
-  GameEvents,
   PLAYER_CHAT_EVENTS,
+  playerChatTopic,
+  publishGame,
+  publishPlayerChat,
   type BetAckPayload,
   type CashOutAckPayload,
   type SeedAckPayload,
 } from './game.events.js';
+import type { ServerPayloads } from '@firecracker/contracts';
 import { GameMath } from './game.math.js';
 import { GameRoundStatus } from './schema/game-round.schema.js';
 import { GameBetService } from './services/game-bet.service.js';
@@ -206,54 +211,38 @@ export class GameGateway {
 
     // Straight down this socket, not published: it is this client's own view of
     // the round, and nobody else's business.
-    socket.send(
-      JSON.stringify({
-        event: GAME_EVENTS.ROUND_STATE,
-        data: this.state.snapshot(),
-      }),
-    );
+    this.#send(socket, GAME_EVENTS.ROUND_STATE, this.state.snapshot());
 
     // The chat scrollback, for the same reason. A player who reloads mid-round
     // should not find an empty chat window - see `ChatService`, which keeps it in
     // Redis rather than in the database the bet path is writing to.
-    socket.send(
-      JSON.stringify({
-        event: EVENTS.CHAT_HISTORY,
-        data: await this.chat.history(),
-      }),
-    );
+    this.#send(socket, EVENTS.CHAT_HISTORY, await this.chat.history());
 
     if (player !== null) {
       // `{ payload }` because that is the envelope the client's `updateUser`
       // already destructures. The wire shape is the client's to dictate; there is
       // no reason to rename it here and edit React for the privilege.
-      socket.send(
-        JSON.stringify({
-          event: EVENTS.CONNECTED,
-          data: {
-            payload: {
-              id: player.userId,
-              email: player.email,
-              displayName: player.username,
-              picture: player.picture,
-            },
-          },
-        }),
-      );
+      this.#send(socket, EVENTS.CONNECTED, {
+        payload: {
+          id: player.userId,
+          email: player.email,
+          displayName: player.username,
+          picture: player.picture,
+        },
+      });
       // The demo wallet, created on first sight, so a new player has something to
       // bet with before they have done anything.
       const demo = this.wallets.getWallet(player.userId, true);
-      socket.send(
-        JSON.stringify({
-          event: GAME_EVENTS.WALLET_UPDATED,
-          data: { balanceCents: demo.balanceCents, isDemo: true },
-        }),
-      );
+      this.#send(socket, GAME_EVENTS.WALLET_UPDATED, {
+        balanceCents: demo.balanceCents,
+        isDemo: true,
+      });
     }
   }
 
   /**
-   * Send one frame to one socket, under a name of our choosing.
+   * Send one frame to one socket, under a name of our choosing, with the payload
+   * checked against that name.
    *
    * This exists because of a sharp edge worth stating: dunx replies to
    * `@OnMessage('x')` by sending the handler's **return value back under `x`**. So
@@ -264,11 +253,15 @@ export class GameGateway {
    *
    * An e2e test caught this. Without it every ack in the UI would have been
    * silently dropped, which looks exactly like a bet that did nothing.
+   *
+   * `ServerPayloads` is the merged map from `@firecracker/contracts`: this is the
+   * one socket the game, the chat and the rooms all ride, so a frame leaving here
+   * can be any of them - and `data: unknown` was the last untyped `send` left.
    */
-  #reply(
+  #send<E extends keyof ServerPayloads>(
     socket: Socket<GameSocketContext>,
-    event: string,
-    data: unknown,
+    event: E,
+    data: ServerPayloads[E],
   ): void {
     socket.send(JSON.stringify({ event, data }));
   }
@@ -278,11 +271,7 @@ export class GameGateway {
     data: unknown,
     socket: Socket<GameSocketContext>,
   ): Promise<void> {
-    this.#reply(
-      socket,
-      GAME_EVENTS.BET_ACK,
-      await this.#placeBet(data, socket),
-    );
+    this.#send(socket, GAME_EVENTS.BET_ACK, await this.#placeBet(data, socket));
   }
 
   async #placeBet(
@@ -342,13 +331,13 @@ export class GameGateway {
       }
 
       const wallet = this.wallets.getWallet(player.userId, isDemo);
-      GameEvents.publish(
+      publishGame(
         this.events,
         Topics.user(player.userId),
         GAME_EVENTS.WALLET_UPDATED,
         { balanceCents: wallet.balanceCents, isDemo },
       );
-      GameEvents.publish(this.events, GAME_TOPIC, GAME_EVENTS.BET_PLACED, {
+      publishGame(this.events, GAME_TOPIC, GAME_EVENTS.BET_PLACED, {
         userId: player.userId,
         username: player.username,
         betAmountCents: bet.betAmountCents,
@@ -377,7 +366,7 @@ export class GameGateway {
    */
   @OnMessage(GAME_CLIENT_EVENTS.CASH_OUT)
   cashOut(data: unknown, socket: Socket<GameSocketContext>): void {
-    this.#reply(socket, GAME_EVENTS.CASH_OUT_ACK, this.#cashOut(data, socket));
+    this.#send(socket, GAME_EVENTS.CASH_OUT_ACK, this.#cashOut(data, socket));
   }
 
   #cashOut(
@@ -436,13 +425,13 @@ export class GameGateway {
       const wallet = this.wallets.getWallet(player.userId, isDemo);
       const multiplier = GameMath.toMultiplier(multiplierX100);
 
-      GameEvents.publish(
+      publishGame(
         this.events,
         Topics.user(player.userId),
         GAME_EVENTS.WALLET_UPDATED,
         { balanceCents: wallet.balanceCents, isDemo },
       );
-      GameEvents.publish(this.events, GAME_TOPIC, GAME_EVENTS.BET_CASHED_OUT, {
+      publishGame(this.events, GAME_TOPIC, GAME_EVENTS.BET_CASHED_OUT, {
         userId: player.userId,
         username: player.username,
         multiplier,
@@ -468,7 +457,7 @@ export class GameGateway {
     data: unknown,
     socket: Socket<GameSocketContext>,
   ): Promise<void> {
-    this.#reply(
+    this.#send(
       socket,
       GAME_EVENTS.SEED_ACK,
       await this.#submitSeed(data, socket),
@@ -534,7 +523,7 @@ export class GameGateway {
           : null;
 
     if (room === null) {
-      this.#reply(socket, PLAYER_CHAT_EVENTS.SYSTEM_MESSAGE, {
+      this.#send(socket, PLAYER_CHAT_EVENTS.SYSTEM_MESSAGE, {
         roomId: request.roomId ?? '',
         message: 'That conversation is not available.',
         timestamp: new Date().toISOString(),
@@ -545,14 +534,15 @@ export class GameGateway {
 
     // Subscribing is per-socket, which is why this lives in the gateway and not
     // in the service: the service owns the room, the gateway owns the connection.
-    socket.subscribe(GameEvents.playerChatTopic(room.roomId));
+    socket.subscribe(playerChatTopic(room.roomId));
 
     // To this socket: the room it now belongs to. To the other participant's own
     // topic: the same room, so their client opens a window without polling.
-    this.#reply(socket, PLAYER_CHAT_EVENTS.ROOM_JOINED, room);
+    this.#send(socket, PLAYER_CHAT_EVENTS.ROOM_JOINED, room);
     for (const participant of room.participants) {
       if (participant === player.userId) continue;
-      this.events.publish(
+      publishPlayerChat(
+        this.events,
         Topics.user(participant),
         PLAYER_CHAT_EVENTS.ROOM_CREATED,
         room,
@@ -586,7 +576,7 @@ export class GameGateway {
     const roomId = GameMessages.parseRoomId(data);
     if (roomId === null) return;
 
-    socket.unsubscribe(GameEvents.playerChatTopic(roomId));
+    socket.unsubscribe(playerChatTopic(roomId));
     this.playerChat.announce(roomId, player.username, 'leave');
   }
 
@@ -600,7 +590,7 @@ export class GameGateway {
    */
   @OnMessage(CLIENT_EVENTS.CHAT_MESSAGE)
   globalChat(data: unknown, socket: Socket<GameSocketContext>): void {
-    this.#reply(socket, EVENTS.CHAT_ACK, this.#globalChat(data, socket));
+    this.#send(socket, EVENTS.CHAT_ACK, this.#globalChat(data, socket));
   }
 
   #globalChat(
@@ -618,7 +608,7 @@ export class GameGateway {
     // Recorded before it is published, so a client that reloads immediately after
     // sending still sees its own line. The write is synchronous, so "before" is
     // real rather than a race that usually wins.
-    const line = {
+    const line: ChatLine = {
       username: player.username,
       message: text,
       timestamp: new Date().toISOString(),
@@ -628,7 +618,7 @@ export class GameGateway {
       picture: player.picture,
     };
 
-    this.events.publish(TOPICS.CHAT, EVENTS.MESSAGE, line);
+    publishSocket(this.events, TOPICS.CHAT, EVENTS.MESSAGE, line);
     // After the broadcast: everyone watching has it, and a failed write costs the
     // scrollback rather than the message.
     this.chat.record(line);
@@ -652,7 +642,8 @@ export class GameGateway {
    * `app` service is ever scaled.
    */
   #broadcastUserCount(): void {
-    this.events.publish(
+    publishSocket(
+      this.events,
       GAME_TOPIC,
       EVENTS.USER_COUNT,
       this.pubsub.subscriberCount(GAME_TOPIC),

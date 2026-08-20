@@ -5,6 +5,8 @@ import { EventsPublisher } from '../events/events.publisher.js';
 import {
   EVENTS,
   JOBS,
+  NotificationKind,
+  publishSocket,
   QUEUES,
   TOPICS,
   Topics,
@@ -48,13 +50,19 @@ export class NotificationJobs {
 
     // Two topics: the user's own, and the admin room. Written by the worker
     // process, so a browser seeing this is proof the frame crossed processes.
-    this.events.publish(Topics.user(userId), EVENTS.NOTIFICATION, {
-      event: JOBS.USER_REGISTERED,
-      payload: { userId, email, name },
+    //
+    // The text is written here rather than derived in the browser from a job name:
+    // `JOBS.USER_REGISTERED` is how this process talks to itself, and a client that
+    // switched on it would be reading the queue's vocabulary off the wire.
+    publishSocket(this.events, Topics.user(userId), EVENTS.NOTIFICATION, {
+      kind: NotificationKind.USER_REGISTERED,
+      title: 'Welcome to Firecracker',
+      message: `Your account is ready, ${name}.`,
     });
-    this.events.publish(TOPICS.ADMINS, EVENTS.NOTIFICATION, {
-      event: JOBS.USER_REGISTERED,
-      payload: { userId, email },
+    publishSocket(this.events, TOPICS.ADMINS, EVENTS.NOTIFICATION, {
+      kind: NotificationKind.USER_REGISTERED,
+      title: 'A player signed up',
+      message: `${email} joined.`,
     });
 
     this.logger.debug('handled user.registered', { userId });
@@ -104,9 +112,10 @@ export class NotificationJobs {
       body: reason,
     });
 
-    this.events.publish(TOPICS.ADMINS, EVENTS.NOTIFICATION, {
-      event: JOBS.USER_BANNED,
-      payload: { userId, reason },
+    publishSocket(this.events, TOPICS.ADMINS, EVENTS.NOTIFICATION, {
+      kind: NotificationKind.USER_BANNED,
+      title: 'An account was suspended',
+      message: `${email}: ${reason}`,
     });
 
     return { notified: userId };

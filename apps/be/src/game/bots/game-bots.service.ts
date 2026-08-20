@@ -5,9 +5,14 @@ import { AIService } from '../../ai/services/ai.service.js';
 import { ChatService } from '../../chat/services/chat.service.js';
 import { AppConfigService } from '../../config/app.config.service.js';
 import { EventsPublisher } from '../../notifications/events/events.publisher.js';
-import { EVENTS, TOPICS } from '../../notifications/events/events.js';
+import {
+  EVENTS,
+  publishSocket,
+  TOPICS,
+  type ChatLine,
+} from '../../notifications/events/events.js';
 import { CrashEngineService } from '../engine/crash-engine.service.js';
-import { GAME_EVENTS, GAME_TOPIC, GameEvents } from '../game.events.js';
+import { GAME_EVENTS, GAME_TOPIC, publishGame } from '../game.events.js';
 import { GameMath } from '../game.math.js';
 import { GameRoundStatus } from '../schema/game-round.schema.js';
 
@@ -174,7 +179,7 @@ export class GameBotsService implements OnInit {
     }
 
     for (const bot of this.#bots) {
-      GameEvents.publish(this.events, GAME_TOPIC, GAME_EVENTS.BET_PLACED, {
+      publishGame(this.events, GAME_TOPIC, GAME_EVENTS.BET_PLACED, {
         userId: bot.userId,
         username: bot.username,
         betAmountCents: bot.betAmountCents,
@@ -217,13 +222,13 @@ export class GameBotsService implements OnInit {
         if (text === null) return;
         // Trimmed hard: a model that ignores the word limit must not be able to
         // paste an essay into a lobby.
-        const line = {
+        const line: ChatLine = {
           username: speaker.username,
           message: text.slice(0, 140),
           timestamp: new Date().toISOString(),
           picture: null,
         };
-        this.events.publish(TOPICS.CHAT, EVENTS.MESSAGE, line);
+        publishSocket(this.events, TOPICS.CHAT, EVENTS.MESSAGE, line);
         this.chat.record(line);
       })
       .catch((error: unknown) =>
@@ -242,7 +247,7 @@ export class GameBotsService implements OnInit {
       if (bot.cashedOut || bot.targetX100 > multiplierX100) continue;
       bot.cashedOut = true;
 
-      GameEvents.publish(this.events, GAME_TOPIC, GAME_EVENTS.BET_CASHED_OUT, {
+      publishGame(this.events, GAME_TOPIC, GAME_EVENTS.BET_CASHED_OUT, {
         userId: bot.userId,
         username: bot.username,
         multiplier: GameMath.toMultiplier(bot.targetX100),

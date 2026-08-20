@@ -8,3 +8,4 @@
 export * from './enums.js';
 export * from './game.js';
 export * from './chat.js';
+export * from './wire.js';
