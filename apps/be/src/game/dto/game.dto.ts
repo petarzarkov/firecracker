@@ -1,22 +1,7 @@
 import type { RouteSchemas } from '@dunx/http';
+import { BET_STATUSES, ROUND_STATUSES } from '@firecracker/contracts';
 import { z } from 'zod';
-import { Paginated, pageOptionsSchema } from '../../core/pagination.dto.js';
-import { GameBetStatus } from '../schema/game-bet.schema.js';
-import { GameRoundStatus } from '../schema/game-round.schema.js';
-
-const ROUND_STATUSES = [
-  GameRoundStatus.WAITING,
-  GameRoundStatus.RUNNING,
-  GameRoundStatus.CRASHED,
-  GameRoundStatus.FAILED,
-] as const;
-
-const BET_STATUSES = [
-  GameBetStatus.ACTIVE,
-  GameBetStatus.CASHED_OUT,
-  GameBetStatus.LOST,
-  GameBetStatus.REFUNDED,
-] as const;
+import { pageOptionsSchema } from '../../core/pagination.dto.js';
 
 /**
  * A round as a client sees it.
@@ -49,6 +34,7 @@ export const CurrentRound = GameRound.extend({
   multiplier: z.number().optional(),
   elapsed: z.number().int().optional(),
 }).meta({ id: 'CurrentRound', title: 'The round in progress' });
+export type CurrentRound = z.infer<typeof CurrentRound>;
 
 /**
  * A stake as its owner sees it.
@@ -98,9 +84,12 @@ export const RoundVerification = z
     id: 'RoundVerification',
     title: 'Provably-fair inputs for a crashed round',
   });
-
-export const PaginatedRounds = Paginated.of(GameRound, 'PaginatedRounds');
-export const PaginatedBets = Paginated.of(GameBet, 'PaginatedBets');
+/**
+ * The *response*. `GameRoundService` has an interface of the same name for the
+ * proof it reads out of the round row, which carries `crashPointX100` and no
+ * instructions - this is that, converted at the edge and documented.
+ */
+export type RoundVerification = z.infer<typeof RoundVerification>;
 
 const RoundIdParams = z.object({ roundId: z.uuid() });
 

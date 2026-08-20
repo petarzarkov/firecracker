@@ -15,8 +15,10 @@ import {
   listRounds,
   oneRound,
   verifyRound,
+  type CurrentRound,
   type GameBet,
   type GameRound,
+  type RoundVerification,
 } from './dto/game.dto.js';
 import { CrashEngineService } from './engine/crash-engine.service.js';
 import { GameMath } from './game.math.js';
@@ -116,7 +118,7 @@ export class GameController {
   @ApiDoc({ tags: ['game'], summary: 'The round in progress' })
   @Public()
   @Get('/state', gameState)
-  state(): GameRound & { multiplier?: number; elapsed?: number } {
+  state(): CurrentRound {
     const round = this.rounds.getCurrentRound();
     if (round === undefined) {
       throw new HttpError(
@@ -166,7 +168,7 @@ export class GameController {
   })
   @Public()
   @Get('/rounds/:roundId/verify', verifyRound)
-  verify(input: Input<typeof verifyRound>) {
+  verify(input: Input<typeof verifyRound>): RoundVerification {
     const proof = this.rounds.verification(input.params.roundId);
     if (proof === undefined) {
       throw new HttpError(
