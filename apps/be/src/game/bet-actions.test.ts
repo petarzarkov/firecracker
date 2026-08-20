@@ -21,14 +21,14 @@ import type { AppSchema } from '../infra/db/tx.js';
 import { users } from '../users/schema/user.schema.js';
 import { GameBetRepository } from './repos/game-bet.repository.js';
 import { GameRoundRepository } from './repos/game-round.repository.js';
-import { WalletRepository } from './repos/wallet.repository.js';
+import { WalletRepository } from '../wallet/repos/wallet.repository.js';
 import { GameBetStatus, gameBets } from './schema/game-bet.schema.js';
 import {
   walletTransactions,
   WalletTransactionType,
-} from './schema/wallet.schema.js';
+} from '../wallet/schema/wallet.schema.js';
 import { BetRejected, GameBetService } from './services/game-bet.service.js';
-import { WalletService } from './services/wallet.service.js';
+import { WalletService } from '../wallet/services/wallet.service.js';
 
 /**
  * The money path, against a real migrated SQLite and no container.
@@ -117,7 +117,12 @@ beforeAll(() => {
   walletRepo = new WalletRepository(connection.db);
   betRepo = new GameBetRepository(connection.db);
   roundRepo = new GameRoundRepository(connection.db);
-  wallets = new WalletService(walletRepo, config, new RecordingLogger());
+  wallets = new WalletService(
+    walletRepo,
+    connection.db,
+    config,
+    new RecordingLogger(),
+  );
   bets = new GameBetService(
     betRepo,
     wallets,

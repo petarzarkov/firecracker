@@ -3,19 +3,17 @@ import { Logger } from '@dunx/core';
 import { SyncDatabase, transactionSync } from '@dunx/infra/db';
 import { HttpError, HttpStatusCode } from '@dunx/http';
 import type { Page, PageOptions } from '@dunx/infra/pagination';
+import { WalletTransactionType } from '@firecracker/contracts';
 import { AppConfigService } from '../../config/app.config.service.js';
-import * as schema from '../../infra/db/schema.js';
-import type { DbHandle } from '../../infra/db/tx.js';
+import type { AppSchema, DbHandle } from '../../infra/db/tx.js';
+import { WalletService } from '../../wallet/services/wallet.service.js';
 import { GameMath } from '../game.math.js';
 import { GameBetStatus, type GameBetRow } from '../schema/game-bet.schema.js';
-import { WalletTransactionType } from '../schema/wallet.schema.js';
 import {
   GameBetRepository,
   type BetWithPlayer,
 } from '../repos/game-bet.repository.js';
-import { WalletRepository } from '../repos/wallet.repository.js';
 import type { RefundedBet } from './game-round.service.js';
-import { WalletService } from './wallet.service.js';
 
 /**
  * A bet or cash-out the player is not allowed to make. Always a 400, and the
@@ -99,7 +97,7 @@ export class GameBetService {
   constructor(
     private readonly bets: GameBetRepository,
     private readonly wallets: WalletService,
-    private readonly db: SyncDatabase<typeof schema>,
+    private readonly db: SyncDatabase<AppSchema>,
     private readonly config: AppConfigService,
     private readonly logger: Logger,
   ) {}
@@ -126,7 +124,6 @@ export class GameBetService {
     try {
       return transactionSync(this.db, (tx) => {
         const betRepo = GameBetRepository.over(tx);
-        const walletRepo = WalletRepository.over(tx);
 
         const existing = betRepo.findActiveByRoundAndUser(
           roundId,
@@ -136,7 +133,7 @@ export class GameBetService {
         if (existing !== undefined)
           throw new BetRejected(GameBetService.#alreadyBet(isDemo));
 
-        const wallet = walletRepo.findByUserId(userId, isDemo);
+        const wallet = this.wallets.findWallet(tx, userId, isDemo);
         if (wallet === undefined) {
           throw new BetRejected(
             isDemo
@@ -146,12 +143,12 @@ export class GameBetService {
         }
 
         const debited = this.wallets.debit(
+          tx,
           wallet.id,
           betAmountCents,
           WalletTransactionType.BET_DEBIT,
           `${isDemo ? 'Demo bet' : 'Bet'} placed in round ${roundId}`,
           null,
-          walletRepo,
         );
         if (debited === undefined) {
           throw new BetRejected(
@@ -204,7 +201,6 @@ export class GameBetService {
   ): GameBetRow {
     return transactionSync(this.db, (tx) => {
       const betRepo = GameBetRepository.over(tx);
-      const walletRepo = WalletRepository.over(tx);
 
       const bet = betRepo.findActiveByRoundAndUser(roundId, userId, isDemo);
       if (bet === undefined) {
@@ -222,18 +218,18 @@ export class GameBetService {
         throw new BetRejected('No active bet found for this round');
       }
 
-      const wallet = walletRepo.findByUserId(userId, isDemo);
+      const wallet = this.wallets.findWallet(tx, userId, isDemo);
       if (wallet === undefined) {
         throw new BetRejected('Wallet not found. Please contact support.');
       }
 
       this.wallets.credit(
+        tx,
         wallet.id,
         payout,
         WalletTransactionType.WIN_CREDIT,
         `${isDemo ? 'Demo cashout' : 'Cashout'} at ${(multiplierX100 / 100).toFixed(2)}x in round ${roundId}`,
         settled.id,
-        walletRepo,
       );
 
       this.logger.info('bet cashed out', {
@@ -254,11 +250,10 @@ export class GameBetService {
    */
   refundBetsForRound(roundId: string, tx: DbHandle): RefundedBet[] {
     const betRepo = GameBetRepository.over(tx);
-    const walletRepo = WalletRepository.over(tx);
     const refunds: RefundedBet[] = [];
 
     for (const bet of betRepo.findActiveByRound(roundId)) {
-      const wallet = walletRepo.findByUserId(bet.userId, bet.isDemo);
+      const wallet = this.wallets.findWallet(tx, bet.userId, bet.isDemo);
       if (wallet === undefined) {
         this.logger.error('cannot refund a bet whose wallet is missing', {
           betId: bet.id,
@@ -268,12 +263,12 @@ export class GameBetService {
       }
 
       const credited = this.wallets.credit(
+        tx,
         wallet.id,
         bet.betAmountCents,
         WalletTransactionType.REFUND,
         `Refund for failed round ${roundId}`,
         bet.id,
-        walletRepo,
       );
       betRepo.update(bet.id, { status: GameBetStatus.REFUNDED });
 

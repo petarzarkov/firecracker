@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { Paginated, pageOptionsSchema } from '../../core/pagination.dto.js';
 import { GameBetStatus } from '../schema/game-bet.schema.js';
 import { GameRoundStatus } from '../schema/game-round.schema.js';
-import { WalletTransactionType } from '../schema/wallet.schema.js';
 
 const ROUND_STATUSES = [
   GameRoundStatus.WAITING,
@@ -17,14 +16,6 @@ const BET_STATUSES = [
   GameBetStatus.CASHED_OUT,
   GameBetStatus.LOST,
   GameBetStatus.REFUNDED,
-] as const;
-
-const TRANSACTION_TYPES = [
-  WalletTransactionType.DEPOSIT,
-  WalletTransactionType.WITHDRAWAL,
-  WalletTransactionType.BET_DEBIT,
-  WalletTransactionType.WIN_CREDIT,
-  WalletTransactionType.REFUND,
 ] as const;
 
 /**
@@ -99,38 +90,10 @@ export const RoundVerification = z
     title: 'Provably-fair inputs for a crashed round',
   });
 
-export const Wallet = z
-  .object({
-    id: z.uuid(),
-    balanceCents: z.number().int(),
-    isDemo: z.boolean(),
-    updatedAt: z.iso.datetime(),
-  })
-  .meta({ id: 'Wallet', title: 'A balance' });
-export type Wallet = z.infer<typeof Wallet>;
-
-export const WalletTransaction = z
-  .object({
-    id: z.uuid(),
-    type: z.enum(TRANSACTION_TYPES),
-    amountCents: z.number().int(),
-    balanceAfterCents: z.number().int(),
-    gameBetId: z.uuid().nullable(),
-    description: z.string().nullable(),
-    createdAt: z.iso.datetime(),
-  })
-  .meta({ id: 'WalletTransaction', title: 'One movement on a balance' });
-export type WalletTransaction = z.infer<typeof WalletTransaction>;
-
 export const PaginatedRounds = Paginated.of(GameRound, 'PaginatedRounds');
 export const PaginatedBets = Paginated.of(GameBet, 'PaginatedBets');
-export const PaginatedTransactions = Paginated.of(
-  WalletTransaction,
-  'PaginatedTransactions',
-);
 
 const RoundIdParams = z.object({ roundId: z.uuid() });
-const DemoQuery = z.object({ isDemo: z.stringbool().default(false) });
 
 export const gameState = {} as const satisfies RouteSchemas;
 export const listRounds = {
@@ -144,8 +107,4 @@ export const verifyRound = {
 } as const satisfies RouteSchemas;
 export const listMyBets = {
   query: pageOptionsSchema,
-} as const satisfies RouteSchemas;
-export const walletQuery = { query: DemoQuery } as const satisfies RouteSchemas;
-export const listTransactions = {
-  query: pageOptionsSchema.extend(DemoQuery.shape),
 } as const satisfies RouteSchemas;

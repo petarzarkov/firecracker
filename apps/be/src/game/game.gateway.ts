@@ -40,7 +40,7 @@ import { ChatService } from '../chat/services/chat.service.js';
 import { AutoCashOutService } from './services/auto-cashout.service.js';
 import { PlayerChatService } from './services/player-chat.service.js';
 import { GameStateService } from './services/game-state.service.js';
-import { WalletService } from './services/wallet.service.js';
+import { WalletService } from '../wallet/services/wallet.service.js';
 import { GameMessages } from './game.messages.js';
 
 /** Who is on the far end of a socket. `null` for a spectator. */

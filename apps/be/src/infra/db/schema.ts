@@ -12,4 +12,4 @@ export {
   wallets,
   walletTransactions,
   WalletTransactionType,
-} from '../../game/schema/wallet.schema.js';
+} from '../../wallet/schema/wallet.schema.js';

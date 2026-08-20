@@ -8,7 +8,7 @@ import { GameRoundStatus } from './schema/game-round.schema.js';
 import { GameBetStatus } from './schema/game-bet.schema.js';
 import { BetRejected, GameBetService } from './services/game-bet.service.js';
 import { GameRoundService } from './services/game-round.service.js';
-import { WalletService } from './services/wallet.service.js';
+import { WalletService } from '../wallet/services/wallet.service.js';
 import { GameRoundRepository } from './repos/game-round.repository.js';
 import { GameRoundWatchdog } from './services/game-watchdog.service.js';
 

@@ -5,7 +5,7 @@ import { Topics } from '../../notifications/events/events.js';
 import { GAME_EVENTS, GAME_TOPIC, GameEvents } from '../game.events.js';
 import { GameMath } from '../game.math.js';
 import { GameBetService } from './game-bet.service.js';
-import { WalletService } from './wallet.service.js';
+import { WalletService } from '../../wallet/services/wallet.service.js';
 
 /** Where a round's pending auto-cashouts live while it runs. */
 /** How long the hash outlives the round it belongs to. */

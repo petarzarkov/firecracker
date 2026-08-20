@@ -8,7 +8,7 @@ import {
 import { users } from '../../users/schema/user.schema.js';
 import { Columns } from '../../infra/db/columns.js';
 import { TRANSACTION_TYPES } from '@firecracker/contracts';
-import { gameBets } from './game-bet.schema.js';
+import { gameBets } from '../../game/schema/game-bet.schema.js';
 
 /** The transaction kinds, from `@firecracker/contracts`. */
 export {
@@ -60,6 +60,15 @@ export const walletTransactions = sqliteTable(
     amountCents: integer('amount_cents').notNull(),
     /** Snapshot of the wallet balance after this row was written. */
     balanceAfterCents: integer('balance_after_cents').notNull(),
+    /**
+     * The bet this movement settled, when there was one.
+     *
+     * The `references` is why this file imports from `game/`, and that is not the
+     * wallet module depending on the game module: a foreign key is declared on the
+     * table holding the column, drizzle needs the referenced table object to build
+     * it, and every schema here imports `users` the same way. The module graph and
+     * the schema graph are separate.
+     */
     gameBetId: text('game_bet_id').references(() => gameBets.id, {
       onDelete: 'set null',
     }),

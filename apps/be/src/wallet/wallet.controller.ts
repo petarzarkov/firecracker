@@ -7,7 +7,7 @@ import {
   walletQuery,
   type Wallet,
   type WalletTransaction,
-} from './dto/game.dto.js';
+} from './dto/wallet.dto.js';
 import type {
   WalletRow,
   WalletTransactionRow,
