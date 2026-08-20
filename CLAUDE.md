@@ -319,9 +319,39 @@ A bug fix comes with the test that would have caught it.
 
 Redis must be up for rounds to advance: `docker compose up -d`.
 
+**Every suite takes its own `QUEUE_PREFIX`, via `testNamespace()`.** Only
+`queues.spec.ts` used to, and the other seven ran on the default - which is the
+prefix a developer's server uses. `QUEUE_CONSUME: 'false'` stops a suite
+*consuming*, not *producing*: the engine enqueues a round at `onInit`, a sign-up
+enqueues an email, an upload enqueues a thumbnail. So a `bun run dev` inherited 500
+failed thumbnails pointing at deleted temp directories and 61 delayed
+`game-round-start` jobs. `dropTestNamespaces()` in `afterAll` removes them after,
+because bullmq's `meta` keys carry no TTL.
+
 `QUEUE_PREFIX`, `THROTTLE_PREFIX` and `WS_RELAY_CHANNEL` must name **this** app. They arrived from the template saying `dunx-template`, which put two applications on one queue namespace in a shared Redis - each consuming the other's jobs.
 
 ---
+
+## Logging
+
+`info` is a **frequency contract**, not an importance one: it is for events bounded
+by deploys and lifecycle. Per-request, per-job, per-entity and per-round is `debug`;
+anything on a clock - the 100 ms tick, the 250 ms bot poll - is `verbose` or nothing.
+A durable row is not a log line: a round, a bet, a wallet movement and a file are all
+records, and a log line about one is a second, worse copy of it.
+
+Six sites are `info` and that is the whole list: the server listening, the first
+administrator seeded, the bots enabling, the model hierarchy loading, and the
+engine's two boot-recovery lines.
+
+**Never log a URL that carries a token.** `LOG_MASK_FIELDS` masks by field *name*, so
+a one-time password-reset link inside a string sails through it. `EmailService` used
+to log whole bodies at `info` whenever `EMAIL_WEBHOOK_URL` was unset - which is
+local, CI, and any deploy that forgot it.
+
+A forked child cannot see a `logLevel` module option, because a module option is not
+an environment. `NODE_ENV` crosses a fork and `bun test` sets it, which is how a
+sandboxed child stays quiet under a suite.
 
 ## Style
 
