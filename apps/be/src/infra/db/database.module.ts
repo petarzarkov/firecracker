@@ -4,7 +4,7 @@ import { DbConnection, DbModule, SyncDatabase } from '@dunx/infra/db';
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator';
 import { AppConfigService } from '../../config/app.config.service.js';
 import { sqliteOptionsFor } from './sqlite.js';
-import type * as schema from './schema.js';
+import type { Db } from './tx.js';
 
 export const MIGRATIONS_FOLDER = join(import.meta.dir, 'migrations');
 
@@ -17,7 +17,7 @@ export const MIGRATIONS_FOLDER = join(import.meta.dir, 'migrations');
  * makes it safe to assume the connection is already open here.
  */
 export class DatabaseBootstrap {
-  constructor(connection: DbConnection<SyncDatabase<typeof schema>>) {
+  constructor(connection: DbConnection<Db>) {
     migrate(connection.db, { migrationsFolder: MIGRATIONS_FOLDER });
   }
 }
