@@ -1,7 +1,6 @@
 import { Module } from '@dunx/core';
 import { RedisModule } from '@dunx/infra/redis';
 import { AppConfigService } from '../../config/app.config.service.js';
-import { CacheService } from './services/cache.service.js';
 
 /** Hoisted, so the decorator below can both import and re-export one reference. */
 const redis = RedisModule.forRootAsync({
@@ -39,10 +38,5 @@ const redis = RedisModule.forRootAsync({
  * it also injects `CurrentUser`, which would have made this infra module import the
  * auth feature that imports it back.
  */
-@Module({
-  global: true,
-  imports: [redis],
-  providers: [CacheService],
-  exports: [redis, CacheService],
-})
+@Module({ global: true, imports: [redis], exports: [redis] })
 export class RedisCacheModule {}
