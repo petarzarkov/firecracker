@@ -8,12 +8,12 @@ Status vocabulary: `research` → `planned` → `in progress` → `done` / `bloc
 |---|-----------|--------|-------|
 | 01 | Contracts | planned | **3 live drift bugs found, 2 shipped**; 12-step plan; 11 raw `publish` holes |
 | 02 | Game module | planned | 6 sub-modules + facade; 3 of 4 proposed merges rejected; 7 steps |
-| 03 | Module hygiene | in progress | SPA fallback **fixed**; audit + invites still to drop |
+| 03 | Module hygiene | in progress | SPA fallback fixed; audit + invites + dead routes **deleted** (1244 lines) |
 | 04 | Data layer | planned | BaseRepository design typechecked at exit 0; migrations already correct |
 | 05 | Noise reduction | planned | **3 secret-leak sites, fixed**; 27 info -> 5 survive; comments 22.4% |
 | 06 | Multi-replica | done | design doc delivered; found 2 single-replica bugs + a stale prefix |
 | 07 | dunx framework | in progress | separate repo, prerelease target |
-| 08 | dunx docs | in progress | separate repo |
+| 08 | dunx docs | done | 17 docs + README rewritten; **52 docs-vs-code discrepancies**, 4 likely code bugs |
 
 ## Live bugs found during research
 
@@ -80,6 +80,11 @@ Related: `CLIENT_DIST=''` is a boot failure. `app.module.ts:128` gates the modul
 empty string registers `SpaFallback` without the module that provides it.
 
 ## Landed so far
+
+- Audit module, invites feature, dead AI controller and two dead profile routes
+  deleted: **1244 code lines, 17 files**, two verified migrations
+  (13f825c, ea5760e, 21bdea4, 52396f8). e2e went 38/8 to 32/0 - the 6 that went are
+  the deleted invites tests.
 
 - `THROTTLE_PREFIX` / `WS_RELAY_CHANNEL` renamed off `dunx-template` (801ddd6).
 - SPA deep links fixed, with the spec that fails against the old mechanism (bdefb8c).
