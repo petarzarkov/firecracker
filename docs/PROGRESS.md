@@ -7,7 +7,7 @@ Status vocabulary: `research` → `planned` → `in progress` → `done` / `bloc
 | # | Workstream | Status | Notes |
 |---|-----------|--------|-------|
 | 01 | Contracts | planned | **3 live drift bugs found, 2 shipped**; 12-step plan; 11 raw `publish` holes |
-| 02 | Game module | research | 4.8k lines, gateway alone is 649 |
+| 02 | Game module | planned | 6 sub-modules + facade; 3 of 4 proposed merges rejected; 7 steps |
 | 03 | Module hygiene | research | audit/files/profile-controller usage unknown |
 | 04 | Data layer | research | — |
 | 05 | Noise reduction | queued | runs last, touches every file |
@@ -41,6 +41,21 @@ Confirmed by hand, not taken on an agent's word.
 6. FIXED: `THROTTLE_PREFIX` and `WS_RELAY_CHANNEL` still defaulted to `dunx-template`
    and `.env` did not override them - the exact shared-Redis cross-talk CLAUDE.md
    warns about. `QUEUE_PREFIX` was already correct.
+
+## Wrong comments found during research
+
+Verified by hand. These matter because they are the reason the code reads the way it does.
+
+1. `game.module.ts` claims `GameBetService` and `GameRoundService` reference each other
+   and that Nest needed `forwardRef()` on both sides. There is no cycle: the round
+   service imports and injects the bet service, and the bet service only does
+   `import type { RefundedBet }` (`game-bet.service.ts:17`), which erases at build
+   time. That comment is the main reason the module reads as un-splittable.
+2. `GameModule`'s `exports: [GameRoundService, GameBetService, WalletService]` have no
+   consumer anywhere outside `src/game/` - the only external hit is a mention inside a
+   comment in `config/dto/db-vars.dto.ts`.
+3. The gateway's `onInit` justifies itself with `GameModule.forRoot({ engine: false })`,
+   which no longer exists.
 
 ## Decisions taken up front
 
