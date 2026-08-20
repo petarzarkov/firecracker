@@ -23,22 +23,6 @@ export class DatabaseBootstrap {
 }
 
 /**
- * Hoisted to a file-scope `const` so the same reference is both imported and
- * re-exported, and so the decorator below can name it: a `const` is initialised
- * before the decorator runs.
- */
-const db = DbModule.forRootAsync(SyncDatabase, {
-  useFactory: (config: AppConfigService) => {
-    const settings = config.get('db');
-    return sqliteOptionsFor({
-      filename: settings.sqlitePath,
-      busyTimeoutMs: settings.busyTimeoutMs,
-    });
-  },
-  inject: [AppConfigService] as const,
-});
-
-/**
  * **`global: true`**, like every module under `infra/`. There is exactly one
  * database in this app, `Foundation.for()` builds it once, and auth, users, the game
  * and the health probe all read it - so making each of them import a reference they
@@ -55,11 +39,24 @@ const db = DbModule.forRootAsync(SyncDatabase, {
  */
 @Module({
   global: true,
-  imports: [db],
+  imports: [
+    DbModule.forRootAsync(SyncDatabase, {
+      useFactory: (config: AppConfigService) => {
+        const settings = config.get('db');
+        return sqliteOptionsFor({
+          filename: settings.sqlitePath,
+          busyTimeoutMs: settings.busyTimeoutMs,
+        });
+      },
+      inject: [AppConfigService] as const,
+    }),
+  ],
   providers: [DatabaseBootstrap],
-  // The reference, not a token list: re-exporting the module hands on whatever
-  // `DbModule` exports - `DbConnection`, the drizzle handle - without this
-  // module having to restate a list that is not its own.
-  exports: [db, DatabaseBootstrap],
+  // `DbModule`, the class: dunx 2.2.0 resolves an exported module reference to the
+  // configuration imported beside it, so re-exporting hands on whatever that module
+  // exports - `DbConnection`, `DbOptions`, the drizzle handle - without restating a
+  // list that is not this module's own. It is what retired the hoisted `const` this
+  // file kept so one object could appear in both lists.
+  exports: [DbModule, DatabaseBootstrap],
 })
 export class DatabaseModule {}
