@@ -120,6 +120,34 @@ it is gone.
 - One branch, one commit per workstream, nothing pushed without a say-so.
 - `.cursor/` deleted.
 
+## Closed since that ledger was written
+
+- **The fairness hole** (a2e08b7). A Redis failure no longer launches a round whose
+  crash point came from the server seed alone. `combineClientSeeds([])` is the
+  constant `'firecracker'`, so the degraded round was indistinguishable from an idle
+  lobby's - which is why it was never noticed. Six cases in `fairness.test.ts`, three
+  of which fail against the previous code.
+- **The duplicate round.** The guard is on state in `GameJobs.schedule`, not on a
+  `jobId`: bullmq dedupes against the completed set, so a fixed id would have stopped
+  the eleventh restart scheduling anything.
+- **`crashPoint` on `/api/game/my-bets`** (5b22495), with the join filtered on CRASHED
+  **in SQL** - the column is written at the transition to RUNNING, so an unfiltered
+  read would have leaked the outcome mid-round.
+- **The chat ack** (1ff0f5e). Sent as `chatAck` rather than returned under the inbound
+  name, and the client listens for it.
+- **The invariant test** (f67b7ad). A name with no payload fails `bun test`; a payload
+  with no name fails `bun run typecheck`. Both ends, all five payload maps.
+- 9 raw `publish` holes closed; `GameEvents` deleted in favour of `publishGame`.
+- Every suite has its own queue namespace, and the application's namespace goes from
+  1686 keys to 0 after a full run.
+- `info` reserved for lifecycle: 16 sites demoted, a test run goes from 32 log lines
+  to 1.
+
+## Still open
+
+Two agents are working on the game-module split and the small leftovers. What
+follows is what remained when that ledger was written, minus the above.
+
 ## What is actually left
 
 Verified against the tree, not from memory, on 2026-08-20 after the second wave.
