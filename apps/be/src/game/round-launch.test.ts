@@ -8,6 +8,7 @@ import type { AppConfigService } from '../config/app.config.service.js';
 import { MIGRATIONS_FOLDER } from '../infra/db/database.module.js';
 import * as schema from '../infra/db/schema.js';
 import type { AppSchema } from '../infra/db/tx.js';
+import { ClientSeedService } from './fairness/client-seed.service.js';
 import { Fairness } from './fairness/fairness.js';
 import { GameRoundRepository } from './repos/game-round.repository.js';
 import { GameRoundStatus } from './schema/game-round.schema.js';
@@ -19,10 +20,15 @@ import type { GameBetService } from './services/game-bet.service.js';
  *
  * The crash point is drawn at launch from `serverSeed:clientSeed:nonce`. The client
  * seeds live in Redis, and a failed read used to fall back to `{}` - which
- * `combineClientSeeds` turns into the constant `'firecracker'`. The round then drew
+ * `Fairness.combine` turns into the constant `'firecracker'`. The round then drew
  * from the server seed alone, a value committed at creation and computable by the
  * house in advance, and recorded itself as provably fair. The record was identical
  * to an idle lobby's, so nothing afterwards could tell the two apart.
+ *
+ * `fairness/fairness.test.ts` covers the values. This file covers the **order** they
+ * are produced in, which is the half that only exists once there is a round row to
+ * watch: committed and undrawn at creation, drawn from the pool at the launch, and
+ * never the other way round.
  */
 let connection: SyncSqliteConnection<AppSchema>;
 let rounds: GameRoundRepository;
@@ -35,8 +41,8 @@ const config = {
 let nonce = 0;
 
 /**
- * Only the two commands this service reaches for. `incr` is the round nonce, and it
- * has to count for real - the crash-point draw is seeded with it.
+ * Only the two commands the seed pool reaches for here. `incr` is the round nonce,
+ * and it has to count for real - the crash-point draw is seeded with it.
  */
 const serviceOver = (redis: Pick<RedisConnection, 'hgetall'>) =>
   new GameRoundService(
@@ -45,10 +51,14 @@ const serviceOver = (redis: Pick<RedisConnection, 'hgetall'>) =>
     // is where settlement itself is asserted.
     { settleAllBetsAsLost: () => 0 } as unknown as GameBetService,
     connection.db,
-    {
-      incr: () => Promise.resolve(++nonce),
-      ...redis,
-    } as unknown as RedisConnection,
+    new ClientSeedService(
+      {
+        incr: () => Promise.resolve(++nonce),
+        ...redis,
+      } as unknown as RedisConnection,
+      config,
+      logger,
+    ),
     config,
     logger,
   );
@@ -122,6 +132,64 @@ describe('launching a round with a healthy Redis', () => {
 
     expect(started?.clientSeed).toBe(Fairness.combine(['aaa', 'bbb']));
     expect(started?.clientSeed).not.toBe(Fairness.combine([]));
+  });
+});
+
+/**
+ * The four stages, asserted as a sequence rather than as four values.
+ *
+ * Nothing checked this before, and it is the property `CLAUDE.md` says is not
+ * negotiable: the commitment exists before anyone bets, the crash point does not
+ * exist until the window shuts, and when it appears it is the draw over the seeds
+ * that were actually collected. A reordering that drew at creation, or that folded
+ * the pool from the wrong input, still produces a plausible round row - so only
+ * recomputing the number by hand catches it.
+ */
+describe('the order a round is built in', () => {
+  test('committed and undrawn at creation, drawn from the pool at the launch', async () => {
+    const service = serviceOver({
+      hgetall: () => Promise.resolve({ 'user-a': 'aaa', 'user-b': 'bbb' }),
+    });
+
+    const created = await service.createNextRound();
+
+    expect(created.seedHash).toBe(Fairness.commit(created.seed));
+    // The crash point cannot exist yet: the players have not contributed.
+    expect(created.crashPointX100).toBeNull();
+    expect(created.clientSeed).toBeNull();
+
+    const started = await service.transitionToRunning(created.id);
+
+    expect(started?.crashPointX100).toBe(
+      Fairness.crashPointX100(
+        created.seed,
+        Fairness.combine(['aaa', 'bbb']),
+        created.nonce,
+        Fairness.DEFAULT_ALGORITHM,
+      ),
+    );
+    // The seed committed at creation is the one the draw used, unchanged.
+    expect(started?.seed).toBe(created.seed);
+    expect(started?.seedHash).toBe(created.seedHash);
+  });
+
+  /**
+   * The pool is read at the launch and nowhere else. Reading it a second time -
+   * after the draw, say - would let a seed submitted late change the recorded
+   * `clientSeed` away from the one the crash point was drawn from.
+   */
+  test('the pool is collected exactly once per launch', async () => {
+    let reads = 0;
+    const service = serviceOver({
+      hgetall: () => {
+        reads += 1;
+        return Promise.resolve({ 'user-a': 'aaa' });
+      },
+    });
+
+    await service.transitionToRunning(waitingRound());
+
+    expect(reads).toBe(1);
   });
 });
 

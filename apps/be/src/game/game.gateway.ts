@@ -15,9 +15,7 @@ import {
   PubSub,
   type Socket,
 } from '@dunx/http';
-import { RedisConnection } from '@dunx/infra/redis';
 import type { BunRequest } from 'bun';
-import { AppConfigService } from '../config/app.config.service.js';
 import { EventsPublisher } from '../notifications/events/events.publisher.js';
 import {
   CLIENT_EVENTS,
@@ -43,11 +41,10 @@ import {
   type SeedAckPayload,
 } from './game.events.js';
 import type { ServerPayloads } from '@firecracker/contracts';
-import { Fairness } from './fairness/fairness.js';
+import { ClientSeedService } from './fairness/client-seed.service.js';
 import { GameMath } from './game.math.js';
 import { GameRoundStatus } from './schema/game-round.schema.js';
 import { GameBetService } from './services/game-bet.service.js';
-import { GameRoundService } from './services/game-round.service.js';
 import { ChatService } from '../chat/services/chat.service.js';
 import { AutoCashOutService } from './services/auto-cashout.service.js';
 import { PlayerChatService } from './services/player-chat.service.js';
@@ -118,10 +115,9 @@ export class GameGateway {
     private readonly state: GameStateService,
     private readonly playerChat: PlayerChatService,
     private readonly chat: ChatService,
-    private readonly redis: RedisConnection,
+    private readonly clientSeeds: ClientSeedService,
     private readonly events: EventsPublisher,
     private readonly pubsub: PubSub,
-    private readonly config: AppConfigService,
     private readonly logger: Logger,
   ) {}
 
@@ -315,15 +311,7 @@ export class GameGateway {
         isDemo,
       );
 
-      // Contribute entropy on the player's behalf. `HSETNX` so an explicit seed
-      // submitted through `submitClientSeed` is never overwritten by this.
-      await this.redis
-        .send('HSETNX', [
-          GameRoundService.clientSeedsKey(roundId),
-          player.userId,
-          Fairness.autoClientSeed(),
-        ])
-        .catch(() => undefined);
+      await this.clientSeeds.contributeIfAbsent(roundId, player.userId);
 
       if (autoCashOutAt !== undefined) {
         await this.autoCashOut.store(
@@ -486,16 +474,13 @@ export class GameGateway {
       };
     }
 
-    // Keyed by user where there is one, so a player cannot stuff the pool with
-    // one seed per socket. A spectator still contributes, keyed by connection.
+    // A spectator has no user id, so they are keyed by connection - see
+    // `ClientSeedService.contribute` for why the key matters.
     const { player } = socket.data.context;
-    const field = player?.userId ?? crypto.randomUUID();
-    const key = GameRoundService.clientSeedsKey(roundId);
-
-    await this.redis.hset(key, { [field]: seed });
-    await this.redis.expire(
-      key,
-      Math.ceil(this.config.get('game').waitingPhaseMs / 1000) + 30,
+    await this.clientSeeds.contribute(
+      roundId,
+      player?.userId ?? crypto.randomUUID(),
+      seed,
     );
 
     return { success: true };

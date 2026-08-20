@@ -50,7 +50,7 @@ describe('the client-seed pool', () => {
   /**
    * An idle lobby has no players and therefore no seeds, and must still launch.
    * The constant is what `ClientSeedService.collect` refuses to fall back to when
-   * Redis is merely unreachable - see `rounds/round-launch.test.ts`.
+   * Redis is merely unreachable - see `round-launch.test.ts`.
    */
   test('an empty pool is the documented constant', () => {
     expect(Fairness.combine([])).toBe('firecracker');

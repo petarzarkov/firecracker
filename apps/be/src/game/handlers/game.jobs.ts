@@ -18,6 +18,7 @@ import {
   type EngineCommand,
 } from '../engine/crash-engine.service.js';
 import { GameRoundService } from '../services/game-round.service.js';
+import { ClientSeedService } from '../fairness/client-seed.service.js';
 
 /**
  * The round lifecycle, as three jobs. The fourth was `cleanup`; it is a schedule now,
@@ -39,6 +40,7 @@ import { GameRoundService } from '../services/game-round.service.js';
 export class GameJobs {
   constructor(
     private readonly rounds: GameRoundService,
+    private readonly clientSeeds: ClientSeedService,
     private readonly jobs: JobPublisher,
     private readonly redis: RedisConnection,
     private readonly events: EventsPublisher,
@@ -107,11 +109,9 @@ export class GameJobs {
       return { started: false };
     }
 
-    // The seeds are spent. Dropped after the draw rather than before, so a retry
-    // that lost the transition race still had them available.
-    await this.redis
-      .del(GameRoundService.clientSeedsKey(roundId))
-      .catch(() => 0);
+    // Dropped after the draw rather than before, so a retry that lost the
+    // transition race still had the seeds available.
+    await this.clientSeeds.discard(roundId);
 
     publishGame(this.events, GAME_TOPIC, GAME_EVENTS.PHASE_CHANGE, {
       phase: 'running',

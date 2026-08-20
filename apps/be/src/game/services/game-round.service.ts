@@ -1,9 +1,9 @@
 import { Logger } from '@dunx/core';
 import { SyncDatabase, transactionSync } from '@dunx/infra/db';
-import { RedisConnection } from '@dunx/infra/redis';
 import type { Page, PageOptions } from '@dunx/infra/pagination';
 import { AppConfigService } from '../../config/app.config.service.js';
 import * as schema from '../../infra/db/schema.js';
+import { ClientSeedService } from '../fairness/client-seed.service.js';
 import { Fairness } from '../fairness/fairness.js';
 import {
   GameRoundStatus,
@@ -11,9 +11,6 @@ import {
 } from '../schema/game-round.schema.js';
 import { GameRoundRepository } from '../repos/game-round.repository.js';
 import { GameBetService, type RefundedBet } from './game-bet.service.js';
-
-/** Where the monotonic per-round nonce lives. One `INCR`, no contention. */
-const NONCE_KEY = 'game:round:nonce';
 
 /**
  * The lifecycle of a round, and the provably-fair record that goes with it.
@@ -30,24 +27,14 @@ const NONCE_KEY = 'game:round:nonce';
  * unit test cannot see.
  */
 export class GameRoundService {
-  /** Per-round hash of player-submitted client seeds, written during WAITING. */
-  static clientSeedsKey(roundId: string): string {
-    return `game:client-seeds:${roundId}`;
-  }
-
   constructor(
     private readonly rounds: GameRoundRepository,
     private readonly bets: GameBetService,
     private readonly db: SyncDatabase<typeof schema>,
-    private readonly redis: RedisConnection,
+    private readonly clientSeeds: ClientSeedService,
     private readonly config: AppConfigService,
     private readonly logger: Logger,
   ) {}
-
-  /** Atomically increments and returns the round nonce. */
-  nextNonce(): Promise<number> {
-    return this.redis.incr(NONCE_KEY);
-  }
 
   /**
    * A new round in WAITING, with the seed committed and the crash point still
@@ -56,7 +43,7 @@ export class GameRoundService {
   async createNextRound(): Promise<GameRoundRow> {
     const seed = Fairness.serverSeed();
     const seedHash = Fairness.commit(seed);
-    const nonce = await this.nextNonce();
+    const nonce = await this.clientSeeds.nextNonce();
     const waitingEndsAt = new Date(
       Date.now() + this.config.get('game').waitingPhaseMs,
     );
@@ -110,20 +97,17 @@ export class GameRoundService {
       return undefined;
     }
 
-    // A read failure must not become an empty pool. `combineClientSeeds([])` is the
-    // constant `'firecracker'`, so a round launched without the seeds would draw its
-    // crash point from the server seed alone - a value the house committed at
-    // creation and can therefore compute in advance - while recording itself as
-    // provably fair. Worse, the record of that round is byte-for-byte identical to
-    // an idle lobby's, so nothing distinguishes the degraded case afterwards.
-    //
-    // Rounds need Redis. Leaving this one WAITING is the honest answer: the stuck
-    // round sweep picks it up, and no round claims entropy it did not have.
-    const submitted = await this.#clientSeeds(roundId);
-    if (submitted === null) return undefined;
+    // `null` is an unreachable Redis, not an empty lobby - see `collect`, which
+    // explains why the two must not be the same value. Rounds need Redis, and
+    // leaving this one WAITING is the honest answer: the stuck-round sweep picks it
+    // up, and no round claims entropy it did not have.
+    const pool = await this.clientSeeds.collect(roundId);
+    if (pool === null) return undefined;
 
-    const clientSeed = Fairness.combine(Object.values(submitted));
+    const { clientSeed } = pool;
 
+    // Here, and only here: after the window has shut and the pool is folded, and
+    // before the row that publishes it.
     const crashPoint = Fairness.crashPointX100(
       round.seed,
       clientSeed,
@@ -149,28 +133,9 @@ export class GameRoundService {
     this.logger.debug('game round running', {
       roundId,
       crashPointX100: crashPoint,
-      seedCount: Object.keys(submitted).length,
+      seedCount: pool.count,
     });
     return started;
-  }
-
-  /**
-   * The submitted client seeds, or `null` when Redis could not be asked.
-   *
-   * The distinction is the whole point. An empty hash is normal - an idle lobby has
-   * no players and therefore no seeds. An unreachable Redis is not, and the two used
-   * to be the same value.
-   */
-  async #clientSeeds(roundId: string): Promise<Record<string, string> | null> {
-    try {
-      return await this.redis.hgetall(GameRoundService.clientSeedsKey(roundId));
-    } catch (error) {
-      this.logger.error('cannot launch a round without its client seeds', {
-        roundId,
-        reason: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
   }
 
   /**
