@@ -1,8 +1,7 @@
 import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import { SyncDatabase } from '@dunx/infra/db';
 import { paginate, type Page, type PageOptions } from '@dunx/infra/pagination';
-import * as schema from '../../infra/db/schema.js';
-import { Tx, type DbHandle } from '../../infra/db/tx.js';
+import { Tx, type AppSchema, type DbHandle } from '../../infra/db/tx.js';
 import {
   wallets,
   walletTransactions,
@@ -12,7 +11,7 @@ import {
 } from '../schema/wallet.schema.js';
 
 export class WalletRepository {
-  constructor(private readonly db: SyncDatabase<typeof schema>) {}
+  constructor(private readonly db: SyncDatabase<AppSchema>) {}
 
   /**
    * The same repository bound to a transaction handle, so a service can run its

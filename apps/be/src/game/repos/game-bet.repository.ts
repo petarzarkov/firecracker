@@ -1,8 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { SyncDatabase } from '@dunx/infra/db';
 import { paginate, type Page, type PageOptions } from '@dunx/infra/pagination';
-import * as schema from '../../infra/db/schema.js';
-import { Tx, type DbHandle } from '../../infra/db/tx.js';
+import { Tx, type AppSchema, type DbHandle } from '../../infra/db/tx.js';
 import { users, type UserRow } from '../../users/schema/user.schema.js';
 import {
   gameBets,
@@ -26,7 +25,7 @@ export class GameBetRepository {
     return user.name || user.email.split('@')[0] || user.id;
   }
 
-  constructor(private readonly db: SyncDatabase<typeof schema>) {}
+  constructor(private readonly db: SyncDatabase<AppSchema>) {}
 
   /**
    * The same repository bound to a transaction handle, so a service can run its

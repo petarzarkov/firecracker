@@ -1,7 +1,7 @@
 import { and, eq, like, type SQL } from 'drizzle-orm';
 import { SyncDatabase } from '@dunx/infra/db';
 import { paginate, type Page, type PageOptions } from '@dunx/infra/pagination';
-import * as schema from '../../infra/db/schema.js';
+import type { AppSchema } from '../../infra/db/tx.js';
 import { files, type FileRow, type NewFileRow } from '../schema/file.schema.js';
 
 export interface ListFilesFilters extends PageOptions {
@@ -9,7 +9,7 @@ export interface ListFilesFilters extends PageOptions {
 }
 
 export class FilesRepository {
-  constructor(private readonly db: SyncDatabase<typeof schema>) {}
+  constructor(private readonly db: SyncDatabase<AppSchema>) {}
 
   findById(id: string): FileRow | undefined {
     return this.db.select().from(files).where(eq(files.id, id)).get();

@@ -3,7 +3,7 @@ import { Logger, type OnInit } from '@dunx/core';
 import { SyncDatabase } from '@dunx/infra/db';
 import { eq } from 'drizzle-orm';
 import { AppConfigService } from '../../config/app.config.service.js';
-import * as schema from '../../infra/db/schema.js';
+import type { AppSchema } from '../../infra/db/tx.js';
 import { UserRole, users } from '../../users/schema/user.schema.js';
 
 /**
@@ -24,7 +24,7 @@ import { UserRole, users } from '../../users/schema/user.schema.js';
 export class AuthAdminSeeder implements OnInit {
   constructor(
     private readonly auth: Auth,
-    private readonly db: SyncDatabase<typeof schema>,
+    private readonly db: SyncDatabase<AppSchema>,
     private readonly config: AppConfigService,
     private readonly logger: Logger,
   ) {}

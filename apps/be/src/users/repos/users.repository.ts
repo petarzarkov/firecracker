@@ -1,7 +1,7 @@
 import { and, eq, like, or, type SQL } from 'drizzle-orm';
 import { SyncDatabase } from '@dunx/infra/db';
 import { paginate, type Page, type PageOptions } from '@dunx/infra/pagination';
-import * as schema from '../../infra/db/schema.js';
+import type { AppSchema } from '../../infra/db/tx.js';
 import {
   users,
   type NewUserRow,
@@ -26,7 +26,7 @@ export interface ListUsersFilters extends PageOptions {
  * three methods, which is cheaper than the keyset query living here.
  */
 export class UsersRepository {
-  constructor(private readonly db: SyncDatabase<typeof schema>) {}
+  constructor(private readonly db: SyncDatabase<AppSchema>) {}
 
   findById(id: string): UserRow | undefined {
     return this.db.select().from(users).where(eq(users.id, id)).get();
