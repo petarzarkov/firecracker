@@ -132,7 +132,7 @@ export class GameBetRepository extends CrudRepository<
       .all().length;
   }
 
-  listByUser(userId: string, options: PageOptions): Promise<Page<GameBetRow>> {
+  listByUser(userId: string, options: PageOptions): Page<GameBetRow> {
     return this.page(options, eq(gameBets.userId, userId));
   }
 

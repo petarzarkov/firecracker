@@ -78,14 +78,15 @@ export abstract class BaseRepository<
    * first of `updatedAt`, `createdAt`, `id` the table has - so a table with
    * `updatedAt` would silently sort by last modification.
    *
-   * Async because `paginate` is, and `paginate` is async because it serves
-   * `Bun.SQL` as well as `bun:sqlite`. It is the one method here allowed to be.
+   * Synchronous, like every other read here. `paginate` used to be async because it
+   * also serves `Bun.SQL`; since @dunx/infra 2.2.0 its return type follows the
+   * driver, so a `bun:sqlite` handle gets a `Page` rather than a promise for one.
    */
   protected page(
     options: PageOptions,
     where?: SQL | undefined,
     orderBy = 'createdAt',
-  ): Promise<Page<TRow>> {
+  ): Page<TRow> {
     return paginate<TTable, TRow>({
       db: this.db,
       table: this.table,

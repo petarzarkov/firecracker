@@ -123,7 +123,7 @@ export class WalletRepository extends BaseRepository<
   listTransactions(
     walletId: string,
     options: PageOptions,
-  ): Promise<Page<WalletTransactionRow>> {
+  ): Page<WalletTransactionRow> {
     return paginate<typeof walletTransactions, WalletTransactionRow>({
       db: this.db,
       table: walletTransactions,

@@ -24,7 +24,7 @@ export class UsersRepository extends CrudRepository<
     return this.db.select().from(users).where(eq(users.email, email)).get();
   }
 
-  list(filters: ListUsersFilters): Promise<Page<UserRow>> {
+  list(filters: ListUsersFilters): Page<UserRow> {
     const clauses: SQL[] = [];
     if (filters.role !== undefined) clauses.push(eq(users.role, filters.role));
     if (filters.banned !== undefined) {

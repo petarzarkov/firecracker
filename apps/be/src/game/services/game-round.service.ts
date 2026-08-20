@@ -249,7 +249,7 @@ export class GameRoundService {
     return this.rounds.findById(id);
   }
 
-  list(options: PageOptions): Promise<Page<GameRoundRow>> {
+  list(options: PageOptions): Page<GameRoundRow> {
     return this.rounds.list(options);
   }
 

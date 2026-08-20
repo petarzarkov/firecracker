@@ -14,7 +14,7 @@ export class FilesRepository extends CrudRepository<
 > {
   protected readonly table = files;
 
-  list(filters: ListFilesFilters): Promise<Page<FileRow>> {
+  list(filters: ListFilesFilters): Page<FileRow> {
     const clauses: SQL[] = [];
     if (filters.userId !== undefined) {
       clauses.push(eq(files.userId, filters.userId));

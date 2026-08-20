@@ -119,7 +119,7 @@ export class WalletService {
     userId: string,
     isDemo: boolean,
     options: PageOptions,
-  ): Promise<Page<WalletTransactionRow>> {
+  ): Page<WalletTransactionRow> {
     const wallet = this.getWallet(userId, isDemo);
     return this.wallets.listTransactions(wallet.id, options);
   }

@@ -303,7 +303,7 @@ export class GameBetService {
     return this.bets.recentByUser(userId, limit);
   }
 
-  listByUser(userId: string, options: PageOptions): Promise<Page<GameBetRow>> {
+  listByUser(userId: string, options: PageOptions): Page<GameBetRow> {
     return this.bets.listByUser(userId, options);
   }
 }

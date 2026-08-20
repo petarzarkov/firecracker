@@ -99,7 +99,7 @@ export class GameRoundRepository extends CrudRepository<
       .get();
   }
 
-  list(options: PageOptions): Promise<Page<GameRoundRow>> {
+  list(options: PageOptions): Page<GameRoundRow> {
     return this.page(options);
   }
 }
