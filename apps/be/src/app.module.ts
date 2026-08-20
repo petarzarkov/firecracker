@@ -1,6 +1,10 @@
 import type { ConfigSource, DynamicModule, ModuleRef } from '@dunx/core';
+import { ClientAddress, RedisThrottleStore, ThrottleModule } from '@dunx/http';
 import { LoggerModule } from '@dunx/infra/logger';
+import { RedisConnection } from '@dunx/infra/redis';
+import type { BunRequest } from 'bun';
 import { AccountsModule } from './auth/auth.module.js';
+import { CurrentUser } from './auth/services/current-user.service.js';
 import { ProfileModule } from './auth/profile.module.js';
 import { AIModule } from './ai/ai.module.js';
 import { AppConfigModule } from './config/app.config.module.js';
@@ -15,7 +19,6 @@ import { ServiceModule } from './infra/health/health.module.js';
 import { QueuesModule } from './infra/queue/queue.module.js';
 import { RedisCacheModule } from './infra/redis/redis.module.js';
 import { SchedulesModule } from './infra/schedule/schedule.module.js';
-import { ThrottleGuard } from './infra/redis/guards/throttle.guard.js';
 import { EventsPublisherModule } from './notifications/events/events-publisher.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { UsersModule } from './users/users.module.js';
@@ -125,15 +128,48 @@ export class AppModule {
         ...(typeof clientDist === 'string' && clientDist.length > 0
           ? [ClientModule.forRoot(clientDist)]
           : []),
+        AppModule.#throttle(),
       ],
-      /**
-       * `http.options.ts` names `ThrottleGuard` in the app-wide chain, and the
-       * container builds a middleware from its class - so app-level middleware has
-       * to be bound app-level. A module-scoped binding would not be in scope when
-       * the chain is composed.
-       */
-      providers: [ThrottleGuard],
     };
+  }
+
+  /**
+   * `@dunx/http`'s rate limit, replacing a hand-rolled decorator and guard that
+   * did the same thing for 119 lines. Registered here rather than in
+   * `Foundation.for()`: `ClientAddress` is an HTTP binding and a job child has no
+   * server, and nothing in a child answers a request to limit.
+   *
+   * `store` is explicit because the default is `MemoryThrottleStore`, which
+   * **counts** when Redis is unreachable rather than standing aside. Only
+   * `RedisThrottleStore` can fail - and failing is what the guard reads as
+   * "allow", which is this app's posture everywhere: an absent Redis degrades a
+   * route, never the process.
+   *
+   * `subject` is an option rather than an injected caller because `@dunx/http`
+   * must not depend on `@dunx/auth`. It is why `ThrottleGuard` is listed after
+   * `SessionGuard` in `http.options.ts`: ahead of it, every caller is an address.
+   */
+  static #throttle(): DynamicModule {
+    return ThrottleModule.forRootAsync({
+      useFactory: (
+        config: AppConfigService,
+        redis: RedisConnection,
+        caller: CurrentUser,
+        address: ClientAddress,
+      ) => ({
+        ...config.get('throttle'),
+        store: new RedisThrottleStore(redis),
+        // No `?? 'anonymous'`: the guard already substitutes that for an
+        // undefined subject, and saying it twice invites the two to disagree.
+        subject: (req: BunRequest) => caller.optional()?.id ?? address.of(req),
+      }),
+      inject: [
+        AppConfigService,
+        RedisConnection,
+        CurrentUser,
+        ClientAddress,
+      ] as const,
+    });
   }
 }
 

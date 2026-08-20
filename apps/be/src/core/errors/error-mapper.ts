@@ -34,7 +34,18 @@ export class ErrorMapper {
   static readonly toResponseBody: DunxErrorMapper = (error, req) => {
     const body = ErrorMapper.toErrorBody(error);
     if (body === undefined) return defaultErrorMapper(error, req);
-    return Response.json(body, { status: body.status });
+    /**
+     * `HttpError.headers` is part of the status, not an extra: `Retry-After` and
+     * `RateLimit-*` on `ThrottleGuard`'s 429, `WWW-Authenticate` on a 401. dunx's
+     * own `errorMapper` copies them, and replacing the mapper means copying them
+     * here - a 429 whose body says "try again" and whose headers do not say when
+     * is a 429 a client cannot act on.
+     */
+    const headers = error instanceof HttpError ? error.headers : undefined;
+    return Response.json(body, {
+      status: body.status,
+      ...(headers === undefined ? {} : { headers }),
+    });
   };
 
   static toErrorBody(error: unknown): ErrorBody | undefined {

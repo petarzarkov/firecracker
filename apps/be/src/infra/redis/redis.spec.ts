@@ -115,6 +115,11 @@ describe('with a broker that will not answer', () => {
    * The rate limiter fails **open**. `THROTTLE_LIMIT` is 1 here, so with a
    * reachable counter the second call would be a 429 - refusing every request
    * because the limiter is down would turn a degraded cache into an outage.
+   *
+   * This is also what pins `store: new RedisThrottleStore(redis)` in
+   * `AppModule.#throttle()`. `ThrottleModule`'s default store is the in-process
+   * `MemoryThrottleStore`, which cannot fail and therefore cannot stand aside:
+   * leaving it out would 429 the second call here with no Redis in sight.
    */
   test('the throttler stops counting instead of refusing', async () => {
     for (const _ of [1, 2, 3]) {
@@ -148,14 +153,32 @@ describe('with a live broker', () => {
 
   test('the throttler refuses the third call in the window', async () => {
     if (!live) return;
-    const statuses: number[] = [];
+    const responses: Response[] = [];
     for (const _ of [1, 2, 3]) {
-      const { status } = await (server as TestServer).json('api/profile', {
-        headers: TestSession.bearer(token),
-      });
-      statuses.push(status);
+      responses.push(
+        await (server as TestServer).request('api/profile', {
+          headers: TestSession.bearer(token),
+        }),
+      );
     }
-    expect(statuses).toEqual([200, 200, 429]);
+    expect(responses.map((response) => response.status)).toEqual([
+      200, 200, 429,
+    ]);
+
+    /**
+     * The 429 is *thrown*, so it comes out of `ErrorMapper` rather than the
+     * guard - and a mapper that only reads `status` and `message` drops the one
+     * header a client needs to act on. Asserted here rather than in the unit
+     * test alone because the throw crossing the mapper is the part that broke.
+     */
+    const refused = responses[2] as Response;
+    expect(Number(refused.headers.get('retry-after'))).toBeGreaterThan(0);
+    expect(refused.headers.get('ratelimit-limit')).toBe('2');
+    expect(refused.headers.get('ratelimit-remaining')).toBe('0');
+    // An allowed call reports the budget too, which is what makes the 429 predictable.
+    expect((responses[0] as Response).headers.get('ratelimit-remaining')).toBe(
+      '1',
+    );
   });
 
   test('readiness reports the cache up', async () => {

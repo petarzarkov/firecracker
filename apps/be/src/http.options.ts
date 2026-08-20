@@ -2,6 +2,7 @@ import { SessionGuard } from '@dunx/auth';
 import {
   RedisRelay,
   StaticFiles,
+  ThrottleGuard,
   type HttpOptions,
   type Middleware,
 } from '@dunx/http';
@@ -10,7 +11,6 @@ import { HEALTH_ROUTES } from './constants.js';
 import { SpaFallback } from './client/client.module.js';
 import type { AppConfig } from './config/env.validation.js';
 import { ErrorMapper } from './core/errors/error-mapper.js';
-import { ThrottleGuard } from './infra/redis/guards/throttle.guard.js';
 
 /**
  * The `HttpOptions`, in one place, because they go to `HttpFactory.create` **and** to
