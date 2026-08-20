@@ -196,6 +196,12 @@ export class GameGateway {
     };
   }
 
+  /**
+   * Subscribing is per-socket, which is the half that has to stay here; the frames
+   * a new client is owed are a projection, so they come from `GameStateService`.
+   * They go straight down this socket rather than being published - the round as
+   * this client sees it, its own scrollback, its own identity and its own balance.
+   */
   @OnOpen()
   async opened(socket: Socket<GameSocketContext>): Promise<void> {
     const { player } = socket.data.context;
@@ -210,34 +216,8 @@ export class GameGateway {
 
     this.#broadcastUserCount();
 
-    // Straight down this socket, not published: it is this client's own view of
-    // the round, and nobody else's business.
-    this.#send(socket, GAME_EVENTS.ROUND_STATE, this.state.snapshot());
-
-    // The chat scrollback, for the same reason. A player who reloads mid-round
-    // should not find an empty chat window - see `ChatService`, which keeps it in
-    // Redis rather than in the database the bet path is writing to.
-    this.#send(socket, EVENTS.CHAT_HISTORY, await this.chat.history());
-
-    if (player !== null) {
-      // `{ payload }` because that is the envelope the client's `updateUser`
-      // already destructures. The wire shape is the client's to dictate; there is
-      // no reason to rename it here and edit React for the privilege.
-      this.#send(socket, EVENTS.CONNECTED, {
-        payload: {
-          id: player.userId,
-          email: player.email,
-          displayName: player.username,
-          picture: player.picture,
-        },
-      });
-      // The demo wallet, created on first sight, so a new player has something to
-      // bet with before they have done anything.
-      const demo = this.wallets.getWallet(player.userId, true);
-      this.#send(socket, GAME_EVENTS.WALLET_UPDATED, {
-        balanceCents: demo.balanceCents,
-        isDemo: true,
-      });
+    for (const frame of await this.state.connectFrames(player)) {
+      socket.send(JSON.stringify(frame));
     }
   }
 
