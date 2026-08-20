@@ -13,10 +13,6 @@ interface ChatCompletionResponse {
   readonly choices?: { message?: { content?: string } }[];
 }
 
-interface ModelListResponse {
-  readonly data?: { id: string }[];
-}
-
 export interface OpenAICompatibleOptions {
   /** OpenAI-compatible API root, e.g. `https://api.groq.com/openai/v1`. */
   readonly baseUrl: string;
@@ -26,8 +22,6 @@ export interface OpenAICompatibleOptions {
   readonly label: string;
   /** The model used when the caller does not pin one. */
   readonly defaultModel: string;
-  /** Fallback ids for when the live `/models` listing cannot be fetched. */
-  readonly staticModels: readonly string[];
 }
 
 /**
@@ -95,26 +89,6 @@ export abstract class OpenAICompatibleService extends BaseProviderService {
       systemPrompt === undefined ? shape : `${systemPrompt}\n\n${shape}`;
     const raw = await this.#chat(model, this.#messages(prompt, system), true);
     return this.parseJson(raw, schema);
-  }
-
-  /**
-   * The provider's own list, falling back to a static one.
-   *
-   * Never throws: an unreachable provider contributes no models rather than
-   * failing the whole listing, which is what `AIService.listAllModels` relies on.
-   */
-  async listModels(): Promise<readonly string[]> {
-    if (!this.configured) return [];
-    try {
-      const data = await this.http.get<ModelListResponse>(
-        `${this.options.baseUrl}/models`,
-        { headers: this.#authHeaders() },
-      );
-      const ids = data?.data?.map((model) => model.id) ?? [];
-      return ids.length > 0 ? ids : this.options.staticModels;
-    } catch {
-      return this.options.staticModels;
-    }
   }
 
   /**

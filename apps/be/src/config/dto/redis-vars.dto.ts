@@ -24,8 +24,6 @@ export const redisVarsSchema = z.object({
     .max(30_000)
     .default(500),
 
-  CACHE_TTL_SECONDS: z.coerce.number().int().min(1).max(3600).default(30),
-
   /**
    * Namespaces every counter key. Two deployments sharing one Redis need two
    * values, or one would spend the other's budget - and a test run needs its own,
