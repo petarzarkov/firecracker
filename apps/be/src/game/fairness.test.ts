@@ -8,6 +8,7 @@ import type { AppConfigService } from '../config/app.config.service.js';
 import { MIGRATIONS_FOLDER } from '../infra/db/database.module.js';
 import * as schema from '../infra/db/schema.js';
 import type { AppSchema } from '../infra/db/tx.js';
+import { Fairness } from './fairness/fairness.js';
 import { GameRoundRepository } from './repos/game-round.repository.js';
 import { GameRoundStatus } from './schema/game-round.schema.js';
 import { GameRoundService } from './services/game-round.service.js';
@@ -119,10 +120,8 @@ describe('launching a round with a healthy Redis', () => {
 
     const started = await service.transitionToRunning(waitingRound());
 
-    expect(started?.clientSeed).toBe(
-      service.combineClientSeeds(['aaa', 'bbb']),
-    );
-    expect(started?.clientSeed).not.toBe(service.combineClientSeeds([]));
+    expect(started?.clientSeed).toBe(Fairness.combine(['aaa', 'bbb']));
+    expect(started?.clientSeed).not.toBe(Fairness.combine([]));
   });
 });
 

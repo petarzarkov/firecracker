@@ -43,6 +43,7 @@ import {
   type SeedAckPayload,
 } from './game.events.js';
 import type { ServerPayloads } from '@firecracker/contracts';
+import { Fairness } from './fairness/fairness.js';
 import { GameMath } from './game.math.js';
 import { GameRoundStatus } from './schema/game-round.schema.js';
 import { GameBetService } from './services/game-bet.service.js';
@@ -111,7 +112,6 @@ export class GameGateway {
   constructor(
     private readonly auth: Auth,
     private readonly engine: CrashEngineService,
-    private readonly rounds: GameRoundService,
     private readonly bets: GameBetService,
     private readonly wallets: WalletService,
     private readonly autoCashOut: AutoCashOutService,
@@ -321,7 +321,7 @@ export class GameGateway {
         .send('HSETNX', [
           GameRoundService.clientSeedsKey(roundId),
           player.userId,
-          this.rounds.autoClientSeed(),
+          Fairness.autoClientSeed(),
         ])
         .catch(() => undefined);
 

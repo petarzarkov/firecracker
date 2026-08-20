@@ -1,11 +1,10 @@
-import { Rng } from '@arkv/rng';
 import { Logger } from '@dunx/core';
 import { SyncDatabase, transactionSync } from '@dunx/infra/db';
 import { RedisConnection } from '@dunx/infra/redis';
 import type { Page, PageOptions } from '@dunx/infra/pagination';
 import { AppConfigService } from '../../config/app.config.service.js';
 import * as schema from '../../infra/db/schema.js';
-import { GameMath } from '../game.math.js';
+import { Fairness } from '../fairness/fairness.js';
 import {
   GameRoundStatus,
   type GameRoundRow,
@@ -25,6 +24,10 @@ const NONCE_KEY = 'game:round:nonce';
  * RUNNING - once the window is shut - is the crash point drawn. Drawing it any
  * earlier would mean the players' seeds could not have influenced it; drawing it
  * any later would mean we chose it knowing the bets.
+ *
+ * The values themselves live in `fairness/fairness.ts`, which has no container
+ * behind it. This class decides *when* each one is produced, which is the half a
+ * unit test cannot see.
  */
 export class GameRoundService {
   /** Per-round hash of player-submitted client seeds, written during WAITING. */
@@ -41,64 +44,6 @@ export class GameRoundService {
     private readonly logger: Logger,
   ) {}
 
-  /**
-   * 32 bytes from the platform CSPRNG.
-   *
-   * **Deliberately not `@arkv/rng`.** This value is published after the round
-   * crashes, and every algorithm that package offers is a non-cryptographic PRNG
-   * whose internal state is recoverable from a handful of outputs. A player
-   * collecting revealed seeds could then predict every future crash point. The
-   * draw in `game.math.ts` is seeded *from* this and may be a PRNG precisely
-   * because it is reproducible on purpose; this one must not be.
-   */
-  generateSeed(): string {
-    const bytes = new Uint8Array(32);
-    crypto.getRandomValues(bytes);
-    return Buffer.from(bytes).toString('hex');
-  }
-
-  /**
-   * The commitment: `SHA256(seed)`, published before the round starts so a player
-   * can check afterwards that the seed was not swapped for a more convenient one.
-   */
-  generateSeedHash(seed: string): string {
-    const hasher = new Bun.CryptoHasher('sha256');
-    hasher.update(seed);
-    return hasher.digest('hex');
-  }
-
-  /**
-   * Every player's seed folded into one value.
-   *
-   * Sorted before hashing so the result cannot depend on the order submissions
-   * happened to arrive in - otherwise a player who could influence arrival order
-   * could influence the outcome.
-   */
-  combineClientSeeds(seeds: readonly string[]): string {
-    if (seeds.length === 0) return 'firecracker';
-    const hasher = new Bun.CryptoHasher('sha256');
-    hasher.update([...seeds].sort().join(':'));
-    return hasher.digest('hex');
-  }
-
-  /**
-   * A random 16-byte client seed, contributed on a player's behalf when they place
-   * a bet without submitting one of their own.
-   *
-   * `@arkv/rng` here and not for the server seed: this value is public the moment
-   * it is used, it only has to vary, and nothing about the game's security rests
-   * on it being unpredictable.
-   */
-  autoClientSeed(): string {
-    const rng = new Rng();
-    try {
-      const words = rng.ints(4);
-      return Array.from(words, (w) => w.toString(16).padStart(8, '0')).join('');
-    } finally {
-      rng.free();
-    }
-  }
-
   /** Atomically increments and returns the round nonce. */
   nextNonce(): Promise<number> {
     return this.redis.incr(NONCE_KEY);
@@ -109,8 +54,8 @@ export class GameRoundService {
    * undrawn. `crashPointX100` stays null until `transitionToRunning`.
    */
   async createNextRound(): Promise<GameRoundRow> {
-    const seed = this.generateSeed();
-    const seedHash = this.generateSeedHash(seed);
+    const seed = Fairness.serverSeed();
+    const seedHash = Fairness.commit(seed);
     const nonce = await this.nextNonce();
     const waitingEndsAt = new Date(
       Date.now() + this.config.get('game').waitingPhaseMs,
@@ -122,7 +67,7 @@ export class GameRoundService {
       nonce,
       clientSeed: null,
       crashPointX100: null,
-      rngAlgorithm: GameMath.DEFAULT_RNG_ALGORITHM,
+      rngAlgorithm: Fairness.DEFAULT_ALGORITHM,
       status: GameRoundStatus.WAITING,
       waitingEndsAt,
     });
@@ -177,20 +122,20 @@ export class GameRoundService {
     const submitted = await this.#clientSeeds(roundId);
     if (submitted === null) return undefined;
 
-    const clientSeed = this.combineClientSeeds(Object.values(submitted));
+    const clientSeed = Fairness.combine(Object.values(submitted));
 
-    const crashPoint = GameMath.crashPointX100(
+    const crashPoint = Fairness.crashPointX100(
       round.seed,
       clientSeed,
       round.nonce,
-      GameMath.DEFAULT_RNG_ALGORITHM,
+      Fairness.DEFAULT_ALGORITHM,
     );
 
     const started = this.rounds.transition(roundId, GameRoundStatus.WAITING, {
       status: GameRoundStatus.RUNNING,
       clientSeed,
       crashPointX100: crashPoint,
-      rngAlgorithm: GameMath.DEFAULT_RNG_ALGORITHM,
+      rngAlgorithm: Fairness.DEFAULT_ALGORITHM,
       startedAt: new Date(),
     });
 
@@ -320,7 +265,7 @@ export class GameRoundService {
       clientSeed: round.clientSeed,
       nonce: round.nonce,
       algorithm: round.rngAlgorithm,
-      rngSeed: GameMath.fairnessSeed(round.seed, round.clientSeed, round.nonce),
+      rngSeed: Fairness.seedString(round.seed, round.clientSeed, round.nonce),
       crashPointX100: round.crashPointX100,
     };
   }
