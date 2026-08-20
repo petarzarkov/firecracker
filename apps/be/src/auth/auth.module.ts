@@ -75,11 +75,14 @@ const auth = AuthModule.forRootAsync(
                 url,
               })
               .catch((error: unknown) => {
-                // With no Redis there is no queue. Log the link rather than
-                // failing the request - in development that is how you get it.
+                // With no Redis there is no queue. In development the logged link
+                // is how you get it; in production it is an account-takeover
+                // primitive sitting in the log aggregator, so it is gated.
                 logger.warn('password reset could not be queued', {
                   email: user.email,
-                  url,
+                  ...(config.get('app').nodeEnv === 'production'
+                    ? {}
+                    : { url }),
                   reason: (error as Error).message,
                 });
               });

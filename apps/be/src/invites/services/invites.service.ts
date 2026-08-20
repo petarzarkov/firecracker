@@ -188,9 +188,9 @@ export class InvitesService {
         expiresAt: invite.expiresAt.toISOString(),
       })
       .catch((error: unknown) =>
+        // No `url`: the invite code grants account creation at the invited role.
         this.logger.warn('invitation email could not be queued', {
           email: invite.email,
-          url,
           reason: (error as Error).message,
         }),
       );
