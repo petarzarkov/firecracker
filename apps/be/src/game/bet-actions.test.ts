@@ -43,6 +43,12 @@ import { WalletService } from '../wallet/services/wallet.service.js';
  * No container on purpose. `WalletService` and `GameBetService` need a database,
  * a config and a logger and nothing else, so a suite that boots the engine to
  * reach them is paying for a clock it must then avoid.
+ *
+ * It is also the only file under `game/` that names `WalletRepository`, and that
+ * is a consequence of having no container rather than a hole in the seam: with no
+ * injector to resolve it, the repository has to be constructed here to be handed
+ * to `WalletService`. `WalletModule` still does not export it, so no *provider*
+ * can reach it.
  */
 const MIN_BET_CENTS = 100;
 const OPENING_DEMO_CENTS = 5000;
