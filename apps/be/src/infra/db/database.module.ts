@@ -5,7 +5,6 @@ import { Module } from '@dunx/core';
 import {
   DbConnection,
   DbModule,
-  SqliteConnection,
   SyncDatabase,
   SyncSqliteOptions,
 } from '@dunx/infra/db';
@@ -24,27 +23,8 @@ export const MIGRATIONS_FOLDER = join(import.meta.dir, 'migrations');
  * makes it safe to assume the connection is already open here.
  */
 export class DatabaseBootstrap {
-  constructor(
-    private readonly connection: DbConnection<SyncDatabase<typeof schema>>,
-  ) {
-    if (!(this.connection instanceof SqliteConnection)) {
-      throw new TypeError('DatabaseBootstrap expects the bun:sqlite backend.');
-    }
-
-    migrate(this.connection.db, { migrationsFolder: MIGRATIONS_FOLDER });
-  }
-
-  /** The raw `bun:sqlite` handle, for health probes and `BEGIN IMMEDIATE`. */
-  get raw(): SqliteConnection<
-    typeof schema,
-    SyncDatabase<typeof schema>
-  >['raw'] {
-    return (
-      this.connection as SqliteConnection<
-        typeof schema,
-        SyncDatabase<typeof schema>
-      >
-    ).raw;
+  constructor(connection: DbConnection<SyncDatabase<typeof schema>>) {
+    migrate(connection.db, { migrationsFolder: MIGRATIONS_FOLDER });
   }
 }
 
