@@ -1,65 +1,51 @@
 import { Module } from '@dunx/core';
-import { ChatModule } from '../chat/chat.module.js';
-import { WalletModule } from '../wallet/wallet.module.js';
-import { GameBotsService } from './bots/game-bots.service.js';
-import { CrashEngineService } from './engine/crash-engine.service.js';
-import { ClientSeedService } from './fairness/client-seed.service.js';
-import { BetActionsService } from './surface/bet-actions.service.js';
-import { SocketAuthService } from './surface/socket-auth.service.js';
-import { GameController } from './game.controller.js';
-import { GameGateway } from './game.gateway.js';
-import { GameJobs } from './handlers/game.jobs.js';
-import { GameBetRepository } from './repos/game-bet.repository.js';
-import { GameRoundRepository } from './repos/game-round.repository.js';
-import { AutoCashOutService } from './services/auto-cashout.service.js';
-import { GameBetService } from './services/game-bet.service.js';
-import { GameStateService } from './services/game-state.service.js';
-import { GameRoundWatchdog } from './services/game-watchdog.service.js';
-import { PlayerChatService } from './services/player-chat.service.js';
-import { GameRoundService } from './services/game-round.service.js';
+import { GameBettingModule } from './betting/betting.module.js';
+import { GameBotsModule } from './bots/bots.module.js';
+import { GameEngineModule } from './engine/engine.module.js';
+import { GameFairnessModule } from './fairness/fairness.module.js';
+import { GameRoundsModule } from './rounds/rounds.module.js';
+import { GameSurfaceModule } from './surface/surface.module.js';
 
 /**
- * The crash game.
+ * The crash game: a facade over six modules, and nothing of its own.
  *
- * **Decorated, and it used to be configured.** `forRoot({ engine, controllers })` had
- * exactly one caller - `WorkerModule`, which left the clock and the gateway out so a
- * second process could own the database transitions. There is no second process, and
- * the sandboxed child does not build this module at all. Dropping the factory also
- * removes the hazard it created: `forRoot()` returns a fresh object per call and a
- * scope is keyed on the module reference, so two callers meant two engines - which is
- * what `engine: false` was guarding against.
+ * It was one module with fourteen providers, and the split is not about file size.
+ * It turns three invariants that were doc comments into properties of the graph:
+ * `GameBotsModule` cannot see `GameBetService`, `GameEngineModule` exports one class
+ * so "exactly one clock" is a diamond rather than a paragraph, and everything a
+ * player re-runs to check us is under `fairness/`.
  *
- * Nothing here is exported. `AppModule` is its only importer and declares no
- * provider that injects into the game, so an `exports` list was a public surface
- * with no public.
+ * Nothing is exported. `AppModule` is the only importer and declares no provider
+ * that injects into the game.
  *
- * `ChatModule` because the gateway carries the lobby chat, and `WalletModule` because
- * a bet moves money - and that is the whole list. `WalletModule` exports only
- * `WalletService`, so the game can spend a balance and cannot write one: see that
- * class's doc comment for the seam. The socket upgrade resolves a session, but
- * `AccountsModule` is `global: true` and naming it here bought nothing. No `NotificationsModule` either: both reach
- * `EventsPublisher` through the `global: true` `EventsPublisherModule`, and importing
- * it would call its `forRoot()` again and bind a second publisher.
+ * ## Two rules, and both are one edit away from breaking something
+ *
+ * **No game sub-module carries `global: true`.** If one did and somebody later
+ * added it to `Foundation.for()`, `JobsModule` would build it - and if that module
+ * were `GameEngineModule`, or anything that transitively imports it, every BullMQ
+ * fork would be a second clock. `JobsModule` imports nothing from here, and that
+ * has to stay true.
+ *
+ * **No game sub-module carries a `static forRoot()`.** There is nothing to
+ * configure, and the only thing a factory buys is per-caller configuration - which
+ * is precisely the mechanism that produces two engines and two nonce counters.
+ * `forRoot()` returns a new object per call and scopes are keyed on the module
+ * reference; a decorated class is deduped by reference, so five importers share
+ * one instance and dunx keeps the resulting diamond silent. That is why sharing
+ * here is free and why no binding below needs `global: true`.
+ *
+ * Import order is construction order: fairness and betting have no game-internal
+ * dependencies, rounds needs both, the engine needs rounds, and the surface needs
+ * everything.
  */
 @Module({
-  imports: [ChatModule, WalletModule],
-  controllers: [GameController],
-  providers: [
-    ClientSeedService,
-    GameRoundRepository,
-    GameBetRepository,
-    GameBetService,
-    GameRoundService,
-    GameJobs,
-    CrashEngineService,
-    AutoCashOutService,
-    GameStateService,
-    PlayerChatService,
-    SocketAuthService,
-    BetActionsService,
-    GameGateway,
-    GameBotsService,
-    GameRoundWatchdog,
+  imports: [
+    GameFairnessModule,
+    GameBettingModule,
+    GameRoundsModule,
+    GameEngineModule,
+    GameBotsModule,
+    GameSurfaceModule,
   ],
 })
 export class GameModule {}

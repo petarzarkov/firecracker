@@ -4,16 +4,16 @@ import { LogLevel } from '@dunx/core';
 import { RecordingLogger } from '@dunx/testing';
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator';
 import type { RedisConnection } from '@dunx/infra/redis';
-import type { AppConfigService } from '../config/app.config.service.js';
-import { MIGRATIONS_FOLDER } from '../infra/db/database.module.js';
-import * as schema from '../infra/db/schema.js';
-import type { AppSchema } from '../infra/db/tx.js';
-import { ClientSeedService } from './fairness/client-seed.service.js';
-import { Fairness } from './fairness/fairness.js';
-import { GameRoundRepository } from './repos/game-round.repository.js';
-import { GameRoundStatus } from './schema/game-round.schema.js';
-import { GameRoundService } from './services/game-round.service.js';
-import type { GameBetService } from './services/game-bet.service.js';
+import type { AppConfigService } from '../../config/app.config.service.js';
+import { MIGRATIONS_FOLDER } from '../../infra/db/database.module.js';
+import * as schema from '../../infra/db/schema.js';
+import type { AppSchema } from '../../infra/db/tx.js';
+import { ClientSeedService } from '../fairness/client-seed.service.js';
+import { Fairness } from '../fairness/fairness.js';
+import { GameRoundRepository } from './game-round.repository.js';
+import { GameRoundStatus } from '../schema/game-round.schema.js';
+import { GameRoundService } from './game-round.service.js';
+import type { GameBetService } from '../betting/game-bet.service.js';
 
 /**
  * The fairness guarantee at the one moment it can be broken silently.

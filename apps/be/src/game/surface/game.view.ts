@@ -2,12 +2,12 @@ import type {
   ActiveBetView,
   CrashedRoundSummary,
 } from '@firecracker/contracts';
-import type { GameBet, GameRound } from '../dto/game.dto.js';
+import type { GameBet, GameRound } from './game.dto.js';
 import { GameMath } from '../game.math.js';
 import type {
   BetWithCrash,
   BetWithPlayer,
-} from '../repos/game-bet.repository.js';
+} from '../betting/game-bet.repository.js';
 import {
   GameRoundStatus,
   type GameRoundRow,

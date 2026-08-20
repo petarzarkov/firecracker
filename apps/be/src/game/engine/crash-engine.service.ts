@@ -13,28 +13,8 @@ import {
 } from '../game.events.js';
 import { GameMath } from '../game.math.js';
 import { GameRoundStatus } from '../schema/game-round.schema.js';
-import { GameRoundRepository } from '../repos/game-round.repository.js';
-
-/** Where the worker tells the web process what the round just became. */
-export const GAME_ENGINE_CHANNEL = 'game:engine:commands';
-
-/**
- * What a worker publishes on {@link GAME_ENGINE_CHANNEL}.
- *
- * The worker owns the database transitions and the web process owns the clock, so
- * this is the only thing crossing between them. Note `crashPointX100`: the command
- * carries hundredths like everything else, so the engine's comparison never leaves
- * integer space.
- */
-export type EngineCommand =
-  | { action: 'waiting'; roundId: string }
-  | {
-      action: 'start';
-      roundId: string;
-      crashPointX100: number;
-      startedAt: string;
-    }
-  | { action: 'crash' };
+import { GameRoundRepository } from '../rounds/game-round.repository.js';
+import { GAME_ENGINE_CHANNEL, type EngineCommand } from './engine.commands.js';
 
 /**
  * The clock. It holds the current round in memory, ticks the multiplier, and

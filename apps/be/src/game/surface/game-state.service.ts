@@ -4,12 +4,12 @@ import { WalletService } from '../../wallet/services/wallet.service.js';
 import { EVENTS } from '../../notifications/events/events.js';
 import { CrashEngineService } from '../engine/crash-engine.service.js';
 import { GAME_EVENTS, type GameRoundStatePayload } from '../game.events.js';
-import type { SocketPlayer } from '../surface/socket-auth.service.js';
+import type { SocketPlayer } from './socket-auth.service.js';
 import { GameMath } from '../game.math.js';
 import { GameRoundStatus } from '../schema/game-round.schema.js';
-import { GameView } from '../surface/game.view.js';
-import { GameBetService } from './game-bet.service.js';
-import { GameRoundService } from './game-round.service.js';
+import { GameView } from './game.view.js';
+import { GameBetService } from '../betting/game-bet.service.js';
+import { GameRoundService } from '../rounds/game-round.service.js';
 
 /**
  * One frame, with its payload checked against its name.

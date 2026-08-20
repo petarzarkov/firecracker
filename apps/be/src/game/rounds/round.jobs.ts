@@ -16,13 +16,16 @@ import { GameMath } from '../game.math.js';
 import {
   GAME_ENGINE_CHANNEL,
   type EngineCommand,
-} from '../engine/crash-engine.service.js';
-import { GameRoundService } from '../services/game-round.service.js';
+} from '../engine/engine.commands.js';
+import { GameRoundService } from './game-round.service.js';
 import { ClientSeedService } from '../fairness/client-seed.service.js';
 
 /**
  * The round lifecycle, as three jobs. The fourth was `cleanup`; it is a schedule now,
  * in `GameRoundWatchdog`.
+ *
+ * `RoundJobs` rather than `GameJobs`, which read as a sibling of the `GAME_JOBS`
+ * name map it uses in every decorator below.
  *
  * Jobs rather than method calls even with one process consuming, and the reason is
  * retry: a `crash` that fails mid-settlement must be attempted again or a round's bets
@@ -37,7 +40,7 @@ import { ClientSeedService } from '../fairness/client-seed.service.js';
  * An {@link EngineCommand} on a Redis channel is still how the clock is told what a
  * round became - a loopback publish now, kept because it is also the recovery path.
  */
-export class GameJobs {
+export class RoundJobs {
   constructor(
     private readonly rounds: GameRoundService,
     private readonly clientSeeds: ClientSeedService,

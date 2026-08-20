@@ -14,21 +14,21 @@ import {
 import { RecordingLogger } from '@dunx/testing';
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator';
 import { and, eq } from 'drizzle-orm';
-import type { AppConfigService } from '../config/app.config.service.js';
-import { MIGRATIONS_FOLDER } from '../infra/db/database.module.js';
-import * as schema from '../infra/db/schema.js';
-import type { AppSchema } from '../infra/db/tx.js';
-import { users } from '../users/schema/user.schema.js';
-import { GameBetRepository } from './repos/game-bet.repository.js';
-import { GameRoundRepository } from './repos/game-round.repository.js';
-import { WalletRepository } from '../wallet/repos/wallet.repository.js';
-import { GameBetStatus, gameBets } from './schema/game-bet.schema.js';
+import type { AppConfigService } from '../../config/app.config.service.js';
+import { MIGRATIONS_FOLDER } from '../../infra/db/database.module.js';
+import * as schema from '../../infra/db/schema.js';
+import type { AppSchema } from '../../infra/db/tx.js';
+import { users } from '../../users/schema/user.schema.js';
+import { GameBetRepository } from './game-bet.repository.js';
+import { GameRoundRepository } from '../rounds/game-round.repository.js';
+import { WalletRepository } from '../../wallet/repos/wallet.repository.js';
+import { GameBetStatus, gameBets } from '../schema/game-bet.schema.js';
 import {
   walletTransactions,
   WalletTransactionType,
-} from '../wallet/schema/wallet.schema.js';
-import { BetRejected, GameBetService } from './services/game-bet.service.js';
-import { WalletService } from '../wallet/services/wallet.service.js';
+} from '../../wallet/schema/wallet.schema.js';
+import { BetRejected, GameBetService } from './game-bet.service.js';
+import { WalletService } from '../../wallet/services/wallet.service.js';
 
 /**
  * The money path, against a real migrated SQLite and no container.

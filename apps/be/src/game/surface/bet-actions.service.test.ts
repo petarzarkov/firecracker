@@ -6,11 +6,11 @@ import type { ClientSeedService } from '../fairness/client-seed.service.js';
 import { GAME_EVENTS, GAME_TOPIC } from '../game.events.js';
 import type { GameBetRow } from '../schema/game-bet.schema.js';
 import { GameRoundStatus } from '../schema/game-round.schema.js';
-import type { AutoCashOutService } from '../services/auto-cashout.service.js';
+import type { AutoCashOutService } from '../betting/auto-cashout.service.js';
 import {
   BetRejected,
   type GameBetService,
-} from '../services/game-bet.service.js';
+} from '../betting/game-bet.service.js';
 import { BetActionsService } from './bet-actions.service.js';
 import type { SocketPlayer } from './socket-auth.service.js';
 

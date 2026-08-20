@@ -8,7 +8,7 @@ import {
 } from '@dunx/http';
 import { ApiDoc } from '@dunx/openapi';
 import type { Page } from '@dunx/infra/pagination';
-import { CurrentUser } from '../auth/services/current-user.service.js';
+import { CurrentUser } from '../../auth/services/current-user.service.js';
 import {
   gameState,
   listMyBets,
@@ -19,12 +19,12 @@ import {
   type GameBet,
   type GameRound,
   type RoundVerification,
-} from './dto/game.dto.js';
-import { CrashEngineService } from './engine/crash-engine.service.js';
-import { GameMath } from './game.math.js';
-import { GameView } from './surface/game.view.js';
-import { GameBetService } from './services/game-bet.service.js';
-import { GameRoundService } from './services/game-round.service.js';
+} from './game.dto.js';
+import { CrashEngineService } from '../engine/crash-engine.service.js';
+import { GameMath } from '../game.math.js';
+import { GameView } from './game.view.js';
+import { GameBetService } from '../betting/game-bet.service.js';
+import { GameRoundService } from '../rounds/game-round.service.js';
 
 /**
  * How a player checks a round without trusting us. Written out on the response

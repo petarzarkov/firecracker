@@ -11,8 +11,8 @@ import {
   publishGame,
 } from '../game.events.js';
 import { GameRoundStatus } from '../schema/game-round.schema.js';
-import { GameRoundRepository } from '../repos/game-round.repository.js';
-import { GameRoundService } from '../services/game-round.service.js';
+import { GameRoundRepository } from './game-round.repository.js';
+import { GameRoundService } from './game-round.service.js';
 
 /**
  * Fails rounds that stalled, refunds what was riding on them, and restarts the loop if

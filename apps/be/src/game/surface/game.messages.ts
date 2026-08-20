@@ -3,7 +3,7 @@ import type {
   PlaceBetMessage,
   SendPlayerChatMessage,
 } from '@firecracker/contracts';
-import { BetRejected } from './services/game-bet.service.js';
+import { BetRejected } from '../betting/game-bet.service.js';
 
 /**
  * What a client is allowed to send, and what it becomes.

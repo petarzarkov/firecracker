@@ -2,7 +2,7 @@ import { Logger } from '@dunx/core';
 import { RedisConnection } from '@dunx/infra/redis';
 import { EventsPublisher } from '../../notifications/events/events.publisher.js';
 import { Topics } from '../../notifications/events/events.js';
-import { GameBetRepository } from '../repos/game-bet.repository.js';
+import { GameBetRepository } from '../betting/game-bet.repository.js';
 import {
   PLAYER_CHAT_EVENTS,
   playerChatTopic,

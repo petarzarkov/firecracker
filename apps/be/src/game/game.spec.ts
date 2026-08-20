@@ -6,12 +6,15 @@ import { AppHttpOptions } from '../http.options.js';
 import { TestSession } from '../test-support/session.js';
 import { GameRoundStatus } from './schema/game-round.schema.js';
 import { GameBetStatus } from './schema/game-bet.schema.js';
-import type { GameBet } from './dto/game.dto.js';
-import { BetRejected, GameBetService } from './services/game-bet.service.js';
-import { GameRoundService } from './services/game-round.service.js';
+import type { GameBet } from './surface/game.dto.js';
+import { BetRejected, GameBetService } from './betting/game-bet.service.js';
+import { GameRoundService } from './rounds/game-round.service.js';
 import { WalletService } from '../wallet/services/wallet.service.js';
-import { GameRoundRepository } from './repos/game-round.repository.js';
-import { GameRoundWatchdog } from './services/game-watchdog.service.js';
+import { GameRoundRepository } from './rounds/game-round.repository.js';
+import { GameRoundWatchdog } from './rounds/round-watchdog.service.js';
+import { CrashEngineService } from './engine/crash-engine.service.js';
+import { GameBotsModule } from './bots/bots.module.js';
+import { GameSurfaceModule } from './surface/surface.module.js';
 import {
   dropTestNamespaces,
   testNamespace,
@@ -87,6 +90,32 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await server.close();
+});
+
+/**
+ * The split's own assertion, against the graph the application actually boots.
+ *
+ * `game.module.test.ts` proves the *bindings* are shared without constructing
+ * anything; this proves resolution then produced one instance of the class it
+ * matters most for. A second engine would tick its own multiplier and enqueue its
+ * own crash job, and the failure a client sees is the number stuttering between two
+ * timelines - not something a test that only counts rows would notice.
+ */
+describe('the module graph the app boots', () => {
+  test('the bots and the socket resolve the same clock', () => {
+    expect(server.app.get(CrashEngineService, GameBotsModule)).toBe(
+      server.app.get(CrashEngineService, GameSurfaceModule),
+    );
+  });
+
+  /**
+   * The free half: dunx pushes a warning for every ambiguous import and every
+   * shadowed binding, which is exactly what a `forRoot()` on a shared sub-module
+   * produces. Empty, or somebody configured a module that had nothing to configure.
+   */
+  test('nothing in the graph is ambiguous or shadowed', () => {
+    expect(server.app.warnings).toEqual([]);
+  });
 });
 
 describe('placing a bet', () => {

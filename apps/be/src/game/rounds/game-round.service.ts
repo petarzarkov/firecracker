@@ -9,8 +9,11 @@ import {
   GameRoundStatus,
   type GameRoundRow,
 } from '../schema/game-round.schema.js';
-import { GameRoundRepository } from '../repos/game-round.repository.js';
-import { GameBetService, type RefundedBet } from './game-bet.service.js';
+import { GameRoundRepository } from './game-round.repository.js';
+import {
+  GameBetService,
+  type RefundedBet,
+} from '../betting/game-bet.service.js';
 
 /**
  * The lifecycle of a round, and the provably-fair record that goes with it.

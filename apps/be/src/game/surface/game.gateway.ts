@@ -10,8 +10,8 @@ import {
 } from '@dunx/http';
 import type { ServerPayloads } from '@firecracker/contracts';
 import type { BunRequest } from 'bun';
-import { ChatService } from '../chat/services/chat.service.js';
-import { EventsPublisher } from '../notifications/events/events.publisher.js';
+import { ChatService } from '../../chat/services/chat.service.js';
+import { EventsPublisher } from '../../notifications/events/events.publisher.js';
 import {
   CLIENT_EVENTS,
   EVENTS,
@@ -19,10 +19,10 @@ import {
   TOPICS,
   Topics,
   type ChatAckPayload,
-} from '../notifications/events/events.js';
-import { UserRole } from '../users/schema/user.schema.js';
-import { CrashEngineService } from './engine/crash-engine.service.js';
-import { ClientSeedService } from './fairness/client-seed.service.js';
+} from '../../notifications/events/events.js';
+import { UserRole } from '../../users/schema/user.schema.js';
+import { CrashEngineService } from '../engine/crash-engine.service.js';
+import { ClientSeedService } from '../fairness/client-seed.service.js';
 import {
   GAME_CLIENT_EVENTS,
   GAME_EVENTS,
@@ -30,17 +30,17 @@ import {
   PLAYER_CHAT_EVENTS,
   playerChatTopic,
   type SeedAckPayload,
-} from './game.events.js';
+} from '../game.events.js';
 import { GameMessages } from './game.messages.js';
-import { GameRoundStatus } from './schema/game-round.schema.js';
-import { AutoCashOutService } from './services/auto-cashout.service.js';
-import { GameStateService } from './services/game-state.service.js';
-import { PlayerChatService } from './services/player-chat.service.js';
-import { BetActionsService } from './surface/bet-actions.service.js';
+import { GameRoundStatus } from '../schema/game-round.schema.js';
+import { AutoCashOutService } from '../betting/auto-cashout.service.js';
+import { GameStateService } from './game-state.service.js';
+import { PlayerChatService } from './player-chat.service.js';
+import { BetActionsService } from './bet-actions.service.js';
 import {
   SocketAuthService,
   type GameSocketContext,
-} from './surface/socket-auth.service.js';
+} from './socket-auth.service.js';
 
 /**
  * The one socket. Chat, notifications and the game all arrive here.

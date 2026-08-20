@@ -13,7 +13,7 @@ import {
   GameBetRepository,
   type BetWithCrash,
   type BetWithPlayer,
-} from '../repos/game-bet.repository.js';
+} from './game-bet.repository.js';
 
 /**
  * A bet or cash-out the player is not allowed to make. Always a 400, and the

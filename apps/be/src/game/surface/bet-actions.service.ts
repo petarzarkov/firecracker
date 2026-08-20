@@ -11,10 +11,10 @@ import {
   type CashOutAckPayload,
 } from '../game.events.js';
 import { GameMath } from '../game.math.js';
-import { GameMessages } from '../game.messages.js';
+import { GameMessages } from './game.messages.js';
 import { GameRoundStatus } from '../schema/game-round.schema.js';
-import { AutoCashOutService } from '../services/auto-cashout.service.js';
-import { GameBetService } from '../services/game-bet.service.js';
+import { AutoCashOutService } from '../betting/auto-cashout.service.js';
+import { GameBetService } from '../betting/game-bet.service.js';
 import type { SocketPlayer } from './socket-auth.service.js';
 
 /**
