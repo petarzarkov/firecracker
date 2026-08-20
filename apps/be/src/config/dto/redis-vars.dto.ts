@@ -31,7 +31,7 @@ export const redisVarsSchema = z.object({
    * values, or one would spend the other's budget - and a test run needs its own,
    * or it inherits the last run's counters.
    */
-  THROTTLE_PREFIX: z.string().default('dunx-template'),
+  THROTTLE_PREFIX: z.string().default('firecracker'),
   THROTTLE_LIMIT: z.coerce.number().int().min(1).max(10_000).default(20),
   THROTTLE_WINDOW_SECONDS: z.coerce.number().int().min(1).max(3600).default(60),
 
@@ -79,5 +79,5 @@ export const redisVarsSchema = z.object({
    * sharing a Redis need two different values, or each would fan out the other's
    * frames.
    */
-  WS_RELAY_CHANNEL: z.string().default('dunx-template:ws'),
+  WS_RELAY_CHANNEL: z.string().default('firecracker:ws'),
 });
