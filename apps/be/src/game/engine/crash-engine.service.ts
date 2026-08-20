@@ -36,14 +36,6 @@ export type EngineCommand =
     }
   | { action: 'crash' };
 
-/** A cash-out the engine triggers on the player's behalf when the curve reaches it. */
-export interface AutoCashOut {
-  readonly userId: string;
-  readonly username: string;
-  readonly autoCashOutAtX100: number;
-  readonly isDemo: boolean;
-}
-
 /**
  * The clock. It holds the current round in memory, ticks the multiplier, and
  * decides the moment of the crash.
@@ -52,20 +44,27 @@ export interface AutoCashOut {
  *
  * The tick loop must run in **exactly one** process. Two would each publish their
  * own crash job and each broadcast their own ticks, so a client would see the
- * multiplier stutter between two timelines. `GameModule.forRoot({ engine: false })`
- * is what keeps it out of the worker, and it is also why the `app` service in
- * docker-compose.prod.yml cannot be scaled to two replicas as it stands.
+ * multiplier stutter between two timelines. The module that declares this class is
+ * decorated and carries no static factory for exactly that reason: dunx dedupes a
+ * decorated module by reference, so however many modules import it there is one
+ * scope and one engine, where a `forRoot()` would hand each importer its own. It is
+ * also why the `app` service in docker-compose.prod.yml cannot be scaled past one
+ * replica.
  *
  * The database is the truth and this is a cache of it: everything here is
  * recoverable from `game_round` at boot, which is what `#recover` does.
  *
- * ## The tick emitter is gone
+ * ## One callback survived, and it is not scaffolding
  *
- * The NestJS version had `registerTickEmitter()` and `registerAutoCashOutHandler()`
- * - two callbacks the gateway installed on `onModuleInit` to break a circular
- * module import between engine and gateway. dunx records dependencies as a thunk
- * evaluated at resolution, so a cycle resolves on its own and neither callback is
- * needed: this class injects `EventsPublisher` and publishes ticks itself.
+ * The NestJS version also had `registerTickEmitter()`, installed from the gateway to
+ * break a circular module import. That one is gone - dunx records a dependency as a
+ * thunk evaluated at resolution, so a cycle resolves on its own and this class
+ * publishes its own ticks.
+ *
+ * {@link CrashEngineService.registerAutoCashOutHandler} stays, for a different
+ * reason: injecting `AutoCashOutService` would give the clock a path to
+ * `GameBetService` and through it to the wallet. This class's only game dependency
+ * is `GameRoundRepository`, and the callback is what keeps it that way.
  */
 export class CrashEngineService implements OnInit, OnShutdown {
   // In-memory state. The database is canonical; this is the clock's copy.
@@ -77,7 +76,7 @@ export class CrashEngineService implements OnInit, OnShutdown {
   /** Whether {@link CrashEngineService.TICK} is currently armed. */
   #ticking = false;
 
-  /** Set by the gateway, which owns the Redis hash the auto-cashouts live in. */
+  /** Set from outside, by whoever owns the Redis hash the auto-cashouts live in. */
   #autoCashOut: ((roundId: string, multiplierX100: number) => void) | null =
     null;
 

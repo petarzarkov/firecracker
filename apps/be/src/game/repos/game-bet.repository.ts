@@ -213,15 +213,4 @@ export class GameBetRepository extends CrudRepository<
       .get();
     return row === undefined ? undefined : GameBetRepository.displayName(row);
   }
-
-  /** The player's most recent results, for the history panel. */
-  recentByUser(userId: string, limit: number): GameBetRow[] {
-    return this.db
-      .select()
-      .from(gameBets)
-      .where(eq(gameBets.userId, userId))
-      .orderBy(desc(gameBets.createdAt))
-      .limit(limit)
-      .all();
-  }
 }

@@ -85,9 +85,9 @@ export const RoundVerification = z
     title: 'Provably-fair inputs for a crashed round',
   });
 /**
- * The *response*. `GameRoundService` has an interface of the same name for the
- * proof it reads out of the round row, which carries `crashPointX100` and no
- * instructions - this is that, converted at the edge and documented.
+ * The *response*. `GameRoundService.RoundProof` is what comes off the round row -
+ * `crashPointX100`, and no instructions; this is that, converted at the edge and
+ * documented.
  */
 export type RoundVerification = z.infer<typeof RoundVerification>;
 

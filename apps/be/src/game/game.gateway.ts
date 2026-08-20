@@ -128,11 +128,16 @@ export class GameGateway {
   /**
    * Wires the engine's per-tick auto-cashout callback.
    *
-   * The engine cannot do this itself: the pending cashouts live in a Redis hash
-   * this class writes on `placeBet`, and the engine has no business knowing about
-   * it. It is a callback rather than an injection because the engine ticks on a
-   * timer and must not hold a reference to a socket layer that may not exist -
-   * `GameModule.forRoot({ engine: false })` builds the engine nowhere near this.
+   * The engine cannot do this itself, and must not: injecting `AutoCashOutService`
+   * would give the clock a path to `GameBetService` and through it to the wallet,
+   * where today its only game dependency is `GameRoundRepository`.
+   *
+   * It is registered *after* the engine's own `onInit` has run its boot recovery,
+   * because providers construct in declaration order - so a round that was
+   * mid-flight resumes ticking a moment before this sweep is armed. Survivable
+   * rather than overlooked: the engine reads the handler per tick, and `sweep`
+   * claims each entry with `hdel` before it pays, so the cost is a couple of ticks
+   * of precision and never a double payout.
    */
   onInit(): void {
     this.engine.registerAutoCashOutHandler((roundId, multiplierX100) => {
@@ -648,10 +653,5 @@ export class GameGateway {
       EVENTS.USER_COUNT,
       this.pubsub.subscriberCount(GAME_TOPIC),
     );
-  }
-
-  /** Subscribers on this node, for the lobby's player count. */
-  get spectators(): number {
-    return this.pubsub.subscriberCount(GAME_TOPIC);
   }
 }

@@ -26,6 +26,10 @@ import { GameRoundService } from './services/game-round.service.js';
  * scope is keyed on the module reference, so two callers meant two engines - which is
  * what `engine: false` was guarding against.
  *
+ * Nothing here is exported. `AppModule` is its only importer and declares no
+ * provider that injects into the game, so an `exports` list was a public surface
+ * with no public.
+ *
  * `ChatModule` because the gateway carries the lobby chat, and `WalletModule` because
  * a bet moves money - and that is the whole list. `WalletModule` exports only
  * `WalletService`, so the game can spend a balance and cannot write one: see that
@@ -40,12 +44,6 @@ import { GameRoundService } from './services/game-round.service.js';
   providers: [
     GameRoundRepository,
     GameBetRepository,
-    // `GameBetService` and `GameRoundService` reference each other - the round
-    // service settles bets, the bet service names the round service's
-    // `RefundedBet`. In Nest this needed `forwardRef()` on both sides. dunx
-    // records a dependency as a thunk evaluated at resolution rather than at
-    // class-definition time, so the cycle resolves on its own and there is
-    // nothing to annotate.
     GameBetService,
     GameRoundService,
     GameJobs,
@@ -57,6 +55,5 @@ import { GameRoundService } from './services/game-round.service.js';
     GameBotsService,
     GameRoundWatchdog,
   ],
-  exports: [GameRoundService, GameBetService],
 })
 export class GameModule {}

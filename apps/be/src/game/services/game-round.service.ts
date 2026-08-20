@@ -11,7 +11,7 @@ import {
   type GameRoundRow,
 } from '../schema/game-round.schema.js';
 import { GameRoundRepository } from '../repos/game-round.repository.js';
-import { GameBetService } from './game-bet.service.js';
+import { GameBetService, type RefundedBet } from './game-bet.service.js';
 
 /** Where the monotonic per-round nonce lives. One `INCR`, no contention. */
 const NONCE_KEY = 'game:round:nonce';
@@ -302,7 +302,7 @@ export class GameRoundService {
    * with. Refuses a round that has not crashed yet - handing out the server seed
    * while bets are open would let anyone read the outcome.
    */
-  verification(roundId: string): RoundVerification | undefined {
+  verification(roundId: string): RoundProof | undefined {
     const round = this.rounds.findById(roundId);
     if (
       round === undefined ||
@@ -326,14 +326,15 @@ export class GameRoundService {
   }
 }
 
-export interface RefundedBet {
-  readonly userId: string;
-  readonly isDemo: boolean;
-  readonly balanceCents: number;
-  readonly refundedCents: number;
-}
-
-export interface RoundVerification {
+/**
+ * The proof as it comes off the round row: hundredths, and no instructions.
+ *
+ * Named apart from the `RoundVerification` **response** in `game.dto.ts`, which is
+ * this converted at the edge with `howToVerify` attached. They were both called
+ * `RoundVerification`, so a reader had to check the import to know which shape a
+ * variable held.
+ */
+export interface RoundProof {
   readonly roundId: string;
   readonly serverSeed: string;
   readonly serverSeedHash: string;

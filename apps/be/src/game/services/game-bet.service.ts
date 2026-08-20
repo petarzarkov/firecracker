@@ -14,7 +14,6 @@ import {
   type BetWithCrash,
   type BetWithPlayer,
 } from '../repos/game-bet.repository.js';
-import type { RefundedBet } from './game-round.service.js';
 
 /**
  * A bet or cash-out the player is not allowed to make. Always a 400, and the
@@ -311,11 +310,19 @@ export class GameBetService {
     return this.bets.findByRoundWithPlayers(roundId);
   }
 
-  recentByUser(userId: string, limit = 20): GameBetRow[] {
-    return this.bets.recentByUser(userId, limit);
-  }
-
   listByUser(userId: string, options: PageOptions): Page<BetWithCrash> {
     return this.bets.listByUser(userId, options);
   }
+}
+
+/**
+ * One player's stake, handed back. Declared beside the method that produces it -
+ * it used to live on `GameRoundService`, which made the two look mutually
+ * dependent when the only edge was this type and types erase at build time.
+ */
+export interface RefundedBet {
+  readonly userId: string;
+  readonly isDemo: boolean;
+  readonly balanceCents: number;
+  readonly refundedCents: number;
 }
