@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { DynamicModule } from '@dunx/core';
+import { Module } from '@dunx/core';
 import {
   DbConnection,
   DbModule,
@@ -49,14 +49,41 @@ export class DatabaseBootstrap {
 }
 
 /**
+ * Hoisted to a file-scope `const` so the same reference is both imported and
+ * re-exported, and so the decorator below can name it: a `const` is initialised
+ * before the decorator runs.
+ */
+const db = DbModule.forRootAsync(SyncDatabase, {
+  useFactory: (config: AppConfigService) => {
+    const settings = config.get('db');
+    if (settings.sqlitePath !== ':memory:') {
+      mkdirSync(dirname(settings.sqlitePath), { recursive: true });
+    }
+    return new SyncSqliteOptions({
+      schema,
+      filename: settings.sqlitePath,
+      // Order matters - see the note below. `busy_timeout` first.
+      pragmas: [
+        `busy_timeout = ${settings.busyTimeoutMs}`,
+        'journal_mode = WAL',
+        'foreign_keys = ON',
+        'synchronous = NORMAL',
+      ],
+    });
+  },
+  inject: [AppConfigService] as const,
+});
+
+/**
  * **`global: true`**, like every module under `infra/`. There is exactly one
- * database in this app, `foundation()` builds it once, and auth, users, the game
+ * database in this app, `Foundation.for()` builds it once, and auth, users, the game
  * and the health probe all read it - so making each of them import a reference they
  * cannot construct for themselves would be ceremony with no boundary behind it.
  *
- * The alternative is worse than verbose, it is wrong: `DbModule.forRootAsync()`
- * returns a new object per call, so a feature module calling it again would be a
- * second scope with a second SQLite connection.
+ * **A decorated class rather than a `forRoot()` that took no arguments.** A scope is
+ * keyed on the module reference and `forRoot()` returned a new object per call, so a
+ * second caller was a second scope with a second SQLite connection. A class is one
+ * reference however many modules name it, which is the only shape that dedupes.
  *
  * ## The pragmas are the concurrency design
  *
@@ -87,38 +114,13 @@ export class DatabaseBootstrap {
  * `foreign_keys = ON` is not concurrency, it is SQLite defaulting to off and every
  * `references()` in the schema being decorative until it is set.
  */
-export class DatabaseModule {
-  static forRoot(): DynamicModule {
-    const db = DbModule.forRootAsync(SyncDatabase, {
-      useFactory: (config: AppConfigService) => {
-        const settings = config.get('db');
-        if (settings.sqlitePath !== ':memory:') {
-          mkdirSync(dirname(settings.sqlitePath), { recursive: true });
-        }
-        return new SyncSqliteOptions({
-          schema,
-          filename: settings.sqlitePath,
-          // Order matters - see the note above. `busy_timeout` first.
-          pragmas: [
-            `busy_timeout = ${settings.busyTimeoutMs}`,
-            'journal_mode = WAL',
-            'foreign_keys = ON',
-            'synchronous = NORMAL',
-          ],
-        });
-      },
-      inject: [AppConfigService] as const,
-    });
-
-    return {
-      module: DatabaseModule,
-      global: true,
-      imports: [db],
-      providers: [DatabaseBootstrap],
-      // The reference, not a token list: re-exporting the module hands on whatever
-      // `DbModule` exports - `DbConnection`, the drizzle handle - without this
-      // module having to restate a list that is not its own.
-      exports: [db, DatabaseBootstrap],
-    };
-  }
-}
+@Module({
+  global: true,
+  imports: [db],
+  providers: [DatabaseBootstrap],
+  // The reference, not a token list: re-exporting the module hands on whatever
+  // `DbModule` exports - `DbConnection`, the drizzle handle - without this
+  // module having to restate a list that is not its own.
+  exports: [db, DatabaseBootstrap],
+})
+export class DatabaseModule {}

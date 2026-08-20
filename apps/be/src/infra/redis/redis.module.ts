@@ -1,7 +1,23 @@
-import type { DynamicModule } from '@dunx/core';
+import { Module } from '@dunx/core';
 import { RedisModule } from '@dunx/infra/redis';
 import { AppConfigService } from '../../config/app.config.service.js';
 import { CacheService } from './services/cache.service.js';
+
+/** Hoisted, so the decorator below can both import and re-export one reference. */
+const redis = RedisModule.forRootAsync({
+  useFactory: (config: AppConfigService) => {
+    // Destructured first: `exactOptionalPropertyTypes` will not let a
+    // `string | undefined` reach a `url?: string`, even inside the branch
+    // that has already ruled `undefined` out.
+    const { url, connectTimeoutMs } = config.get('redis');
+    return {
+      ...(url === undefined ? {} : { url }),
+      connectionTimeout: connectTimeoutMs,
+      maxRetries: 0,
+    };
+  },
+  inject: [AppConfigService] as const,
+});
 
 /**
  * Registered unconditionally, and that is the whole convention: `Bun.RedisClient`
@@ -14,36 +30,19 @@ import { CacheService } from './services/cache.service.js';
  * `false` for the same reason - finding out at startup is the opposite of the point.
  *
  * `global: true` for the same reason as `DatabaseModule`: one client, built once by
- * `foundation()`, read by auth, notifications, the throttler and the health probe.
+ * `Foundation.for()`, read by auth, notifications, the throttler and the health
+ * probe - and decorated rather than configured for the same reason too, since a
+ * second `forRoot()` call was a second scope with a second client.
  *
  * `ThrottleGuard` used to live here and now does not. It is app-level middleware -
  * `httpOptions.middleware` lists it - so it belongs to the module that lists it, and
  * it also injects `CurrentUser`, which would have made this infra module import the
  * auth feature that imports it back.
  */
-export class RedisCacheModule {
-  static forRoot(): DynamicModule {
-    const redis = RedisModule.forRootAsync({
-      useFactory: (config: AppConfigService) => {
-        // Destructured first: `exactOptionalPropertyTypes` will not let a
-        // `string | undefined` reach a `url?: string`, even inside the branch
-        // that has already ruled `undefined` out.
-        const { url, connectTimeoutMs } = config.get('redis');
-        return {
-          ...(url === undefined ? {} : { url }),
-          connectionTimeout: connectTimeoutMs,
-          maxRetries: 0,
-        };
-      },
-      inject: [AppConfigService] as const,
-    });
-
-    return {
-      module: RedisCacheModule,
-      global: true,
-      imports: [redis],
-      providers: [CacheService],
-      exports: [redis, CacheService],
-    };
-  }
-}
+@Module({
+  global: true,
+  imports: [redis],
+  providers: [CacheService],
+  exports: [redis, CacheService],
+})
+export class RedisCacheModule {}

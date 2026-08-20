@@ -43,16 +43,16 @@ class Foundation {
         options.source === undefined ? {} : { source: options.source },
       ),
       Foundation.#logging(options),
-      DatabaseModule.forRoot(),
-      RedisCacheModule.forRoot(),
-      StorageModule.forRoot(),
-      ImagesConfigModule.forRoot(),
+      DatabaseModule,
+      RedisCacheModule,
+      StorageModule,
+      ImagesConfigModule,
       // Not armed in a job child: bullmq forks one per burst, so a schedule there
       // would fire in two or three processes at once.
       SchedulesModule.forRoot({ enabled: publisher === 'socket' }),
       // One instance for both graphs: `GoogleService` paces itself against a
       // per-minute quota, and two clients would each think they had the allowance.
-      AIModule.forRoot(),
+      AIModule,
       // The one thing the two graphs configure differently: `socket` publishes
       // through this server's `PubSub`, `relay` puts the frame on the Redis channel.
       EventsPublisherModule.forRoot({ publisher }),
@@ -113,8 +113,8 @@ export class AppModule {
         QueuesModule.forRoot(),
         // After DatabaseModule, so better-auth reuses the connection it opened.
         AccountsModule,
-        NotificationsModule.forRoot(),
-        ServiceModule.forRoot(),
+        NotificationsModule,
+        ServiceModule,
         UsersModule,
         FilesFeatureModule.forRoot(),
         // Last: the engine's `onInit` recovers the in-flight round and needs the
@@ -150,7 +150,7 @@ export class JobsModule {
       imports: [
         ...Foundation.for(options, 'relay'),
         QueuesModule.forRoot({ controllers: false }),
-        NotificationsModule.forRoot(),
+        NotificationsModule,
         FilesFeatureModule.forRoot({ controllers: false }),
       ],
     };

@@ -1,6 +1,15 @@
-import type { DynamicModule } from '@dunx/core';
+import { Module } from '@dunx/core';
 import { ImagesModule } from '@dunx/infra/images';
 import { AppConfigService } from '../../config/app.config.service.js';
+
+/** Hoisted, so the decorator below can both import and re-export one reference. */
+const images = ImagesModule.forRootAsync({
+  useFactory: (config: AppConfigService) => {
+    const settings = config.get('images');
+    return { quality: settings.quality, maxWidth: settings.maxWidth };
+  },
+  inject: [AppConfigService] as const,
+});
 
 /**
  * `Bun.Image` behind an injectable `Images`, with the limits taken from validated
@@ -12,21 +21,5 @@ import { AppConfigService } from '../../config/app.config.service.js';
  * refuses a decompression bomb before pixels are allocated, and `allowedFormats`
  * refuses a format the app does not want even when Bun can decode it.
  */
-export class ImagesConfigModule {
-  static forRoot(): DynamicModule {
-    const images = ImagesModule.forRootAsync({
-      useFactory: (config: AppConfigService) => {
-        const settings = config.get('images');
-        return { quality: settings.quality, maxWidth: settings.maxWidth };
-      },
-      inject: [AppConfigService] as const,
-    });
-
-    return {
-      module: ImagesConfigModule,
-      global: true,
-      imports: [images],
-      exports: [images],
-    };
-  }
-}
+@Module({ global: true, imports: [images], exports: [images] })
+export class ImagesConfigModule {}
