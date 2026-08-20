@@ -119,3 +119,77 @@ it is gone.
 - Firecracker executes, it does not just plan — except workstream 06.
 - One branch, one commit per workstream, nothing pushed without a say-so.
 - `.cursor/` deleted.
+
+## What is actually left
+
+Verified against the tree, not from memory, on 2026-08-20 after the second wave.
+
+### Fairness, and the most serious thing found all day
+
+`game-round.service.ts:154` swallows a Redis failure with
+`.catch(() => ({}) as Record<string, string>)` and launches the round anyway. The
+client-seed pool is then **empty**, so the crash point is drawn from the server seed
+alone - the players did not influence it - and **nothing is logged**. A round that
+looks provably fair, is recorded as provably fair, and is not.
+
+That is a fairness hole, not a logging one. Workstream 05 flagged it as one of three
+swallowed errors to promote; it deserves its own decision: log and continue, or
+refuse to launch. **Not fixed.**
+
+### Live user-facing bugs still open
+
+- `crashPoint` is absent from the `GameBet` schema (0 occurrences), so every lost or
+  refunded row in MY BETS still renders `x0.00x`. Workstream 01, step 1.
+- `globalChat` still *returns* `{ delivered }` / `{ error }`
+  (`game.gateway.ts:589`), so dunx replies under the inbound name and the client -
+  which registers no `chatMessage` listener - still drops it. "Login required to
+  chat" and the 1000-character rejection still never reach a user.
+- `GAME_JOBS.SCHEDULE` is still enqueued with **no `jobId`** at
+  `crash-engine.service.ts:208` and `game-watchdog.service.ts:120`. Two boots still
+  start two rounds. This was workstream 06's Stage 0, the cheapest fix on the list.
+- A winning auto-cashout is still settled as lost when the crash falls inside a
+  restart gap.
+
+### Workstreams not started
+
+- **01 contracts** - all 12 steps. The highest-value one is the last: a test
+  asserting every event name has a payload and vice versa, which would have caught
+  all three drift bugs.
+- **02 game module split** - 23 files, gateway still 649 lines with its
+  `oxlint-disable max-lines` header. The bet-path gate is now satisfied, so it is
+  unblocked.
+- **05 comments** - 31.5% of non-test `apps/be` lines are comment. The logging half
+  is done; the ~1,184 lines of NestJS/Postgres archaeology are not.
+- **05 websocket logging middleware** - dunx 2.2.0 ships it, the gateway does not use
+  it, and `http.options.ts` still sets no `onError`, so a throwing socket handler
+  still lands in dunx's `defaultOnError` as unstructured `console.error`.
+
+### Smaller leftovers
+
+- `scripts/migrate.ts` and `scripts/seed.ts` still open SQLite without
+  `busy_timeout`, contradicting the pragma rule `database.module.ts` documents.
+- Every bullmq sandbox child still re-runs `migrate()` per burst.
+- 2 `SyncDatabase<typeof schema>` occurrences remain, in files their agent did not own.
+- `infra/db/database.module.ts` still uses the hoisted-`const` module shape 2.2.0
+  retired everywhere else.
+- The files module is still unreachable - no client caller - so `infra/files`,
+  `infra/images` and `MediaJobs` exist for nothing. The verdict was "wire it to avatar
+  upload", and that was not done.
+- `AIService.listAllModels` and `CACHE_TTL_SECONDS` are dead.
+- `QueuesController` kept deliberately: `@dunx/dashboard` is real but not a dependency
+  here, and deleting 215 lines would leave the boot banner advertising nothing.
+
+### dunx
+
+- 10 of 21 guides and 4 architecture docs are still unrewritten, and were flagged
+  rather than skipped silently.
+- Four flagged framework defects are unfixed by decision: no `x-request-id` on
+  failure responses, the `OPTIONS` method-miss running the whole global chain,
+  `override` of an unbound *class* token binding silently, and `'trust proxy'`.
+- PR #4, the monotonic-clock uptime fix, is open and unmerged.
+
+### Unexplained
+
+`page walks a cursor to the end and no further` in `base.repository.test.ts` has
+failed twice in roughly forty runs and nobody has reproduced it. The test is
+deterministic by construction, so the cause is elsewhere. Still open.
