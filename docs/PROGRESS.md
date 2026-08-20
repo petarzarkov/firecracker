@@ -8,9 +8,9 @@ Status vocabulary: `research` → `planned` → `in progress` → `done` / `bloc
 |---|-----------|--------|-------|
 | 01 | Contracts | planned | **3 live drift bugs found, 2 shipped**; 12-step plan; 11 raw `publish` holes |
 | 02 | Game module | planned | 6 sub-modules + facade; 3 of 4 proposed merges rejected; 7 steps |
-| 03 | Module hygiene | planned | **SPA deep links never worked**; drop audit + invites; infra verdict is mostly "keep" |
-| 04 | Data layer | research | — |
-| 05 | Noise reduction | queued | runs last, touches every file |
+| 03 | Module hygiene | in progress | SPA fallback **fixed**; audit + invites still to drop |
+| 04 | Data layer | planned | BaseRepository design typechecked at exit 0; migrations already correct |
+| 05 | Noise reduction | planned | **3 secret-leak sites, fixed**; 27 info -> 5 survive; comments 22.4% |
 | 06 | Multi-replica | done | design doc delivered; found 2 single-replica bugs + a stale prefix |
 | 07 | dunx framework | in progress | separate repo, prerelease target |
 | 08 | dunx docs | in progress | separate repo |
@@ -78,6 +78,25 @@ Fix is about ten lines in the app, using `UNMATCHED`, `HttpError` and
 Related: `CLIENT_DIST=''` is a boot failure. `app.module.ts:128` gates the module on
 `length > 0`, `http.options.ts:75` gates the middleware on `=== undefined`, so an
 empty string registers `SpaFallback` without the module that provides it.
+
+## Landed so far
+
+- `THROTTLE_PREFIX` / `WS_RELAY_CHANNEL` renamed off `dunx-template` (801ddd6).
+- SPA deep links fixed, with the spec that fails against the old mechanism (bdefb8c).
+- Password-reset and invite links no longer logged (412b24b).
+
+## Security: links in logs, fixed
+
+`EmailService` logged the entire email body at `info` whenever `EMAIL_WEBHOOK_URL`
+was unset - local, CI, and any deploy that forgot it. A password-reset body carries
+better-auth's one-time link (`notification.jobs.ts:87`); an invite body carries a
+code granting account creation **at the invited role**. A single test run leaked
+four. `LOG_MASK_FIELDS` could never have caught it: it masks by field name, and a
+token inside a URL string is not a field.
+
+Two further sites logged the `url` directly. `auth.module.ts` is a deliberate
+development affordance so it is gated on `nodeEnv`; `invites.service.ts` is not, so
+it is gone.
 
 ## Decisions taken up front
 
