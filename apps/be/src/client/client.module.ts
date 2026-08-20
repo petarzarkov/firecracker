@@ -1,7 +1,9 @@
 import type { DynamicModule } from '@dunx/core';
 import {
+  HttpError,
   HttpStatusCode,
   StaticModule,
+  UNMATCHED,
   type Middleware,
   type Next,
   type RouteContext,
@@ -29,45 +31,59 @@ export class SpaFallback implements Middleware {
   }
 
   /**
-   * Runs the chain, and rewrites only a **404 on a GET that wanted HTML**.
+   * Rewrites an **unmatched GET that wanted HTML** to `index.html`.
    *
-   * Each of those three conditions is load-bearing:
+   * A miss arrives as a *throw*, not as a 404 response: `@dunx/http` raises
+   * `HttpError(404)` from its innermost fallback and `compose` propagates it. An
+   * earlier version of this method did `(await next()).status === 404`, which never
+   * ran, so deep links never worked - and worse, it rewrote 404s a route had
+   * *returned*, the one case the conditions below exist to protect.
    *
-   *  - Only a 404, so a real route's own 404 for a missing record is never
-   *    replaced by a page saying nothing is wrong.
-   *  - Only outside `/api` and `/ws`, so a mistyped API path still answers 404 as
-   *    JSON rather than handing a client 200 and a pile of HTML to parse.
+   * `UNMATCHED` is the difference. No real route sets it and every miss does, so
+   * gating on it is what keeps a route's own "no such record" intact. The other
+   * three conditions each hold something too:
+   *
+   *  - GET only, so a POST to a typo is not answered with a page.
+   *  - Outside `/api` and `/ws`, so a mistyped API path answers 404 as JSON rather
+   *    than handing a client 200 and a pile of HTML to parse.
    *  - Only when the caller accepts HTML, so `fetch('/nope')` and `curl` get the
    *    404 they asked for while a browser address bar gets the app.
    */
   async handle(
     req: BunRequest,
-    _ctx: RouteContext,
+    ctx: RouteContext,
     next: Next,
   ): Promise<Response> {
-    const response = await next();
-    if (response.status !== HttpStatusCode.NOT_FOUND) return response;
-    if (req.method !== 'GET') return response;
+    try {
+      return await next();
+    } catch (error) {
+      if (
+        !(error instanceof HttpError) ||
+        error.status !== HttpStatusCode.NOT_FOUND ||
+        ctx.get(UNMATCHED) !== true
+      ) {
+        throw error;
+      }
+      if (req.method !== 'GET') throw error;
 
-    const { pathname } = new URL(req.url);
-    if (pathname.startsWith(this.#prefix) || pathname.startsWith('/ws')) {
-      return response;
+      const { pathname } = new URL(req.url);
+      if (pathname.startsWith(this.#prefix) || pathname.startsWith('/ws')) {
+        throw error;
+      }
+      if (!(req.headers.get('accept') ?? '').includes('text/html')) throw error;
+
+      const index = Bun.file(this.#index);
+      if (!(await index.exists())) throw error;
+
+      return new Response(index, {
+        headers: {
+          'content-type': 'text/html; charset=utf-8',
+          // The document must not be cached: it carries the hashed asset names, and
+          // a stale one points at bundles that no longer exist.
+          'cache-control': 'no-cache',
+        },
+      });
     }
-    if (!(req.headers.get('accept') ?? '').includes('text/html')) {
-      return response;
-    }
-
-    const index = Bun.file(this.#index);
-    if (!(await index.exists())) return response;
-
-    return new Response(index, {
-      headers: {
-        'content-type': 'text/html; charset=utf-8',
-        // The document must not be cached: it carries the hashed asset names, and
-        // a stale one points at bundles that no longer exist.
-        'cache-control': 'no-cache',
-      },
-    });
   }
 }
 

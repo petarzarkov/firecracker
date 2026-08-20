@@ -106,6 +106,11 @@ export const serviceVarsSchema = z.object({
    * Unset in development - Vite serves the client on its own port. Set in the
    * Docker image, which builds `apps/fe` and copies its `dist` in. Absent means
    * `ClientModule` is never registered, so nothing static can shadow an API route.
+   *
+   * `min(1)` after a trim because two readers disagree otherwise: `app.module.ts`
+   * registers the module on `length > 0` while `http.options.ts` adds the
+   * middleware on `!== undefined`, so `CLIENT_DIST=''` used to name `StaticFiles`
+   * in the chain with no module providing `StaticOptions` - a boot failure.
    */
-  CLIENT_DIST: z.string().optional(),
+  CLIENT_DIST: z.string().trim().min(1).optional(),
 });
