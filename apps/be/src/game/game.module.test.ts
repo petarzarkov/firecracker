@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { buildScopes, collectModules, type Scope } from '@dunx/core';
+import { ChatModule } from '../chat/chat.module.js';
 import { WalletService } from '../wallet/services/wallet.service.js';
 import { AutoCashOutService } from './betting/auto-cashout.service.js';
 import { GameBettingModule } from './betting/betting.module.js';
@@ -58,6 +59,23 @@ describe('bots cannot reach the money', () => {
    */
   test('all it can see of the game is the clock', () => {
     expect(scopeOf(GameBotsModule).visible.has(CrashEngineService)).toBe(true);
+  });
+});
+
+/**
+ * Chat is generic and the game is the application, so the dependency points one
+ * way. `PlayerChatService` used to sit in `game/` and inject `GameBetRepository`
+ * for a display name; it reads `PlayerDirectory` now and lives in `chat/`, and the
+ * fix would be undone by an import in either direction.
+ */
+describe('chat does not depend on the game', () => {
+  test.each([
+    ['GameBetService', GameBetService],
+    ['GameBetRepository', GameBetRepository],
+    ['GameRoundService', GameRoundService],
+    ['CrashEngineService', CrashEngineService],
+  ])('%s is not visible in ChatModule', (_name, token) => {
+    expect(scopeOf(ChatModule).visible.has(token)).toBe(false);
   });
 });
 

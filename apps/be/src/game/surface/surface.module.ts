@@ -9,11 +9,14 @@ import { BetActionsService } from './bet-actions.service.js';
 import { GameController } from './game.controller.js';
 import { GameGateway } from './game.gateway.js';
 import { GameStateService } from './game-state.service.js';
-import { PlayerChatService } from './player-chat.service.js';
 import { SocketAuthService } from './socket-auth.service.js';
 
 /**
  * Presentation: the one socket, the HTTP routes, and the projections behind both.
+ *
+ * `ChatModule` is here because the gateway carries the lobby chat and the one-to-one
+ * rooms. Both services are that module's now - a DM is not a round, and it only ever
+ * lived under `game/` because the socket does.
  *
  * HTTP and WebSocket in one module rather than two, and that is deliberate: a
  * controller action and an `@OnMessage` handler do the same three things - validate,
@@ -41,7 +44,6 @@ import { SocketAuthService } from './socket-auth.service.js';
     SocketAuthService,
     BetActionsService,
     GameStateService,
-    PlayerChatService,
     GameGateway,
   ],
 })

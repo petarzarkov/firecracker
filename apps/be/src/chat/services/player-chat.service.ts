@@ -2,19 +2,28 @@ import { Logger } from '@dunx/core';
 import { RedisConnection } from '@dunx/infra/redis';
 import { EventsPublisher } from '../../notifications/events/events.publisher.js';
 import { Topics } from '../../notifications/events/events.js';
-import { GameBetRepository } from '../betting/game-bet.repository.js';
 import {
   PLAYER_CHAT_EVENTS,
   playerChatTopic,
   publishPlayerChat,
   type PlayerChatRoom,
-} from '../game.events.js';
+} from '../chat.events.js';
+import { PlayerDirectory } from '../repos/player-directory.repository.js';
 
 /** How long a room's membership survives with nobody touching it. */
 const ROOM_TTL_SECONDS = 24 * 60 * 60;
 
 /**
  * One-to-one chat between two players.
+ *
+ * ## It left the game module, and that is the point
+ *
+ * A DM is not a round. This lived in `game/services/` and injected
+ * `GameBetRepository` for one thing - a display name - which is a chat service
+ * reading the crash game's bet table for a string. `PlayerDirectory` replaced that
+ * edge, and the service is now in the feature it belongs to. The socket is still
+ * `GameGateway`'s, because dunx mounts one gateway per path and the app has one
+ * connection; that is a transport fact, not an ownership one.
  *
  * ## The room id is derived, not allocated
  *
@@ -39,7 +48,7 @@ const ROOM_TTL_SECONDS = 24 * 60 * 60;
  */
 export class PlayerChatService {
   constructor(
-    private readonly players: GameBetRepository,
+    private readonly players: PlayerDirectory,
     private readonly redis: RedisConnection,
     private readonly events: EventsPublisher,
     private readonly logger: Logger,
@@ -67,8 +76,8 @@ export class PlayerChatService {
   ): Promise<PlayerChatRoom | null> {
     if (callerId === targetId) return null;
 
-    const callerName = this.players.playerNameFor(callerId);
-    const targetName = this.players.playerNameFor(targetId);
+    const callerName = this.players.nameFor(callerId);
+    const targetName = this.players.nameFor(targetId);
     if (callerName === undefined || targetName === undefined) return null;
 
     const roomId = this.roomIdFor(callerId, targetId);

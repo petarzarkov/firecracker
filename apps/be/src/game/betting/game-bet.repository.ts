@@ -1,7 +1,8 @@
 import type { Page, PageOptions } from '@dunx/infra/pagination';
 import { and, desc, eq, inArray } from 'drizzle-orm';
+import { PlayerDirectory } from '../../chat/repos/player-directory.repository.js';
 import { CrudRepository } from '../../infra/db/base.repository.js';
-import { users, type UserRow } from '../../users/schema/user.schema.js';
+import { users } from '../../users/schema/user.schema.js';
 import {
   gameBets,
   GameBetStatus,
@@ -32,15 +33,6 @@ export class GameBetRepository extends CrudRepository<
   GameBetRow,
   NewGameBetRow
 > {
-  /**
-   * What the lobby calls a player. The email local-part is the fallback the NestJS
-   * gateway used inline; it is here so the HTTP and socket paths cannot disagree
-   * about what a given player is called.
-   */
-  static displayName(user: Pick<UserRow, 'name' | 'email' | 'id'>): string {
-    return user.name || user.email.split('@')[0] || user.id;
-  }
-
   protected readonly table = gameBets;
 
   findActiveByRoundAndUser(
@@ -122,7 +114,11 @@ export class GameBetRepository extends CrudRepository<
 
     return rows.map(({ bet, user }) => ({
       ...bet,
-      playerName: GameBetRepository.displayName(user),
+      // The rule lives in `PlayerDirectory`, which is chat's - a static rather than
+      // a query, so this join stays one statement. Two copies of it would mean one
+      // player with two names, depending on whether you read the bet list or a
+      // message header.
+      playerName: PlayerDirectory.displayName(user),
     }));
   }
 
@@ -195,22 +191,5 @@ export class GameBetRepository extends CrudRepository<
       ...bet,
       crashPointX100: crashed.get(bet.roundId) ?? null,
     }));
-  }
-
-  /**
-   * What to call a player, for anyone in this module that has only an id.
-   *
-   * Here rather than through `UsersRepository` because `UsersModule` exports
-   * nothing, deliberately - and this module already reads the `users` table for
-   * the lobby list, through the join above. Same table, same `displayName` rule,
-   * no new coupling between features.
-   */
-  playerNameFor(userId: string): string | undefined {
-    const row = this.db
-      .select({ id: users.id, name: users.name, email: users.email })
-      .from(users)
-      .where(eq(users.id, userId))
-      .get();
-    return row === undefined ? undefined : GameBetRepository.displayName(row);
   }
 }

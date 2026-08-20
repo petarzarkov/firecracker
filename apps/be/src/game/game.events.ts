@@ -15,7 +15,6 @@ export {
   GAME_CLIENT_EVENTS,
   GAME_EVENTS,
   GAME_TOPIC,
-  PLAYER_CHAT_EVENTS,
 } from '@firecracker/contracts';
 export type {
   ActiveBetView,
@@ -30,12 +29,11 @@ export type {
   GamePhasePayload,
   GameRoundStatePayload,
   GameTickPayload,
-  PlayerChatRoom,
   SeedAckPayload,
   WalletUpdatedPayload,
 } from '@firecracker/contracts';
 
-import type { GamePayloads, PlayerChatPayloads } from '@firecracker/contracts';
+import type { GamePayloads } from '@firecracker/contracts';
 import type { EventsPublisher } from '../notifications/events/events.publisher.js';
 
 /** The game's own queue. Its own so round transitions cannot queue behind email. */
@@ -50,13 +48,6 @@ export const GAME_JOBS = Object.freeze({
   CRASH: 'game.round.crash',
 } as const);
 export type GameJobName = (typeof GAME_JOBS)[keyof typeof GAME_JOBS];
-
-/**
- * One-to-one chat. A topic per room rather than one topic filtered on the client,
- * because a client that receives a message it then hides has still received it.
- */
-export const playerChatTopic = (roomId: string): string =>
-  `player_chat_${roomId}`;
 
 export interface RoundJob {
   readonly roundId: string;
@@ -82,22 +73,6 @@ export function publishGame<E extends keyof GamePayloads>(
   topic: string,
   event: E,
   data: GamePayloads[E],
-): void {
-  events.publish(topic, event, data);
-}
-
-/**
- * The same, for a one-to-one room.
- *
- * `topic` rather than a room id, because `playerChatRoomCreated` is addressed to
- * the *other* participant's own topic - they are not subscribed to the room until
- * their client joins it.
- */
-export function publishPlayerChat<E extends keyof PlayerChatPayloads>(
-  events: EventsPublisher,
-  topic: string,
-  event: E,
-  data: PlayerChatPayloads[E],
 ): void {
   events.publish(topic, event, data);
 }

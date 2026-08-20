@@ -10,7 +10,9 @@ import {
 } from '@dunx/http';
 import type { ServerPayloads } from '@firecracker/contracts';
 import type { BunRequest } from 'bun';
+import { PLAYER_CHAT_EVENTS, playerChatTopic } from '../../chat/chat.events.js';
 import { ChatService } from '../../chat/services/chat.service.js';
+import { PlayerChatService } from '../../chat/services/player-chat.service.js';
 import { EventsPublisher } from '../../notifications/events/events.publisher.js';
 import {
   CLIENT_EVENTS,
@@ -27,15 +29,12 @@ import {
   GAME_CLIENT_EVENTS,
   GAME_EVENTS,
   GAME_TOPIC,
-  PLAYER_CHAT_EVENTS,
-  playerChatTopic,
   type SeedAckPayload,
 } from '../game.events.js';
 import { GameMessages } from './game.messages.js';
 import { GameRoundStatus } from '../schema/game-round.schema.js';
 import { AutoCashOutService } from '../betting/auto-cashout.service.js';
 import { GameStateService } from './game-state.service.js';
-import { PlayerChatService } from './player-chat.service.js';
 import { BetActionsService } from './bet-actions.service.js';
 import {
   SocketAuthService,

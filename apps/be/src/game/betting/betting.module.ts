@@ -21,6 +21,8 @@ import { GameBetService } from './game-bet.service.js';
 @Module({
   imports: [WalletModule],
   providers: [GameBetRepository, GameBetService, AutoCashOutService],
-  exports: [GameBetRepository, GameBetService, AutoCashOutService],
+  // Not the repository: `PlayerChatService` was the only thing outside this module
+  // that ever needed it, for a display name, and it reads `PlayerDirectory` now.
+  exports: [GameBetService, AutoCashOutService],
 })
 export class GameBettingModule {}
