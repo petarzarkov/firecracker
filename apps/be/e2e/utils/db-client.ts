@@ -53,13 +53,6 @@ export class DbClient {
     return row.code;
   }
 
-  countAuditRows(entityId: string): number {
-    const row = this.#db
-      .query('SELECT count(*) AS n FROM audit_log WHERE entity_id = ?')
-      .get(entityId) as { n: number } | null;
-    return row?.n ?? 0;
-  }
-
   /** The newest round, whatever phase it is in. */
   currentRound(): { id: string; status: string } | null {
     return this.#db

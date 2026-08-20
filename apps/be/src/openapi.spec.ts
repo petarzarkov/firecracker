@@ -114,9 +114,9 @@ describe('the generated OpenAPI document', () => {
    *
    * `RouteSchemas` has `body`, `query`, `params` and `status` and no `response`,
    * and there is no `@ApiResponse` equivalent, so a success response is
-   * documented as a bare description with no `content`. `SanitizedUser`,
-   * `PaginatedUsers` and `AuditLogEntry` all carry `.meta({ id })` and none of
-   * them reaches `components`, because nothing references them. The generated
+   * documented as a bare description with no `content`. `SanitizedUser` and
+   * `PaginatedUsers` both carry `.meta({ id })` and neither reaches
+   * `components`, because nothing references them. The generated
    * document therefore cannot drive client codegen.
    */
   test('KNOWN GAP: no success response body is documented', () => {

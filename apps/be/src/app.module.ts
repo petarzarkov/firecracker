@@ -2,10 +2,8 @@ import type { ConfigSource, DynamicModule, ModuleRef } from '@dunx/core';
 import { LoggerModule } from '@dunx/infra/logger';
 import { AccountsModule } from './auth/auth.module.js';
 import { AIModule } from './ai/ai.module.js';
-import { AuditModule } from './audit/audit.module.js';
 import { AppConfigModule } from './config/app.config.module.js';
 import { ClientModule } from './client/client.module.js';
-import { AuditContextMiddleware } from './core/middlewares/audit-context.middleware.js';
 import { FilesFeatureModule } from './files/files.module.js';
 import { StorageModule } from './infra/files/storage.module.js';
 import { ImagesConfigModule } from './infra/images/images.module.js';
@@ -120,7 +118,6 @@ export class AppModule {
         ServiceModule.forRoot(),
         UsersModule,
         FilesFeatureModule.forRoot(),
-        AuditModule,
         InvitesModule,
         // Last: the engine's `onInit` recovers the in-flight round and needs the
         // queue, the database and Redis all constructed before it runs.
@@ -130,11 +127,12 @@ export class AppModule {
           : []),
       ],
       /**
-       * App-level, not per feature. `AuditContextMiddleware` has to cover
-       * better-auth's own sign-up, which lives in `@dunx/auth` where module
-       * middleware cannot reach - scoping it would stamp the *previous* request's id.
+       * `http.options.ts` names `ThrottleGuard` in the app-wide chain, and the
+       * container builds a middleware from its class - so app-level middleware has
+       * to be bound app-level. A module-scoped binding would not be in scope when
+       * the chain is composed.
        */
-      providers: [AuditContextMiddleware, ThrottleGuard],
+      providers: [ThrottleGuard],
     };
   }
 }

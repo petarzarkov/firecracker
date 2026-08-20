@@ -10,7 +10,6 @@ import { HEALTH_ROUTES } from './constants.js';
 import { SpaFallback } from './client/client.module.js';
 import type { AppConfig } from './config/env.validation.js';
 import { ErrorMapper } from './core/errors/error-mapper.js';
-import { AuditContextMiddleware } from './core/middlewares/audit-context.middleware.js';
 import { ThrottleGuard } from './infra/redis/guards/throttle.guard.js';
 
 /**
@@ -59,14 +58,14 @@ export class AppHttpOptions {
    *
    * **The client pair belongs here rather than in two `app.use()` calls.** `use()`
    * appends to whatever this array declares, so every request for a hashed asset ran
-   * the whole chain first - a better-auth `getSession`, a Redis `INCR`, an audit stamp
-   * - to serve a file off disk, and a cold page load spent its throttle budget on its
+   * the whole chain first - a better-auth `getSession` and a Redis `INCR` - to serve a
+   * file off disk, and a cold page load spent its throttle budget on its
    * own JavaScript. `SpaFallback` outside `StaticFiles`, because it rewrites a 404 and
    * inside it the static mount answers the deep link first.
    *
    * Then `SessionGuard`, because everything after it wants to know who is calling: it
-   * runs the rest inside `AuthContext`, so the throttler can count per user and the
-   * audit stamp can name one.
+   * runs the rest inside `AuthContext`, which is what lets the throttler count per
+   * user rather than per address.
    */
   static #middleware(config: AppConfig): readonly Ctor<Middleware>[] {
     return [
@@ -75,7 +74,6 @@ export class AppHttpOptions {
       ...(config.client.dist === undefined ? [] : [SpaFallback, StaticFiles]),
       SessionGuard,
       ThrottleGuard,
-      AuditContextMiddleware,
     ];
   }
 

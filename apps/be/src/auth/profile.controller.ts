@@ -1,13 +1,5 @@
-import { Controller, Get, Public, Roles } from '@dunx/http';
+import { Controller, Get, Public } from '@dunx/http';
 import { ApiDoc } from '@dunx/openapi';
-import {
-  PaginationDirection,
-  PaginationOrder,
-  type Page,
-} from '@dunx/infra/pagination';
-import { AuditService } from '../audit/services/audit.service.js';
-import type { AuditLogEntry } from '../audit/dto/audit-log.dto.js';
-import { UserRole } from '../users/schema/user.schema.js';
 import { AvatarsService } from './services/avatars.service.js';
 import { CurrentUser, type Caller } from './services/current-user.service.js';
 
@@ -28,7 +20,6 @@ import { CurrentUser, type Caller } from './services/current-user.service.js';
 export class ProfileController {
   constructor(
     private readonly caller: CurrentUser,
-    private readonly audit: AuditService,
     private readonly avatars: AvatarsService,
   ) {}
 
@@ -36,23 +27,6 @@ export class ProfileController {
   @Get('/')
   me(): Caller {
     return this.caller.require();
-  }
-
-  /**
-   * The global `SessionGuard` reads this and 403s unless the caller holds `admin`
-   * - the same metadata `@dunx/openapi` reads to emit `x-required-roles`, so the
-   * document and the guard cannot disagree.
-   */
-  @ApiDoc({ tags: ['profile'], summary: 'Recent audit entries for the caller' })
-  @Roles(UserRole.ADMIN)
-  @Get('/audit')
-  entries(): Promise<Page<AuditLogEntry>> {
-    return this.audit.list({
-      order: PaginationOrder.DESC,
-      direction: PaginationDirection.FORWARD,
-      take: 20,
-      actorId: this.caller.require().id,
-    });
   }
 
   /**
