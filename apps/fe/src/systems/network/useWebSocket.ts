@@ -203,7 +203,7 @@ export function useWebSocket() {
        * it did before this handler existed, which read as the feature being
        * broken rather than reset. See `ChatService` on the server.
        */
-      newSocket.on(SOCKET_EVENTS.CHAT_HISTORY, (lines: ChatLine[]) => {
+      newSocket.on(SOCKET_EVENTS.CHAT_HISTORY, (lines: readonly ChatLine[]) => {
         setGlobalChatMessages(
           (lines ?? []).map((line) => ({
             senderId: line.username,

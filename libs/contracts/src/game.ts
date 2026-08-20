@@ -6,6 +6,12 @@
  * server and a mismatched handler a compile error on the client.
  */
 
+import type {
+  JoinPlayerChatMessage,
+  LeavePlayerChatMessage,
+  SendPlayerChatMessage,
+} from './chat.js';
+
 /** Bun pub/sub topic every spectator is subscribed to. */
 export const GAME_TOPIC = 'game' as const;
 
@@ -35,6 +41,23 @@ export const GAME_CLIENT_EVENTS = Object.freeze({
 } as const);
 
 export type GamePhase = 'waiting' | 'running' | 'crashed' | 'failed';
+
+/**
+ * What a client may send under `GAME_CLIENT_EVENTS`, with the body each carries.
+ *
+ * The three `playerChat` names are in this table rather than beside the rest of the
+ * chat, which is where they have always been - a client sends them on the game's
+ * connection because there is only one. Their bodies are declared in `chat.ts` with
+ * the rest of the chat and mapped here, so the map mirrors the table it belongs to.
+ */
+export interface GameClientPayloads {
+  readonly [GAME_CLIENT_EVENTS.PLACE_BET]: PlaceBetMessage;
+  readonly [GAME_CLIENT_EVENTS.CASH_OUT]: CashOutMessage;
+  readonly [GAME_CLIENT_EVENTS.SUBMIT_CLIENT_SEED]: SubmitClientSeedMessage;
+  readonly [GAME_CLIENT_EVENTS.JOIN_PLAYER_CHAT]: JoinPlayerChatMessage;
+  readonly [GAME_CLIENT_EVENTS.SEND_PLAYER_CHAT]: SendPlayerChatMessage;
+  readonly [GAME_CLIENT_EVENTS.LEAVE_PLAYER_CHAT]: LeavePlayerChatMessage;
+}
 
 /**
  * One player's stake, as the lobby shows it.
@@ -140,6 +163,36 @@ export interface SeedAckPayload {
 export interface WalletUpdatedPayload {
   readonly balanceCents: number;
   readonly isDemo: boolean;
+}
+
+/**
+ * The body of a `placeBet`.
+ *
+ * `autoCashOutAt` is a multiplier, not hundredths - it is a number a player typed.
+ * The server refuses anything below 1.01 and stores the target in Redis; the
+ * conversion to integer hundredths happens there.
+ */
+export interface PlaceBetMessage {
+  readonly betAmountCents: number;
+  readonly isDemo: boolean;
+  readonly autoCashOutAt?: number | undefined;
+}
+
+/**
+ * The body of a `cashOut`, which is usually nothing at all.
+ *
+ * `BetPanel` sends no body, and the server prefers the open bet's own mode over
+ * anything a client says: defaulting to real money here once made every demo
+ * cash-out fail silently. So this exists to say the field is optional and what it
+ * means, not to encourage sending it.
+ */
+export interface CashOutMessage {
+  readonly isDemo?: boolean | undefined;
+}
+
+/** The body of a `submitClientSeed`. 1 to 128 characters. */
+export interface SubmitClientSeedMessage {
+  readonly seed: string;
 }
 
 /** Every server-sent game event, with the payload it carries. */

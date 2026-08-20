@@ -5,8 +5,10 @@ import {
   PLAYER_CHAT_EVENTS,
   SOCKET_CLIENT_EVENTS,
   SOCKET_EVENTS,
+  type GameClientPayloads,
   type GamePayloads,
   type PlayerChatPayloads,
+  type SocketClientPayloads,
   type SocketPayloads,
 } from './index.js';
 
@@ -128,6 +130,19 @@ const playerChatPayloads: Witness<PlayerChatPayloads> = {
   [PLAYER_CHAT_EVENTS.SYSTEM_MESSAGE]: true,
 };
 
+const gameClientPayloads: Witness<GameClientPayloads> = {
+  [GAME_CLIENT_EVENTS.PLACE_BET]: true,
+  [GAME_CLIENT_EVENTS.CASH_OUT]: true,
+  [GAME_CLIENT_EVENTS.SUBMIT_CLIENT_SEED]: true,
+  [GAME_CLIENT_EVENTS.JOIN_PLAYER_CHAT]: true,
+  [GAME_CLIENT_EVENTS.SEND_PLAYER_CHAT]: true,
+  [GAME_CLIENT_EVENTS.LEAVE_PLAYER_CHAT]: true,
+};
+
+const socketClientPayloads: Witness<SocketClientPayloads> = {
+  [SOCKET_CLIENT_EVENTS.CHAT_MESSAGE]: true,
+};
+
 /** Both halves of the disagreement, so a failure names the gap rather than a count. */
 const gaps = (
   witness: Readonly<Record<string, true>>,
@@ -167,15 +182,25 @@ describe('the payload maps', () => {
     expect(gaps(playerChatPayloads, PLAYER_CHAT_EVENTS)).toEqual(agreed);
   });
 
+  test('every inbound game name has a body and every body a name', () => {
+    expect(gaps(gameClientPayloads, GAME_CLIENT_EVENTS)).toEqual(agreed);
+  });
+
+  test('every other inbound name has a body and every body a name', () => {
+    expect(gaps(socketClientPayloads, SOCKET_CLIENT_EVENTS)).toEqual(agreed);
+  });
+
   /**
-   * One socket carries all three, so a name in two families would shadow a handler.
-   * The count is the assertion: three maps, no key twice.
+   * One socket carries all of them, so a name in two families would shadow a
+   * handler. The count is the assertion: five maps, no key twice.
    */
   test('no payload is declared in two families', () => {
     const keys = [
       ...Object.keys(gamePayloads),
       ...Object.keys(socketPayloads),
       ...Object.keys(playerChatPayloads),
+      ...Object.keys(gameClientPayloads),
+      ...Object.keys(socketClientPayloads),
     ];
     expect(new Set(keys).size).toBe(keys.length);
   });

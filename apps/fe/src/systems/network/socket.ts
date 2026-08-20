@@ -22,6 +22,12 @@
  * fallback transport because Bun requires a real WebSocket anyway.
  */
 
+import type {
+  ClientPayloads,
+  GAME_CLIENT_EVENTS,
+  ServerPayloads,
+} from '@firecracker/contracts';
+
 /**
  * How a listener is held once its parameter type is erased.
  *
@@ -31,6 +37,23 @@
  * `unknown`, and the one cast is here rather than at every call site.
  */
 type StoredListener = (data: unknown) => void;
+
+/**
+ * The events this shim raises itself, and what each hands its listener.
+ *
+ * They are not wire events - no frame carries these names - which is why they are
+ * declared here and not in `@firecracker/contracts`, and why `connect_error` keeps
+ * carrying an `Error` that callers read `.message` off.
+ */
+interface LocalPayloads {
+  readonly connect: undefined;
+  readonly disconnect: string;
+  readonly connect_error: Error;
+  readonly error: unknown;
+}
+
+/** Everything a listener on this socket can be registered for. */
+type Incoming = ServerPayloads & LocalPayloads;
 
 export interface SocketOptions {
   /** Sent as `?token=`, which the gateway promotes to an `Authorization` header. */
@@ -42,19 +65,6 @@ export interface SocketOptions {
   readonly reconnectionDelay?: number;
   readonly reconnectionDelayMax?: number;
 }
-
-/**
- * The events this shim raises itself rather than receiving from the server. Named
- * so a listener for one of them is never confused with a wire event of the same
- * name - and so `connect_error` keeps carrying an `Error`, which callers read
- * `.message` off.
- */
-const LOCAL_EVENTS = new Set([
-  'connect',
-  'disconnect',
-  'connect_error',
-  'error',
-]);
 
 /** The `socket.io` manager surface, reduced to the one event this app used. */
 class Manager {
@@ -122,7 +132,17 @@ export class Socket {
     return this.connected ? 'ws' : undefined;
   }
 
-  on<T = unknown>(event: string, listener: (data: T) => void): this {
+  /**
+   * Listen for one event, with the payload named by that event.
+   *
+   * The name decides the type, from `@firecracker/contracts`, so a handler that
+   * reads a field the server does not send stops compiling - which is what three
+   * shipped `userId` bugs and one chat-panel crash needed and did not have.
+   */
+  on<E extends keyof Incoming>(
+    event: E,
+    listener: (data: Incoming[E]) => void,
+  ): this {
     let set = this.#listeners.get(event);
     if (set === undefined) {
       set = new Set();
@@ -132,7 +152,10 @@ export class Socket {
     return this;
   }
 
-  off<T = unknown>(event: string, listener?: (data: T) => void): this {
+  off<E extends keyof Incoming>(
+    event: E,
+    listener?: (data: Incoming[E]) => void,
+  ): this {
     if (listener === undefined) this.#listeners.delete(event);
     else this.#listeners.get(event)?.delete(listener as StoredListener);
     return this;
@@ -141,9 +164,18 @@ export class Socket {
   /**
    * `{"event":name,"data":payload}` - the envelope `@OnMessage(name)` decodes.
    *
+   * The body is checked against the name, against the same `ClientPayloads` map the
+   * server's parsers return - the client half used to be an object literal in a
+   * component and a hand-written interface on the server, with nothing comparing
+   * them.
+   *
    * `data` is omitted entirely when undefined so that `emit('cashOut')` sends
-   * `{"event":"cashOut"}`, which is what a handler taking no payload expects.
+   * `{"event":"cashOut"}`, which is what a handler taking no payload expects - and
+   * why `cashOut` has an overload of its own. Which wallet is decided by the bet
+   * row, not by the client.
    */
+  emit(event: typeof GAME_CLIENT_EVENTS.CASH_OUT): this;
+  emit<E extends keyof ClientPayloads>(event: E, data: ClientPayloads[E]): this;
   emit(event: string, data?: unknown): this {
     const frame = JSON.stringify(
       data === undefined ? { event } : { event, data },
@@ -242,7 +274,6 @@ export class Socket {
 
   #dispatch(event: string, data: unknown): void {
     for (const listener of this.#listeners.get(event) ?? []) listener(data);
-    if (!LOCAL_EVENTS.has(event)) return;
   }
 }
 

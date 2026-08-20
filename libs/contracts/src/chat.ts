@@ -148,6 +148,44 @@ export interface SocketPayloads {
   readonly [SOCKET_EVENTS.CHAT_ACK]: ChatAckPayload;
 }
 
+/**
+ * The body of a `chatMessage`.
+ *
+ * The server also accepts a bare string, because both shapes were once on the
+ * wire. This is the one a client should send.
+ */
+export interface ChatMessageBody {
+  readonly message: string;
+}
+
+/**
+ * The body of a `joinPlayerChat`: a room to rejoin, or somebody to open one with.
+ *
+ * At least one is needed and the server refuses a frame with neither. An **empty
+ * string reads as absent** - the client sends `targetUserId: ''` alongside a
+ * `roomId` when it reconnects, and a user whose id is `""` does not exist.
+ */
+export interface JoinPlayerChatMessage {
+  readonly roomId?: string | undefined;
+  readonly targetUserId?: string | undefined;
+}
+
+/** The body of a `sendPlayerChatMessage`. The text is capped at 1000 characters. */
+export interface SendPlayerChatMessage {
+  readonly roomId: string;
+  readonly message: string;
+}
+
+/** The body of a `leavePlayerChat`. */
+export interface LeavePlayerChatMessage {
+  readonly roomId: string;
+}
+
+/** What a client may send under `SOCKET_CLIENT_EVENTS`. */
+export interface SocketClientPayloads {
+  readonly [SOCKET_CLIENT_EVENTS.CHAT_MESSAGE]: ChatMessageBody;
+}
+
 /** The one-to-one rooms. `ROOM_CREATED` reaches the other participant's own topic. */
 export interface PlayerChatPayloads {
   readonly [PLAYER_CHAT_EVENTS.ROOM_CREATED]: PlayerChatRoom;

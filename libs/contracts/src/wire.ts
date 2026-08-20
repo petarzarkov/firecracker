@@ -11,7 +11,21 @@
  * belongs to one family and narrowing its argument catches a frame sent to the
  * wrong half.
  */
-import type { GamePayloads } from './game.js';
-import type { PlayerChatPayloads, SocketPayloads } from './chat.js';
+import type { GameClientPayloads, GamePayloads } from './game.js';
+import type {
+  PlayerChatPayloads,
+  SocketClientPayloads,
+  SocketPayloads,
+} from './chat.js';
 
 export type ServerPayloads = GamePayloads & SocketPayloads & PlayerChatPayloads;
+
+/**
+ * Everything a client may send, which is the half that was not declared anywhere.
+ *
+ * The names were shared; the bodies were an object literal in a React component and
+ * a hand-written parser on the server, with nothing comparing the two - the exact
+ * precondition of all four drift bugs. `Socket.emit` is typed against this, so a
+ * component that sends the wrong shape stops compiling.
+ */
+export type ClientPayloads = GameClientPayloads & SocketClientPayloads;
