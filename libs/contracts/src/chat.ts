@@ -11,6 +11,8 @@ export const SOCKET_EVENTS = Object.freeze({
   /** The chat scrollback, sent once per connection. */
   CHAT_HISTORY: 'chatHistory',
   USER_COUNT: 'userCount',
+  /** The answer to one `chatMessage`. See {@link ChatAckPayload}. */
+  CHAT_ACK: 'chatAck',
 } as const);
 
 /** What a client sends. */
@@ -57,6 +59,23 @@ export interface ChatLine {
   readonly timestamp: string;
   /** The sender's avatar when they sent it. `null` if they had none. */
   readonly picture: string | null;
+}
+
+/**
+ * What became of one `chatMessage`.
+ *
+ * A separate name from the message that asked for it, and that is the whole reason
+ * this exists: dunx answers `@OnMessage('x')` with the handler's return value under
+ * the name `x`, so the gateway's rejections went out as `chatMessage` frames and no
+ * client has ever registered a listener for one. "Login required to chat" and the
+ * 1000-character refusal both reached the browser and were dropped there - the
+ * input cleared and nothing happened.
+ */
+export interface ChatAckPayload {
+  /** Present when the line went out. */
+  readonly delivered?: number;
+  /** Present instead when it did not, written to be shown to the sender. */
+  readonly error?: string;
 }
 
 export interface PlayerChatRoom {

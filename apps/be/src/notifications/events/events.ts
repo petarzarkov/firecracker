@@ -12,7 +12,7 @@ export {
   /** What a client sends. */
   SOCKET_CLIENT_EVENTS as CLIENT_EVENTS,
 } from '@firecracker/contracts';
-export type { ChatLine } from '@firecracker/contracts';
+export type { ChatAckPayload, ChatLine } from '@firecracker/contracts';
 
 export const QUEUES = Object.freeze({
   /** User-facing side effects: emails, socket notifications. */

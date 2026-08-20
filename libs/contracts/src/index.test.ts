@@ -68,6 +68,7 @@ describe('the event names', () => {
       'message',
       'chatHistory',
       'userCount',
+      'chatAck',
     ]);
   });
 

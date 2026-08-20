@@ -19,7 +19,13 @@ import { RedisConnection } from '@dunx/infra/redis';
 import type { BunRequest } from 'bun';
 import { AppConfigService } from '../config/app.config.service.js';
 import { EventsPublisher } from '../notifications/events/events.publisher.js';
-import { EVENTS, TOPICS, Topics } from '../notifications/events/events.js';
+import {
+  CLIENT_EVENTS,
+  EVENTS,
+  TOPICS,
+  Topics,
+  type ChatAckPayload,
+} from '../notifications/events/events.js';
 import { UserRole } from '../users/schema/user.schema.js';
 import { CrashEngineService } from './engine/crash-engine.service.js';
 import {
@@ -584,12 +590,23 @@ export class GameGateway {
     this.playerChat.announce(roomId, player.username, 'leave');
   }
 
-  /** Global chat, folded in from the template's `EventsGateway`. */
-  @OnMessage('chatMessage')
-  globalChat(
+  /**
+   * Global chat, folded in from the template's `EventsGateway`.
+   *
+   * The ack goes out under `chatAck`, explicitly, like every other handler here.
+   * Returning it instead sent it back as a `chatMessage` - the name the client had
+   * just used to ask - so both rejections below were dropped in the browser and a
+   * spectator typing into the lobby saw the input clear and nothing else.
+   */
+  @OnMessage(CLIENT_EVENTS.CHAT_MESSAGE)
+  globalChat(data: unknown, socket: Socket<GameSocketContext>): void {
+    this.#reply(socket, EVENTS.CHAT_ACK, this.#globalChat(data, socket));
+  }
+
+  #globalChat(
     data: unknown,
     socket: Socket<GameSocketContext>,
-  ): { delivered: number } | { error: string } {
+  ): ChatAckPayload {
     const { player } = socket.data.context;
     if (player === null) return { error: 'Login required to chat' };
 
