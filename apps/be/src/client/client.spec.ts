@@ -6,6 +6,10 @@ import { createTestServer, type TestServer } from '@dunx/testing';
 import { AppModule } from '../app.module.js';
 import { EnvConfig } from '../config/env.validation.js';
 import { AppHttpOptions } from '../http.options.js';
+import {
+  dropTestNamespaces,
+  testNamespace,
+} from '../test-support/namespace.js';
 
 /**
  * The SPA rewrite, against a real server and a real dist directory.
@@ -31,7 +35,7 @@ beforeAll(async () => {
     // `onInit`, so a consuming test server would start the clock under the assertions.
     QUEUE_CONSUME: 'false',
     THROTTLE_LIMIT: '10000',
-    THROTTLE_PREFIX: `test-${crypto.randomUUID()}`,
+    ...testNamespace(),
     CLIENT_DIST: root,
   };
 
@@ -94,4 +98,11 @@ describe('SpaFallback', () => {
     });
     expect(response.status).not.toBe(200);
   });
+});
+
+// Registered last, so it runs after the server has closed. Isolating the suites
+// stopped them writing into the application's namespace; this stops them leaving
+// their own behind, since bullmq's `meta` keys carry no TTL.
+afterAll(async () => {
+  await dropTestNamespaces();
 });

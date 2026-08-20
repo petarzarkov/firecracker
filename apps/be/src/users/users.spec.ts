@@ -7,6 +7,10 @@ import { AppHttpOptions } from '../http.options.js';
 import { TestSession } from '../test-support/session.js';
 import type { Page } from '@dunx/infra/pagination';
 import type { SanitizedUser } from './dto/user.dto.js';
+import {
+  dropTestNamespaces,
+  testNamespace,
+} from '../test-support/namespace.js';
 
 /**
  * The whole graph behind a real `Bun.serve` on port 0, against a real in-memory
@@ -32,7 +36,7 @@ const source = {
   // The throttler is exercised in its own suite; a shared window here would make
   // every other assertion depend on how many ran before it.
   THROTTLE_LIMIT: '10000',
-  THROTTLE_PREFIX: `test-${crypto.randomUUID()}`,
+  ...testNamespace(),
   SEED_ADMIN_EMAIL: 'admin@local.dev',
   SEED_ADMIN_PASSWORD: 'admin-password',
 };
@@ -405,4 +409,11 @@ describe('routing', () => {
     expect(status).toBe(404);
     expect(body.error).toBe('NOT_FOUND');
   });
+});
+
+// Registered last, so it runs after the server has closed. Isolating the suites
+// stopped them writing into the application's namespace; this stops them leaving
+// their own behind, since bullmq's `meta` keys carry no TTL.
+afterAll(async () => {
+  await dropTestNamespaces();
 });

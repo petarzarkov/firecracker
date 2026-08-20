@@ -12,6 +12,10 @@ import { TestSession } from '../test-support/session.js';
 import type { FileMetadata } from './dto/file.dto.js';
 import { MediaJobs } from './handlers/media.jobs.js';
 import type { FileThumbnailJob } from '../notifications/events/events.js';
+import {
+  dropTestNamespaces,
+  testNamespace,
+} from '../test-support/namespace.js';
 
 /**
  * Uploads over the real `LocalStorage` backend, into a temp directory that is
@@ -61,7 +65,7 @@ beforeAll(async () => {
     THROTTLE_LIMIT: '10000',
     // A fresh namespace, so a rerun within the window does not inherit counters
     // from the last one - the counters are in a Redis that outlives the process.
-    THROTTLE_PREFIX: `test-${crypto.randomUUID()}`,
+    ...testNamespace(),
     UPLOAD_MAX_BYTES: '4096',
     SEED_ADMIN_EMAIL: 'admin@local.dev',
     SEED_ADMIN_PASSWORD: 'admin-password',
@@ -270,4 +274,11 @@ describe('the thumbnail job', () => {
     expect(result.width).toBe(4);
     expect(result.bytes).toBeGreaterThan(0);
   });
+});
+
+// Registered last, so it runs after the server has closed. Isolating the suites
+// stopped them writing into the application's namespace; this stops them leaving
+// their own behind, since bullmq's `meta` keys carry no TTL.
+afterAll(async () => {
+  await dropTestNamespaces();
 });

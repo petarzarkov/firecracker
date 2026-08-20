@@ -5,6 +5,10 @@ import { AppModule } from '../../app.module.js';
 import { EnvConfig } from '../../config/env.validation.js';
 import { AppHttpOptions } from '../../http.options.js';
 import { TestSession } from '../../test-support/session.js';
+import {
+  dropTestNamespaces,
+  testNamespace,
+} from '../../test-support/namespace.js';
 
 /**
  * The Redis-backed areas, in both states.
@@ -21,7 +25,7 @@ const base = (over: Record<string, string>): Record<string, string> => ({
   SQLITE_DB_PATH: ':memory:',
   // Off: this suite asserts what degrades without a broker.
   QUEUE_CONSUME: 'false',
-  THROTTLE_PREFIX: `test-${crypto.randomUUID()}`,
+  ...testNamespace(),
   SEED_ADMIN_EMAIL: 'admin@local.dev',
   SEED_ADMIN_PASSWORD: 'admin-password',
   ...over,
@@ -189,4 +193,11 @@ describe('with a live broker', () => {
     const redis = body.checks.find((check) => check.name === 'redis');
     expect(redis?.state).toBe('up');
   });
+});
+
+// Registered last, so it runs after the server has closed. Isolating the suites
+// stopped them writing into the application's namespace; this stops them leaving
+// their own behind, since bullmq's `meta` keys carry no TTL.
+afterAll(async () => {
+  await dropTestNamespaces();
 });

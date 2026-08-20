@@ -6,6 +6,7 @@ import { AppModule } from './app.module.js';
 import { AuthDocument } from './auth/auth.document.js';
 import { EnvConfig } from './config/env.validation.js';
 import { AppHttpOptions } from './http.options.js';
+import { dropTestNamespaces, testNamespace } from './test-support/namespace.js';
 
 interface OpenApiDoc {
   openapi: string;
@@ -25,7 +26,7 @@ const source = {
   // Off: this graph includes the engine, which enqueues the first round at `onInit`,
   // so a consuming test server would start the clock under the assertions.
   QUEUE_CONSUME: 'false',
-  THROTTLE_PREFIX: `test-${crypto.randomUUID()}`,
+  ...testNamespace(),
   THROTTLE_LIMIT: '10000',
 };
 const config = EnvConfig.validate(source);
@@ -273,4 +274,11 @@ describe('the generated OpenAPI document', () => {
     // No external host: a strict CSP or an offline machine must still work.
     expect(page).not.toContain('https://cdn.');
   });
+});
+
+// Registered last, so it runs after the server has closed. Isolating the suites
+// stopped them writing into the application's namespace; this stops them leaving
+// their own behind, since bullmq's `meta` keys carry no TTL.
+afterAll(async () => {
+  await dropTestNamespaces();
 });

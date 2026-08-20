@@ -11,6 +11,10 @@ import { GameRoundService } from './services/game-round.service.js';
 import { WalletService } from '../wallet/services/wallet.service.js';
 import { GameRoundRepository } from './repos/game-round.repository.js';
 import { GameRoundWatchdog } from './services/game-watchdog.service.js';
+import {
+  dropTestNamespaces,
+  testNamespace,
+} from '../test-support/namespace.js';
 
 /**
  * The money path, against a real in-memory SQLite and the real container.
@@ -34,7 +38,7 @@ const source = {
   // so a consuming test server would start the clock under the assertions.
   QUEUE_CONSUME: 'false',
   THROTTLE_LIMIT: '10000',
-  THROTTLE_PREFIX: `test-${crypto.randomUUID()}`,
+  ...testNamespace(),
   // Deterministic money: 100 cents minimum, $50.00 demo balance.
   GAME_MIN_BET_CENTS: '100',
   GAME_DEMO_INITIAL_BALANCE_CENTS: '5000',
@@ -330,4 +334,11 @@ describe('the stuck-round watchdog', () => {
     expect(roundRepo.findById(orphanId)?.status).toBe(GameRoundStatus.FAILED);
     expect(roundRepo.findById(liveId)?.status).toBe(GameRoundStatus.RUNNING);
   });
+});
+
+// Registered last, so it runs after the server has closed. Isolating the suites
+// stopped them writing into the application's namespace; this stops them leaving
+// their own behind, since bullmq's `meta` keys carry no TTL.
+afterAll(async () => {
+  await dropTestNamespaces();
 });

@@ -4,6 +4,7 @@ import { createTestServer, type TestServer } from '@dunx/testing';
 import { AppModule, JobsModule } from './app.module.js';
 import { EnvConfig } from './config/env.validation.js';
 import { AppHttpOptions } from './http.options.js';
+import { dropTestNamespaces, testNamespace } from './test-support/namespace.js';
 
 /**
  * The module graph, asserted rather than read.
@@ -30,7 +31,7 @@ const source = {
   // so a consuming test server would start the clock under the assertions.
   QUEUE_CONSUME: 'false',
   THROTTLE_LIMIT: '10000',
-  THROTTLE_PREFIX: `test-${crypto.randomUUID()}`,
+  ...testNamespace(),
 };
 
 let server: TestServer;
@@ -63,4 +64,11 @@ describe('the module graph', () => {
       await app.shutdown();
     }
   });
+});
+
+// Registered last, so it runs after the server has closed. Isolating the suites
+// stopped them writing into the application's namespace; this stops them leaving
+// their own behind, since bullmq's `meta` keys carry no TTL.
+afterAll(async () => {
+  await dropTestNamespaces();
 });
