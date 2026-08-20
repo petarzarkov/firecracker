@@ -1,7 +1,6 @@
+import type { Page, PageOptions } from '@dunx/infra/pagination';
 import { and, desc, eq } from 'drizzle-orm';
-import { SyncDatabase } from '@dunx/infra/db';
-import { paginate, type Page, type PageOptions } from '@dunx/infra/pagination';
-import { Tx, type AppSchema, type DbHandle } from '../../infra/db/tx.js';
+import { CrudRepository } from '../../infra/db/base.repository.js';
 import { users, type UserRow } from '../../users/schema/user.schema.js';
 import {
   gameBets,
@@ -15,7 +14,11 @@ export interface BetWithPlayer extends GameBetRow {
   readonly playerName: string;
 }
 
-export class GameBetRepository {
+export class GameBetRepository extends CrudRepository<
+  typeof gameBets,
+  GameBetRow,
+  NewGameBetRow
+> {
   /**
    * What the lobby calls a player. The email local-part is the fallback the NestJS
    * gateway used inline; it is here so the HTTP and socket paths cannot disagree
@@ -25,16 +28,7 @@ export class GameBetRepository {
     return user.name || user.email.split('@')[0] || user.id;
   }
 
-  constructor(private readonly db: SyncDatabase<AppSchema>) {}
-
-  /**
-   * The same repository bound to a transaction handle, so a service can run its
-   * reads and writes inside one. See `infra/db/tx.ts` for why the cast is there
-   * and why it is in one place.
-   */
-  static over(handle: DbHandle): GameBetRepository {
-    return new GameBetRepository(Tx.asHandle(handle));
-  }
+  protected readonly table = gameBets;
 
   findActiveByRoundAndUser(
     roundId: string,
@@ -119,22 +113,6 @@ export class GameBetRepository {
     }));
   }
 
-  create(values: NewGameBetRow): GameBetRow {
-    return this.db.insert(gameBets).values(values).returning().get();
-  }
-
-  update(
-    id: string,
-    values: { [K in keyof NewGameBetRow]?: NewGameBetRow[K] | undefined },
-  ): GameBetRow | undefined {
-    return this.db
-      .update(gameBets)
-      .set({ ...values, updatedAt: new Date() })
-      .where(eq(gameBets.id, id))
-      .returning()
-      .get();
-  }
-
   /**
    * Everything still ACTIVE in a crashed round lost. One statement rather than a
    * row-by-row loop, because this runs inside the crash transaction while players
@@ -155,13 +133,7 @@ export class GameBetRepository {
   }
 
   listByUser(userId: string, options: PageOptions): Promise<Page<GameBetRow>> {
-    return paginate<typeof gameBets, GameBetRow>({
-      db: this.db,
-      table: gameBets,
-      options,
-      orderBy: 'createdAt',
-      where: eq(gameBets.userId, userId),
-    });
+    return this.page(options, eq(gameBets.userId, userId));
   }
 
   /**

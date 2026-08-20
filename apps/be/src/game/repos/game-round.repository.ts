@@ -1,7 +1,6 @@
+import type { Page, PageOptions } from '@dunx/infra/pagination';
 import { and, desc, eq, inArray, lt, or } from 'drizzle-orm';
-import { SyncDatabase } from '@dunx/infra/db';
-import { paginate, type Page, type PageOptions } from '@dunx/infra/pagination';
-import { Tx, type AppSchema, type DbHandle } from '../../infra/db/tx.js';
+import { CrudRepository } from '../../infra/db/base.repository.js';
 import {
   gameRounds,
   GameRoundStatus,
@@ -9,30 +8,12 @@ import {
   type NewGameRoundRow,
 } from '../schema/game-round.schema.js';
 
-/**
- * Every method here is synchronous except `list`, which is the same split
- * `UsersRepository` documents: `bun:sqlite` returns rows rather than promises, and
- * `paginate` is async only because it serves `Bun.SQL` as well.
- *
- * The synchrony is not incidental in this module. `GameBetService` needs its
- * read-check-write to be one uninterruptible step, and it gets that for free
- * because none of these can yield.
- */
-export class GameRoundRepository {
-  constructor(private readonly db: SyncDatabase<AppSchema>) {}
-
-  /**
-   * The same repository bound to a transaction handle, so a service can run its
-   * reads and writes inside one. See `infra/db/tx.ts` for why the cast is there
-   * and why it is in one place.
-   */
-  static over(handle: DbHandle): GameRoundRepository {
-    return new GameRoundRepository(Tx.asHandle(handle));
-  }
-
-  findById(id: string): GameRoundRow | undefined {
-    return this.db.select().from(gameRounds).where(eq(gameRounds.id, id)).get();
-  }
+export class GameRoundRepository extends CrudRepository<
+  typeof gameRounds,
+  GameRoundRow,
+  NewGameRoundRow
+> {
+  protected readonly table = gameRounds;
 
   /**
    * The round the game is currently on: the newest that has not finished.
@@ -96,29 +77,14 @@ export class GameRoundRepository {
       .all();
   }
 
-  create(values: NewGameRoundRow): GameRoundRow {
-    return this.db.insert(gameRounds).values(values).returning().get();
-  }
-
-  update(
-    id: string,
-    values: { [K in keyof NewGameRoundRow]?: NewGameRoundRow[K] | undefined },
-  ): GameRoundRow | undefined {
-    return this.db
-      .update(gameRounds)
-      .set({ ...values, updatedAt: new Date() })
-      .where(eq(gameRounds.id, id))
-      .returning()
-      .get();
-  }
-
   /**
    * A status transition that will not run twice.
    *
    * The `from` status is part of the `WHERE`, so two workers racing to crash the
    * same round produce one update and one `undefined`. The caller treats
    * `undefined` as "somebody else already did it" rather than as an error - which
-   * is what makes the crash job safe to retry.
+   * is what makes the crash job safe to retry. Not `update` with extra arguments:
+   * the guard is the point, and the base's `update` cannot express it.
    */
   transition(
     id: string,
@@ -134,11 +100,6 @@ export class GameRoundRepository {
   }
 
   list(options: PageOptions): Promise<Page<GameRoundRow>> {
-    return paginate<typeof gameRounds, GameRoundRow>({
-      db: this.db,
-      table: gameRounds,
-      options,
-      orderBy: 'createdAt',
-    });
+    return this.page(options);
   }
 }

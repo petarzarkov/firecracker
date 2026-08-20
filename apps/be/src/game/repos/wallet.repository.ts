@@ -1,7 +1,6 @@
-import { and, desc, eq, gte, sql } from 'drizzle-orm';
-import { SyncDatabase } from '@dunx/infra/db';
 import { paginate, type Page, type PageOptions } from '@dunx/infra/pagination';
-import { Tx, type AppSchema, type DbHandle } from '../../infra/db/tx.js';
+import { and, desc, eq, gte, sql } from 'drizzle-orm';
+import { BaseRepository } from '../../infra/db/base.repository.js';
 import {
   wallets,
   walletTransactions,
@@ -10,17 +9,18 @@ import {
   type WalletTransactionRow,
 } from '../schema/wallet.schema.js';
 
-export class WalletRepository {
-  constructor(private readonly db: SyncDatabase<AppSchema>) {}
-
-  /**
-   * The same repository bound to a transaction handle, so a service can run its
-   * reads and writes inside one. See `infra/db/tx.ts` for why the cast is there
-   * and why it is in one place.
-   */
-  static over(handle: DbHandle): WalletRepository {
-    return new WalletRepository(Tx.asHandle(handle));
-  }
+/**
+ * `BaseRepository`, not `CrudRepository`, and that is the invariant rather than an
+ * omission: the write tier's `update(id, values)` would accept
+ * `{ balanceCents: n }`, which is the JavaScript balance check CLAUDE.md forbids
+ * and exactly what `debit`'s `WHERE balance_cents >= ?` exists to make
+ * unexpressible. Not inheriting the method is how it stays that way.
+ */
+export class WalletRepository extends BaseRepository<
+  typeof wallets,
+  WalletRow
+> {
+  protected readonly table = wallets;
 
   findByUserId(userId: string, isDemo: boolean): WalletRow | undefined {
     return this.db
@@ -28,10 +28,6 @@ export class WalletRepository {
       .from(wallets)
       .where(and(eq(wallets.userId, userId), eq(wallets.isDemo, isDemo)))
       .get();
-  }
-
-  findById(id: string): WalletRow | undefined {
-    return this.db.select().from(wallets).where(eq(wallets.id, id)).get();
   }
 
   /**
@@ -119,6 +115,11 @@ export class WalletRepository {
       .all();
   }
 
+  /**
+   * The one paginated read that cannot go through `page()`: it walks
+   * `wallet_transaction`, and the base's helper is over the repository's own
+   * table. A second repository for the ledger would be a class for one query.
+   */
   listTransactions(
     walletId: string,
     options: PageOptions,

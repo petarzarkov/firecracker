@@ -1,41 +1,18 @@
+import type { Page, PageOptions } from '@dunx/infra/pagination';
 import { and, eq, like, type SQL } from 'drizzle-orm';
-import { SyncDatabase } from '@dunx/infra/db';
-import { paginate, type Page, type PageOptions } from '@dunx/infra/pagination';
-import type { AppSchema } from '../../infra/db/tx.js';
+import { CrudRepository } from '../../infra/db/base.repository.js';
 import { files, type FileRow, type NewFileRow } from '../schema/file.schema.js';
 
 export interface ListFilesFilters extends PageOptions {
   readonly userId?: string | undefined;
 }
 
-export class FilesRepository {
-  constructor(private readonly db: SyncDatabase<AppSchema>) {}
-
-  findById(id: string): FileRow | undefined {
-    return this.db.select().from(files).where(eq(files.id, id)).get();
-  }
-
-  create(values: NewFileRow): FileRow {
-    return this.db.insert(files).values(values).returning().get();
-  }
-
-  update(
-    id: string,
-    values: { [K in keyof NewFileRow]?: NewFileRow[K] | undefined },
-  ): FileRow | undefined {
-    return this.db
-      .update(files)
-      .set({ ...values, updatedAt: new Date() })
-      .where(eq(files.id, id))
-      .returning()
-      .get();
-  }
-
-  deleteById(id: string): boolean {
-    return (
-      this.db.delete(files).where(eq(files.id, id)).returning().all().length > 0
-    );
-  }
+export class FilesRepository extends CrudRepository<
+  typeof files,
+  FileRow,
+  NewFileRow
+> {
+  protected readonly table = files;
 
   list(filters: ListFilesFilters): Promise<Page<FileRow>> {
     const clauses: SQL[] = [];
@@ -46,12 +23,9 @@ export class FilesRepository {
       clauses.push(like(files.name, `%${filters.search}%`));
     }
 
-    return paginate<typeof files, FileRow>({
-      db: this.db,
-      table: files,
-      options: filters,
-      orderBy: 'createdAt',
-      where: clauses.length === 0 ? undefined : and(...clauses),
-    });
+    return this.page(
+      filters,
+      clauses.length === 0 ? undefined : and(...clauses),
+    );
   }
 }
