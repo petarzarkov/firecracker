@@ -136,6 +136,21 @@ export class GameRoundService {
   }
 
   /**
+   * The round the loop is currently driving, if there is one.
+   *
+   * `GameJobs.schedule` guards on this: the schedule job is enqueued from three
+   * places - boot recovery, the watchdog after a cleanup, and the cooldown after a
+   * crash - and only the third can scope a `jobId` to a round. A *fixed* id for the
+   * other two would be worse than none, because bullmq dedupes against the completed
+   * set too, so the id that stopped ten restarts making ten loops would also stop the
+   * eleventh restart making any. Guarding on state is the same reason the stuck-round
+   * sweep is a schedule rather than a self-rescheduling job.
+   */
+  currentRound(): GameRoundRow | undefined {
+    return this.rounds.findCurrentRound();
+  }
+
+  /**
    * Close the betting window and draw the crash point.
    *
    * The transition is conditional on the round still being WAITING, so two workers
@@ -150,9 +165,18 @@ export class GameRoundService {
       return undefined;
     }
 
-    const submitted = await this.redis
-      .hgetall(GameRoundService.clientSeedsKey(roundId))
-      .catch(() => ({}) as Record<string, string>);
+    // A read failure must not become an empty pool. `combineClientSeeds([])` is the
+    // constant `'firecracker'`, so a round launched without the seeds would draw its
+    // crash point from the server seed alone - a value the house committed at
+    // creation and can therefore compute in advance - while recording itself as
+    // provably fair. Worse, the record of that round is byte-for-byte identical to
+    // an idle lobby's, so nothing distinguishes the degraded case afterwards.
+    //
+    // Rounds need Redis. Leaving this one WAITING is the honest answer: the stuck
+    // round sweep picks it up, and no round claims entropy it did not have.
+    const submitted = await this.#clientSeeds(roundId);
+    if (submitted === null) return undefined;
+
     const clientSeed = this.combineClientSeeds(Object.values(submitted));
 
     const crashPoint = GameMath.crashPointX100(
@@ -183,6 +207,25 @@ export class GameRoundService {
       seedCount: Object.keys(submitted).length,
     });
     return started;
+  }
+
+  /**
+   * The submitted client seeds, or `null` when Redis could not be asked.
+   *
+   * The distinction is the whole point. An empty hash is normal - an idle lobby has
+   * no players and therefore no seeds. An unreachable Redis is not, and the two used
+   * to be the same value.
+   */
+  async #clientSeeds(roundId: string): Promise<Record<string, string> | null> {
+    try {
+      return await this.redis.hgetall(GameRoundService.clientSeedsKey(roundId));
+    } catch (error) {
+      this.logger.error('cannot launch a round without its client seeds', {
+        roundId,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
   }
 
   /**

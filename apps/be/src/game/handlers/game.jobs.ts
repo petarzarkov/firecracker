@@ -52,6 +52,17 @@ export class GameJobs {
    */
   @JobHandler({ queue: GAME_QUEUE, name: GAME_JOBS.SCHEDULE })
   async schedule(): Promise<{ roundId: string }> {
+    // Two boots used to mean two rounds. See `GameRoundService.currentRound` for why
+    // the guard is on state rather than on a `jobId`.
+    const live = this.rounds.currentRound();
+    if (live !== undefined) {
+      this.logger.debug('a round is already live, not scheduling another', {
+        roundId: live.id,
+        status: live.status,
+      });
+      return { roundId: live.id };
+    }
+
     const round = await this.rounds.createNextRound();
 
     GameEvents.publish(this.events, GAME_TOPIC, GAME_EVENTS.PHASE_CHANGE, {
