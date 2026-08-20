@@ -212,16 +212,11 @@ describe('placing a bet', () => {
    * index exists for. What matters here is that the debit went back with the
    * transaction: the constraint fires after the wallet has already been written.
    *
-   * **The throw is asserted untyped, and that is a finding rather than laziness.**
-   * `GameBetService` means to translate this into a `BetRejected` reading "you
-   * already have an active bet in this round", and today it cannot:
-   * `#isDuplicateBet` tests `error.message.includes('game_bet_round_user_demo_index')`,
-   * but bun:sqlite words the message as `UNIQUE constraint failed:
-   * game_bet.round_id, game_bet.user_id, game_bet.is_demo` - the columns, never
-   * the index name. So the constraint reaches the player as a raw 500. The money
-   * is safe either way, which is what the three assertions below are for; when the
-   * match is corrected, tighten this `toThrow()` to `BetRejected` and this test
-   * becomes the one that would have caught it.
+   * `BetRejected` rather than any throw, and that is the whole point of the case.
+   * `#isDuplicateBet` used to look for the index *name* in the error message,
+   * which bun:sqlite never puts there - it names the indexed columns - so the
+   * translation never fired and a genuine double bet answered a player with a raw
+   * 500. Without the fix this line reports a bare `Error`.
    */
   test('the unique index refuses the insert and the debit rolls back with it', () => {
     const roundId = openRound();
@@ -233,7 +228,9 @@ describe('placing a bet', () => {
       status: GameBetStatus.LOST,
     });
 
-    expect(() => bets.placeBet(userId, roundId, 700, true)).toThrow();
+    expect(() => bets.placeBet(userId, roundId, 700, true)).toThrow(
+      BetRejected,
+    );
 
     expect(balanceOf(true)).toBe(OPENING_DEMO_CENTS);
     expect(ledger(true)).toHaveLength(0);

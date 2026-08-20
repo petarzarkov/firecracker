@@ -60,9 +60,25 @@ export class BetRejected extends HttpError {
  */
 export class GameBetService {
   /**
+   * `game_bet_round_user_demo_index`, as SQLite words a violation of it.
+   *
+   * **The columns, not the index name.** This used to match
+   * `'game_bet_round_user_demo_index'`, which no message ever contains: a
+   * `SQLITE_CONSTRAINT_UNIQUE` from bun:sqlite reads `UNIQUE constraint failed:
+   * game_bet.round_id, game_bet.user_id, game_bet.is_demo` and names the indexed
+   * columns, in index order, never the index. So the predicate below was always
+   * false and the one case the index exists to cover - the double bet arriving on
+   * two processes - reached the player as a raw 500 instead of an answer. The
+   * money was never at risk, because the transaction rolled the debit back either
+   * way; the answer was.
+   */
+  static readonly #DUPLICATE_BET_COLUMNS =
+    'game_bet.round_id, game_bet.user_id, game_bet.is_demo';
+
+  /**
    * The unique index refusing a second bet, as opposed to any other constraint.
    *
-   * The index name is matched rather than just the code, because a
+   * The constraint is identified rather than just the code, because a
    * `SQLITE_CONSTRAINT_UNIQUE` from anywhere else in this transaction is a bug and
    * should not be reported to a player as "you already bet".
    */
@@ -70,7 +86,7 @@ export class GameBetService {
     return (
       error instanceof SQLiteError &&
       error.code === 'SQLITE_CONSTRAINT_UNIQUE' &&
-      error.message.includes('game_bet_round_user_demo_index')
+      error.message.includes(GameBetService.#DUPLICATE_BET_COLUMNS)
     );
   }
 
