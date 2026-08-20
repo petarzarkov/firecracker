@@ -1,4 +1,5 @@
 import { Box, Image, SimpleGrid, Text } from '@chakra-ui/react';
+import type { TrendingAvatars } from '@firecracker/contracts';
 import { useState } from 'react';
 import { apiFetch } from '@/systems/network/api';
 import { Button } from './Button';
@@ -40,8 +41,8 @@ export const AvatarPicker = ({
 
     try {
       const res = await apiFetch('/api/profile/avatars/trending');
-      const data = (await res.json()) as { avatars?: string[] };
-      setAvatars(data.avatars?.length ? data.avatars : [...AVATARS]);
+      const { avatars: trending } = (await res.json()) as TrendingAvatars;
+      setAvatars(trending.length > 0 ? [...trending] : [...AVATARS]);
     } catch {
       setAvatars([...AVATARS]);
     }

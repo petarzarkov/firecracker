@@ -1,4 +1,9 @@
 import { Box, Flex, Text } from '@chakra-ui/react';
+import {
+  GameBetStatus,
+  type GameBetView,
+  type Page,
+} from '@firecracker/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Tooltip } from '@/components/Tooltip';
 import { Button } from '@/components/ui/Button';
@@ -6,23 +11,14 @@ import { useAuthStore } from '@/store/authStore';
 import { apiFetch } from '@/systems/network/api';
 import { useGameStore } from '@/store/gameStore';
 
-interface BetEntry {
-  id: string;
-  betAmountCents: number;
-  status: 'active' | 'cashed_out' | 'lost' | 'refunded';
-  cashedOutAt?: number;
-  payoutCents?: number;
-  crashPoint?: number;
-}
-
 function fmtCents(cents: number): string {
   return (cents / 100).toFixed(2);
 }
 
-function BetRow({ bet }: { bet: BetEntry }) {
-  const isWon = bet.status === 'cashed_out';
-  const isLost = bet.status === 'lost';
-  const isActive = bet.status === 'active';
+function BetRow({ bet }: { bet: GameBetView }) {
+  const isWon = bet.status === GameBetStatus.CASHED_OUT;
+  const isLost = bet.status === GameBetStatus.LOST;
+  const isActive = bet.status === GameBetStatus.ACTIVE;
   const dotColor = isWon
     ? '#4ade80'
     : isLost
@@ -150,7 +146,7 @@ export function PlayerHistory() {
   const userId = useAuthStore((state) => state.user?.id);
   const phase = useGameStore((state) => state.phase);
   const myBet = useGameStore((state) => state.myBet);
-  const [bets, setBets] = useState<BetEntry[]>([]);
+  const [bets, setBets] = useState<readonly GameBetView[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasNextPage, setHasNextPage] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -168,14 +164,18 @@ export function PlayerHistory() {
         const params = new URLSearchParams({ take: '20' });
         if (cursor) params.set('cursor', cursor);
         const res = await apiFetch(`/api/game/my-bets?${params}`);
-        const data = await res.json();
+        // The envelope and the row both come from `@firecracker/contracts`, so a
+        // field this panel reads is a field the route is declared to send. It read
+        // a `crashPoint` nobody sent for months, and rendered every loss as a
+        // crash at zero.
+        const page = (await res.json()) as Page<GameBetView>;
         if (cursor) {
-          setBets((prev) => [...prev, ...(data.data ?? [])]);
+          setBets((prev) => [...prev, ...page.data]);
         } else {
-          setBets(data.data ?? []);
+          setBets(page.data);
         }
-        setNextCursor(data.meta?.nextCursor ?? null);
-        setHasNextPage(data.meta?.hasNextPage ?? false);
+        setNextCursor(page.meta.nextCursor);
+        setHasNextPage(page.meta.hasNextPage);
       } finally {
         setIsLoading(false);
         loadedOnce.current = true;
