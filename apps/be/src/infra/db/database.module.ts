@@ -9,6 +9,31 @@ import type { Db } from './tx.js';
 export const MIGRATIONS_FOLDER = join(import.meta.dir, 'migrations');
 
 /**
+ * Whether the process that forked this one has already migrated **this** database.
+ *
+ * `JobProcessor` sets `DUNX_JOB_WORKER` before it builds the container, and says in
+ * its own source that it does so for "anything that must behave differently off the
+ * request path... so a provider can read it in its own constructor" - `QueueRunner`
+ * reads the same marker to keep a child from opening its own workers. bullmq forks
+ * one child per burst, so without this every burst re-read `__drizzle_migrations`
+ * and took a write lock on the one file the game loop is writing to. Idempotent, and
+ * unnecessary: a child is only ever forked by a parent that migrated at boot.
+ *
+ * **`:memory:` is the exception, and it is not academic.** An in-memory database
+ * belongs to the process that opened it, so a child's is empty however thoroughly
+ * its parent migrated - skipping there would hand a handler a database with no
+ * tables. `queues.spec.ts` uses a file for exactly that reason and is the suite that
+ * proves this path.
+ *
+ * The marker is passed in rather than read here so the decision is testable without
+ * mutating the environment of every other suite in the process.
+ */
+export const migratedByParentProcess = (
+  jobWorkerMarker: string | undefined,
+  sqlitePath: string,
+): boolean => jobWorkerMarker === 'true' && sqlitePath !== ':memory:';
+
+/**
  * Applies the drizzle-kit migrations in the constructor, so they are done before
  * anything else in the graph is built. `bun:sqlite` is synchronous, so there is
  * nothing to await and no boot phase to coordinate.
@@ -17,7 +42,16 @@ export const MIGRATIONS_FOLDER = join(import.meta.dir, 'migrations');
  * makes it safe to assume the connection is already open here.
  */
 export class DatabaseBootstrap {
-  constructor(connection: DbConnection<Db>) {
+  constructor(connection: DbConnection<Db>, config: AppConfigService) {
+    if (
+      migratedByParentProcess(
+        Bun.env['DUNX_JOB_WORKER'],
+        config.get('db').sqlitePath,
+      )
+    ) {
+      return;
+    }
+
     migrate(connection.db, { migrationsFolder: MIGRATIONS_FOLDER });
   }
 }
