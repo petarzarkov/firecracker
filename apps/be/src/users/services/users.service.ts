@@ -79,7 +79,7 @@ export class UsersService {
       );
     }
 
-    this.logger.info('user created', { userId: row.id, role: row.role });
+    this.logger.debug('user created', { userId: row.id, role: row.role });
     return UsersService.#sanitize(row);
   }
 
@@ -88,7 +88,7 @@ export class UsersService {
     if (row === undefined) {
       throw new HttpError(HttpStatusCode.NOT_FOUND, `No user with id ${id}`);
     }
-    this.logger.info('user updated', {
+    this.logger.debug('user updated', {
       userId: id,
       fields: Object.keys(input),
     });

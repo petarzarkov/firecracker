@@ -205,7 +205,7 @@ export class WalletService {
           ),
     );
 
-    this.logger.info('demo wallet reset', { userId, opening });
+    this.logger.debug('demo wallet reset', { userId, opening });
     return updated ?? wallet;
   }
 }

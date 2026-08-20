@@ -184,7 +184,7 @@ export class CrashEngineService implements OnInit, OnShutdown {
       () => this.#onTick(),
     );
     this.#ticking = true;
-    this.logger.info('engine ticking', { roundId, crashPointX100 });
+    this.logger.debug('engine ticking', { roundId, crashPointX100 });
   }
 
   setCrashed(): void {
@@ -308,7 +308,7 @@ export class CrashEngineService implements OnInit, OnShutdown {
       const roundId = this.#roundId;
       if (roundId === null) return;
 
-      this.logger.info('crash point reached', {
+      this.logger.debug('crash point reached', {
         roundId,
         crashPointX100: this.#crashPointX100,
       });

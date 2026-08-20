@@ -70,6 +70,6 @@ export class EmailService {
 
     // The body is deliberately not logged on the success path: it went somewhere,
     // and an email body is the field most likely to carry something personal.
-    this.logger.info('email sent', { to: email.to, subject: email.subject });
+    this.logger.debug('email sent', { to: email.to, subject: email.subject });
   }
 }

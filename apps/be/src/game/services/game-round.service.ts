@@ -127,7 +127,7 @@ export class GameRoundService {
       waitingEndsAt,
     });
 
-    this.logger.info('game round created', {
+    this.logger.debug('game round created', {
       roundId: round.id,
       nonce,
       waitingEndsAt,
@@ -177,7 +177,7 @@ export class GameRoundService {
       return undefined;
     }
 
-    this.logger.info('game round running', {
+    this.logger.debug('game round running', {
       roundId,
       crashPointX100: crashPoint,
       seedCount: Object.keys(submitted).length,

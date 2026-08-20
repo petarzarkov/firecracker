@@ -35,6 +35,16 @@ export default new JobProcessor(
    * `Bun.env` still wins wherever it is set, so a deployed child reports the same port
    * as its parent. `0` is simply the honest answer to "which port does this serve on".
    */
-  JobsModule.forRoot({ source: { API_PORT: '0', ...Bun.env } }),
+  JobsModule.forRoot({
+    source: { API_PORT: '0', ...Bun.env },
+    // A spec passes `logLevel: 'fatal'` as a module option, and a module option is
+    // exactly what cannot cross a fork - so a quiet suite still got a chatty child,
+    // and six of them accounted for 31 of the 32 log lines a test run printed.
+    // `NODE_ENV` does cross, because bullmq forks with the parent's environment and
+    // `bun test` sets it. An explicit `LOG_LEVEL` still wins.
+    ...(Bun.env['NODE_ENV'] === 'test' && Bun.env['LOG_LEVEL'] === undefined
+      ? { logLevel: 'fatal' as const }
+      : {}),
+  }),
   { queues: [QUEUES.NOTIFICATIONS, QUEUES.MEDIA] },
 ).handle;

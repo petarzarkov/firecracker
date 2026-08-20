@@ -57,7 +57,7 @@ export class NotificationJobs {
       payload: { userId, email },
     });
 
-    this.logger.info('handled user.registered', { userId });
+    this.logger.debug('handled user.registered', { userId });
     return { notified: userId };
   }
 
@@ -86,7 +86,7 @@ export class NotificationJobs {
       body: `Hello ${name}, use this link within the hour to choose a new password: ${url}`,
     });
 
-    this.logger.info('handled user.password-reset', { userId });
+    this.logger.debug('handled user.password-reset', { userId });
     return { sent: email };
   }
 

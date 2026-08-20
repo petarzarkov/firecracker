@@ -214,7 +214,7 @@ export class GoogleService extends BaseProviderService implements OnInit {
 
     const best = this.#hierarchy[0];
     if (best !== undefined && best !== this.#model) {
-      this.logger.info(
+      this.logger.debug(
         'gemini cool-down elapsed, trying the best model again',
         {
           model: best,

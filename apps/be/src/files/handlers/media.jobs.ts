@@ -56,7 +56,7 @@ export class MediaJobs {
       height: encoded.height,
       bytes: encoded.bytes.byteLength,
     };
-    this.logger.info('thumbnail rendered', { fileId, ...result });
+    this.logger.debug('thumbnail rendered', { fileId, ...result });
     return result;
   }
 

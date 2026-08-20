@@ -105,7 +105,7 @@ export class FilesService {
     // An unreachable queue is not a failed upload, so the enqueue degrades.
     if (dimensions !== undefined) await this.enqueueThumbnail(row);
 
-    this.logger.info('file uploaded', {
+    this.logger.debug('file uploaded', {
       fileId: row.id,
       key,
       size: row.size,

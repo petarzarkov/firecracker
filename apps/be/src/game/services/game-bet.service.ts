@@ -166,7 +166,7 @@ export class GameBetService {
           status: GameBetStatus.ACTIVE,
         });
 
-        this.logger.info('bet placed', {
+        this.logger.debug('bet placed', {
           userId,
           roundId,
           betAmountCents,
@@ -232,7 +232,7 @@ export class GameBetService {
         settled.id,
       );
 
-      this.logger.info('bet cashed out', {
+      this.logger.debug('bet cashed out', {
         userId,
         roundId,
         multiplierX100,
@@ -286,7 +286,7 @@ export class GameBetService {
   /** Everything still open when the rocket exploded. One statement, no loop. */
   settleAllBetsAsLost(roundId: string, tx: DbHandle): number {
     const lost = GameBetRepository.over(tx).settleActiveBetsAsLost(roundId);
-    this.logger.info('active bets settled as lost', { roundId, lost });
+    this.logger.debug('active bets settled as lost', { roundId, lost });
     return lost;
   }
 
