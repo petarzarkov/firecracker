@@ -100,9 +100,15 @@ class Foundation {
  * connections the handlers use. Isolation is per handler now: see
  * `src/jobs.processor.ts`.
  *
- * **Undecorated, with a static factory**, and it must not *also* carry `@Module` -
- * `resolveRef` concatenates decorator metadata with a `DynamicModule`'s options
- * rather than overriding them, so declaring both registers every import twice.
+ * **Undecorated, with a static factory**, because every option here varies: `source`
+ * and `logLevel` per suite, and `CLIENT_DIST` decides whether `ClientModule` is in
+ * the graph at all. A `@Module` on top would have nothing to add.
+ *
+ * It used to be that it *could not* also carry `@Module`: `resolveRef` concatenated
+ * decorator metadata with a `DynamicModule`'s options, so declaring both registered
+ * every import twice. dunx 2.2.0 unions the two instead - a provider's token wins
+ * once and the configured binding replaces the declared one - so the two compose and
+ * a decorator is where a default belongs. Nothing here has a default to state.
  */
 export class AppModule {
   static forRoot(options: AppModuleOptions = {}): DynamicModule {

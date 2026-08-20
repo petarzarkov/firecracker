@@ -10,36 +10,40 @@ import {
 import { AppConfigService } from '../../config/app.config.service.js';
 import { StorageDriver } from '../../config/dto/storage-vars.dto.js';
 
-/** Hoisted, so the decorator below can both import and re-export one reference. */
-const files = FilesModule.forRootAsync({
-  useFactory: async (config: AppConfigService): Promise<StorageOptions> => {
-    const storage = config.get('storage');
+/**
+ * The backend, chosen once. Named separately from the decorator below only because
+ * it is thirty lines: the module it configures is imported and re-exported by
+ * class, which is what dunx 2.2.0 resolves for an `exports` entry and what retired
+ * the `const` holding a configured `FilesModule`.
+ */
+const storageOptions = async (
+  config: AppConfigService,
+): Promise<StorageOptions> => {
+  const storage = config.get('storage');
 
-    if (storage.driver === StorageDriver.S3) {
-      return new S3StorageOptions(
-        {
-          ...(storage.bucket === undefined ? {} : { bucket: storage.bucket }),
-          ...(storage.region === undefined ? {} : { region: storage.region }),
-          ...(storage.endpoint === undefined
-            ? {}
-            : { endpoint: storage.endpoint }),
-          ...(storage.accessKeyId === undefined
-            ? {}
-            : { accessKeyId: storage.accessKeyId }),
-          ...(storage.secretAccessKey === undefined
-            ? {}
-            : { secretAccessKey: storage.secretAccessKey }),
-        },
-        storage.prefix,
-      );
-    }
+  if (storage.driver === StorageDriver.S3) {
+    return new S3StorageOptions(
+      {
+        ...(storage.bucket === undefined ? {} : { bucket: storage.bucket }),
+        ...(storage.region === undefined ? {} : { region: storage.region }),
+        ...(storage.endpoint === undefined
+          ? {}
+          : { endpoint: storage.endpoint }),
+        ...(storage.accessKeyId === undefined
+          ? {}
+          : { accessKeyId: storage.accessKeyId }),
+        ...(storage.secretAccessKey === undefined
+          ? {}
+          : { secretAccessKey: storage.secretAccessKey }),
+      },
+      storage.prefix,
+    );
+  }
 
-    const root = resolve(storage.localRoot);
-    await mkdir(root, { recursive: true });
-    return new LocalStorageOptions(root);
-  },
-  inject: [AppConfigService] as const,
-});
+  const root = resolve(storage.localRoot);
+  await mkdir(root, { recursive: true });
+  return new LocalStorageOptions(root);
+};
 
 /**
  * Backend selection is one `StorageOptions` subclass, not a branch in the app:
@@ -59,5 +63,14 @@ const files = FilesModule.forRootAsync({
  * `global: true` and a re-export, as every infra module here is: `Storage` is read
  * by the files feature, and there is one of it.
  */
-@Module({ global: true, imports: [files], exports: [files] })
+@Module({
+  global: true,
+  imports: [
+    FilesModule.forRootAsync({
+      useFactory: storageOptions,
+      inject: [AppConfigService] as const,
+    }),
+  ],
+  exports: [FilesModule],
+})
 export class StorageModule {}

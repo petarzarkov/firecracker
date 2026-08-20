@@ -4,6 +4,7 @@ import { Logger, Module } from '@dunx/core';
 import { DbConnection } from '@dunx/infra/db';
 import { JobPublisher } from '@dunx/infra/queue';
 import { RedisConnection } from '@dunx/infra/redis';
+import type { BetterAuthOptions } from 'better-auth';
 import { AppConfigService } from '../config/app.config.service.js';
 import { AuthSessionStore } from '../config/dto/auth-vars.dto.js';
 import { users } from '../users/schema/user.schema.js';
@@ -27,102 +28,103 @@ import { CurrentUser } from './services/current-user.service.js';
  * matches `/api/auth`, so the two are different strings for one URL and the
  * route table is built before any factory has run.
  *
- * Hoisted to a `const` so the same reference is both imported and re-exported. A
- * scope is keyed on the module reference, so a second `forRootAsync(...)` call in
- * `exports` would name a module that is not in the graph.
+ * The *configuration* is named, not the configured module. `AuthModule.forRootAsync`
+ * is called once, inline, where the decorator imports it - dunx 2.2.0 resolves an
+ * `exports` entry naming a module class to the configuration of that class this
+ * module imports, so re-exporting it no longer needs the object in a variable two
+ * places can reach.
+ *
+ * The return is annotated `BetterAuthOptions` rather than inferred: detached from
+ * the call, nothing gives `sendResetPassword`'s `{ user, url }` a contextual type,
+ * and inferring it means `any`.
  */
-const auth = AuthModule.forRootAsync(
-  {
-    useFactory: (
-      config: AppConfigService,
-      connection: DbConnection,
-      redis: RedisConnection,
-      publisher: JobPublisher,
-      logger: Logger,
-    ) => {
-      const base = AuthOptions.base(config.values);
-      const redisSessions =
-        config.get('auth').sessionStore === AuthSessionStore.REDIS;
+const options = {
+  useFactory: (
+    config: AppConfigService,
+    connection: DbConnection,
+    redis: RedisConnection,
+    publisher: JobPublisher,
+    logger: Logger,
+  ): BetterAuthOptions => {
+    const base = AuthOptions.base(config.values);
+    const redisSessions =
+      config.get('auth').sessionStore === AuthSessionStore.REDIS;
 
-      return {
-        ...base,
-        emailAndPassword: {
-          ...base.emailAndPassword,
-          /**
-           * Without this, `POST /api/auth/request-password-reset` answers 400
-           * with "Reset password isn't enabled" - the endpoint exists but
-           * refuses. So the client's "Forgot password?" flow is only real
-           * because this is here.
-           *
-           * `url` is better-auth's own one-time link, already carrying the token
-           * and the `redirectTo` the client asked for. It is enqueued rather than
-           * sent inline: this runs inside the HTTP request, and a slow provider
-           * would hold the response open while a failing one would turn "check
-           * your inbox" into a 500 that confirms the address exists.
-           */
-          sendResetPassword: async ({ user, url }) => {
-            await publisher
-              .publish(QUEUES.NOTIFICATIONS, JOBS.PASSWORD_RESET, {
-                userId: user.id,
+    return {
+      ...base,
+      emailAndPassword: {
+        ...base.emailAndPassword,
+        /**
+         * Without this, `POST /api/auth/request-password-reset` answers 400
+         * with "Reset password isn't enabled" - the endpoint exists but
+         * refuses. So the client's "Forgot password?" flow is only real
+         * because this is here.
+         *
+         * `url` is better-auth's own one-time link, already carrying the token
+         * and the `redirectTo` the client asked for. It is enqueued rather than
+         * sent inline: this runs inside the HTTP request, and a slow provider
+         * would hold the response open while a failing one would turn "check
+         * your inbox" into a 500 that confirms the address exists.
+         */
+        sendResetPassword: async ({ user, url }) => {
+          await publisher
+            .publish(QUEUES.NOTIFICATIONS, JOBS.PASSWORD_RESET, {
+              userId: user.id,
+              email: user.email,
+              name: user.name,
+              url,
+            })
+            .catch((error: unknown) => {
+              // With no Redis there is no queue. In development the logged link
+              // is how you get it; in production it is an account-takeover
+              // primitive sitting in the log aggregator, so it is gated.
+              logger.warn('password reset could not be queued', {
                 email: user.email,
-                name: user.name,
-                url,
-              })
-              .catch((error: unknown) => {
-                // With no Redis there is no queue. In development the logged link
-                // is how you get it; in production it is an account-takeover
-                // primitive sitting in the log aggregator, so it is gated.
-                logger.warn('password reset could not be queued', {
-                  email: user.email,
-                  ...(config.get('app').nodeEnv === 'production'
-                    ? {}
-                    : { url }),
-                  reason: (error as Error).message,
-                });
+                ...(config.get('app').nodeEnv === 'production' ? {} : { url }),
+                reason: (error as Error).message,
               });
-          },
+            });
         },
-        // The mapping is not optional here, despite `drizzleDatabase`'s
-        // documentation saying "the better-auth tables being in the app's
-        // schema object is the whole requirement". The adapter looks the
-        // model up as `fullSchema['user']`, which is the **export name**
-        // in the schema barrel, not the SQL table name - and this app
-        // exports `users`, plural, like every other table it has. Without
-        // the mapping the first query is:
-        //
-        //   BetterAuthError: [# Drizzle Adapter]: The model "user" was
-        //   not found in the schema object.
-        database: drizzleDatabase(connection, {
-          schema: {
-            user: users,
-            session: sessions,
-            account: accounts,
-            verification: verifications,
-          },
-        }),
-        // Every path into the user table, not just the ones this app
-        // calls - which is why this is a hook and not a call site.
-        databaseHooks: AuthHooks.registration(publisher, logger),
-        // An explicit opt-in, never a side effect of `REDIS_URL` being
-        // set. `redisStorage` deliberately does not soften a connection
-        // failure - a swallowed `null` from `get` would read as "no
-        // session" and sign every user out - so this is the one area that
-        // does *not* degrade, and choosing it is choosing to have Redis
-        // up. The default keeps sessions in the database, which is why a
-        // clean checkout can sign in with nothing running.
-        ...(redisSessions ? { secondaryStorage: redisStorage(redis) } : {}),
-      };
-    },
-    inject: [
-      AppConfigService,
-      DbConnection,
-      RedisConnection,
-      JobPublisher,
-      Logger,
-    ] as const,
+      },
+      // The mapping is not optional here, despite `drizzleDatabase`'s
+      // documentation saying "the better-auth tables being in the app's
+      // schema object is the whole requirement". The adapter looks the
+      // model up as `fullSchema['user']`, which is the **export name**
+      // in the schema barrel, not the SQL table name - and this app
+      // exports `users`, plural, like every other table it has. Without
+      // the mapping the first query is:
+      //
+      //   BetterAuthError: [# Drizzle Adapter]: The model "user" was
+      //   not found in the schema object.
+      database: drizzleDatabase(connection, {
+        schema: {
+          user: users,
+          session: sessions,
+          account: accounts,
+          verification: verifications,
+        },
+      }),
+      // Every path into the user table, not just the ones this app
+      // calls - which is why this is a hook and not a call site.
+      databaseHooks: AuthHooks.registration(publisher, logger),
+      // An explicit opt-in, never a side effect of `REDIS_URL` being
+      // set. `redisStorage` deliberately does not soften a connection
+      // failure - a swallowed `null` from `get` would read as "no
+      // session" and sign every user out - so this is the one area that
+      // does *not* degrade, and choosing it is choosing to have Redis
+      // up. The default keeps sessions in the database, which is why a
+      // clean checkout can sign in with nothing running.
+      ...(redisSessions ? { secondaryStorage: redisStorage(redis) } : {}),
+    };
   },
-  AUTH_MOUNT,
-);
+  inject: [
+    AppConfigService,
+    DbConnection,
+    RedisConnection,
+    JobPublisher,
+    Logger,
+  ] as const,
+};
 
 /**
  * Named for the feature rather than the package, so `AuthModule` still means
@@ -147,17 +149,22 @@ const auth = AuthModule.forRootAsync(
  */
 @Module({
   global: true,
-  imports: [auth],
+  imports: [AuthModule.forRootAsync(options, AUTH_MOUNT)],
   providers: [CurrentUser, AuthAdminSeeder],
   /**
-   * `AuthModule` re-exported by reference, so a consumer sees `Auth`,
-   * `AuthContext` and `SessionGuard` without naming any of them - and because this
-   * module is global, the export set is what becomes globally visible. `CurrentUser`
-   * is this module's own read of that context and is what every feature actually
-   * injects.
+   * `AuthModule` re-exported **by class**, which dunx 2.2.0 resolves to the
+   * configuration on the line above - so a consumer sees `Auth`, `AuthContext` and
+   * `SessionGuard` without naming any of them, and because this module is global,
+   * the export set is what becomes globally visible. `CurrentUser` is this module's
+   * own read of that context and is what every feature actually injects.
+   *
+   * Naming the class rather than the object is what removed the hoisted `const`
+   * this file used to need: a scope is keyed on the reference `forRootAsync`
+   * returned, so before 2.2.0 a second call here named a module that was not in the
+   * graph, and the only way to say "the one I imported" was to hold onto it.
    *
    * `AuthAdminSeeder` is not exported. It runs once at boot and has no caller.
    */
-  exports: [auth, CurrentUser],
+  exports: [AuthModule, CurrentUser],
 })
 export class AccountsModule {}

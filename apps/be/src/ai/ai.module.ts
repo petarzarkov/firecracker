@@ -9,26 +9,6 @@ import { GroqService } from './services/groq.service.js';
 import { OpenRouterService } from './services/openrouter.service.js';
 
 /**
- * The providers' own HTTP client. `forRootAsync` because the timeout is a config
- * value, and a model call is slow enough that the default would cut it off
- * mid-answer.
- *
- * Hoisted to a `const` so the same reference is both imported and re-exported. A
- * scope is keyed on the module reference, so calling `forRootAsync` twice would name
- * a module that is not in the graph.
- */
-const http = HttpModule.forRootAsync(
-  {
-    useFactory: (config: AppConfigService) => ({
-      timeoutMs: config.get('ai').timeoutMs,
-      headers: { 'content-type': 'application/json' },
-    }),
-    inject: [AppConfigService] as const,
-  },
-  AI_HTTP_CLIENT,
-);
-
-/**
  * The model providers.
  *
  * **`global: true`**, because the game's bots reach `AIService` and this module
@@ -47,7 +27,24 @@ const http = HttpModule.forRootAsync(
  */
 @Module({
   global: true,
-  imports: [http],
+  /**
+   * The providers' own HTTP client. `forRootAsync` because the timeout is a config
+   * value, and a model call is slow enough that the default would cut it off
+   * mid-answer. `AI_HTTP_CLIENT` is the second, positional argument: the token the
+   * client binds, so it does not collide with the notifications one.
+   */
+  imports: [
+    HttpModule.forRootAsync(
+      {
+        useFactory: (config: AppConfigService) => ({
+          timeoutMs: config.get('ai').timeoutMs,
+          headers: { 'content-type': 'application/json' },
+        }),
+        inject: [AppConfigService] as const,
+      },
+      AI_HTTP_CLIENT,
+    ),
+  ],
   providers: [
     GoogleService,
     GroqService,
@@ -56,13 +53,17 @@ const http = HttpModule.forRootAsync(
     AIService,
   ],
   /**
-   * `http` as well as `AIService`, and the reference rather than a token list.
+   * `HttpModule` as well as `AIService`, and the module rather than a token list.
    *
    * This module is `global: true`, so a consumer resolves `AIService` from
    * anywhere - and resolving it means constructing the providers behind it,
    * which reach the named client. Exporting only `AIService` left that
    * invisible from the requesting scope and boot failed naming it.
+   *
+   * Naming the class works because dunx 2.2.0 resolves such an entry to the
+   * configuration of that class this module imports - the one above, with its
+   * `AI_HTTP_CLIENT` token. It is what retired the hoisted `const`.
    */
-  exports: [AIService, http],
+  exports: [AIService, HttpModule],
 })
 export class AIModule {}
