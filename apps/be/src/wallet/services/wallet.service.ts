@@ -73,10 +73,6 @@ export class WalletService {
     );
   }
 
-  getBalanceCents(userId: string, isDemo = false): number {
-    return this.getWallet(userId, isDemo).balanceCents;
-  }
-
   /**
    * The wallet as the caller's transaction sees it.
    *

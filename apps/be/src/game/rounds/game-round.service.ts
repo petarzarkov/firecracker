@@ -2,7 +2,6 @@ import { Logger } from '@dunx/core';
 import { SyncDatabase, transactionSync } from '@dunx/infra/db';
 import type { Page, PageOptions } from '@dunx/infra/pagination';
 import { AppConfigService } from '../../config/app.config.service.js';
-import * as schema from '../../infra/db/schema.js';
 import { ClientSeedService } from '../fairness/client-seed.service.js';
 import { Fairness } from '../fairness/fairness.js';
 import {
@@ -14,6 +13,7 @@ import {
   GameBetService,
   type RefundedBet,
 } from '../betting/game-bet.service.js';
+import type { AppSchema } from '../../infra/db/tx.js';
 
 /**
  * The lifecycle of a round, and the provably-fair record that goes with it.
@@ -33,7 +33,7 @@ export class GameRoundService {
   constructor(
     private readonly rounds: GameRoundRepository,
     private readonly bets: GameBetService,
-    private readonly db: SyncDatabase<typeof schema>,
+    private readonly db: SyncDatabase<AppSchema>,
     private readonly clientSeeds: ClientSeedService,
     private readonly config: AppConfigService,
     private readonly logger: Logger,
