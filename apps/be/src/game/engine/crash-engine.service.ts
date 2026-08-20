@@ -9,7 +9,7 @@ import {
   GAME_JOBS,
   GAME_QUEUE,
   GAME_TOPIC,
-  GameEvents,
+  publishGame,
 } from '../game.events.js';
 import { GameMath } from '../game.math.js';
 import { GameRoundStatus } from '../schema/game-round.schema.js';
@@ -326,7 +326,7 @@ export class CrashEngineService implements OnInit, OnShutdown {
     if (this.#roundId !== null)
       this.#autoCashOut?.(this.#roundId, multiplierX100);
 
-    GameEvents.publish(this.events, GAME_TOPIC, GAME_EVENTS.TICK, {
+    publishGame(this.events, GAME_TOPIC, GAME_EVENTS.TICK, {
       multiplier: GameMath.toMultiplier(multiplierX100),
       elapsed,
     });

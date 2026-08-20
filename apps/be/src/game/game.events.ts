@@ -101,16 +101,3 @@ export function publishPlayerChat<E extends keyof PlayerChatPayloads>(
 ): void {
   events.publish(topic, event, data);
 }
-
-/**
- * The static face of {@link publishGame} and {@link playerChatTopic}.
- *
- * Only here while `engine/crash-engine.service.ts`, `services/auto-cashout.service.ts`
- * and `services/game-watchdog.service.ts` still call `GameEvents.publish`. It is an
- * alias table, not a second implementation - delete it with their last call site,
- * and write new code against the functions.
- */
-export const GameEvents = Object.freeze({
-  publish: publishGame,
-  playerChatTopic,
-});

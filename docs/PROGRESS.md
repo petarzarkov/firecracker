@@ -4,16 +4,16 @@ Branch: `refactor/architecture-sweep`. Baseline: `main` @ 55236e2.
 
 Status vocabulary: `research` → `planned` → `in progress` → `done` / `blocked`.
 
-| # | Workstream | Status | Notes |
-|---|-----------|--------|-------|
-| 01 | Contracts | next | **3 live drift bugs found, 2 shipped**; 12-step plan; 11 raw `publish` holes |
-| 02 | Game module | next; bet-path gate now satisfied | 6 sub-modules + facade; 3 of 4 proposed merges rejected; 7 steps |
-| 03 | Module hygiene | done | SPA fallback fixed; audit + invites + dead routes **deleted** (1244 lines) |
-| 04 | Data layer | done | BaseRepository design typechecked at exit 0; migrations already correct |
-| 05 | Noise reduction | planned | **3 secret-leak sites, fixed**; 27 info -> 5 survive; comments 22.4% |
-| 06 | Multi-replica | done | design doc delivered; found 2 single-replica bugs + a stale prefix |
-| 07 | dunx framework | **released as 2.2.0** | published, tagged, consumed here |
-| 08 | dunx docs | done | 17 docs + README rewritten; **52 docs-vs-code discrepancies**, 4 likely code bugs |
+| #   | Workstream      | Status                            | Notes                                                                             |
+| --- | --------------- | --------------------------------- | --------------------------------------------------------------------------------- |
+| 01  | Contracts       | next                              | **3 live drift bugs found, 2 shipped**; 12-step plan; 11 raw `publish` holes      |
+| 02  | Game module     | next; bet-path gate now satisfied | 6 sub-modules + facade; 3 of 4 proposed merges rejected; 7 steps                  |
+| 03  | Module hygiene  | done                              | SPA fallback fixed; audit + invites + dead routes **deleted** (1244 lines)        |
+| 04  | Data layer      | done                              | BaseRepository design typechecked at exit 0; migrations already correct           |
+| 05  | Noise reduction | planned                           | **3 secret-leak sites, fixed**; 27 info -> 5 survive; comments 22.4%              |
+| 06  | Multi-replica   | done                              | design doc delivered; found 2 single-replica bugs + a stale prefix                |
+| 07  | dunx framework  | **released as 2.2.0**             | published, tagged, consumed here                                                  |
+| 08  | dunx docs       | done                              | 17 docs + README rewritten; **52 docs-vs-code discrepancies**, 4 likely code bugs |
 
 ## Live bugs found during research
 
@@ -24,11 +24,11 @@ Confirmed by hand, not taken on an agent's word.
    `apps/fe/src/components/game/PlayerHistory.tsx:48` against
    `apps/be/src/game/dto/game.dto.ts` (`GameBet` has no such field) and
    `game.controller.ts:49` (`#mapBet` never sets one).
-2. The `chatMessage` handler *returns* `{error}`/`{delivered}`, so dunx replies under
+2. The `chatMessage` handler _returns_ `{error}`/`{delivered}`, so dunx replies under
    the inbound event name and the client — which registers no `chatMessage` listener —
    silently drops it. "Login required to chat" and the 1000-character rejection never
    reach a user. `apps/be/src/game/game.gateway.ts:588`. This is the exact thing
-   CLAUDE.md says not to do: handlers *send* their acks.
+   CLAUDE.md says not to do: handlers _send_ their acks.
 3. `notification` is published to two topics with four mutually inconsistent payloads
    and no client handler at all. `apps/be/src/notifications/handlers/notification.jobs.ts`.
 4. `game.round.schedule` is enqueued with **no `jobId`**, at
@@ -69,7 +69,7 @@ line that never executes on a miss, because `next()` threw. **SPA deep links hav
 never worked.** `notFound` only picks which wrong answer you get: `'guarded'` (the
 dunx default) gives 401, `'public'` (what `http.options.ts:35` sets) gives 404 JSON.
 
-The inversion is worse than the miss: a route that *returns* a 404 Response **is**
+The inversion is worse than the miss: a route that _returns_ a 404 Response **is**
 rewritten to `index.html` - exactly the case the doc comment promises is protected.
 
 Fix is about ten lines in the app, using `UNMATCHED`, `HttpError` and
@@ -140,7 +140,7 @@ refuse to launch. **Not fixed.**
 
 - `crashPoint` is absent from the `GameBet` schema (0 occurrences), so every lost or
   refunded row in MY BETS still renders `x0.00x`. Workstream 01, step 1.
-- `globalChat` still *returns* `{ delivered }` / `{ error }`
+- `globalChat` still _returns_ `{ delivered }` / `{ error }`
   (`game.gateway.ts:589`), so dunx replies under the inbound name and the client -
   which registers no `chatMessage` listener - still drops it. "Login required to
   chat" and the 1000-character rejection still never reach a user.
@@ -185,7 +185,7 @@ refuse to launch. **Not fixed.**
   rather than skipped silently.
 - Four flagged framework defects are unfixed by decision: no `x-request-id` on
   failure responses, the `OPTIONS` method-miss running the whole global chain,
-  `override` of an unbound *class* token binding silently, and `'trust proxy'`.
+  `override` of an unbound _class_ token binding silently, and `'trust proxy'`.
 - PR #4, the monotonic-clock uptime fix, is open and unmerged.
 
 ### Unexplained

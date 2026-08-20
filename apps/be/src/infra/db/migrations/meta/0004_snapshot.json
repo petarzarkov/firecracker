@@ -102,16 +102,12 @@
       "indexes": {
         "account_user_id_index": {
           "name": "account_user_id_index",
-          "columns": [
-            "user_id"
-          ],
+          "columns": ["user_id"],
           "isUnique": false
         },
         "account_provider_id_index": {
           "name": "account_provider_id_index",
-          "columns": [
-            "provider_id"
-          ],
+          "columns": ["provider_id"],
           "isUnique": false
         }
       },
@@ -120,12 +116,8 @@
           "name": "account_user_id_user_id_fk",
           "tableFrom": "account",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -218,16 +210,12 @@
       "indexes": {
         "UQ_file_key": {
           "name": "UQ_file_key",
-          "columns": [
-            "key"
-          ],
+          "columns": ["key"],
           "isUnique": true
         },
         "file_user_id_index": {
           "name": "file_user_id_index",
-          "columns": [
-            "user_id"
-          ],
+          "columns": ["user_id"],
           "isUnique": false
         }
       },
@@ -236,12 +224,8 @@
           "name": "file_user_id_user_id_fk",
           "tableFrom": "file",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -329,32 +313,22 @@
       "indexes": {
         "game_bet_round_id_index": {
           "name": "game_bet_round_id_index",
-          "columns": [
-            "round_id"
-          ],
+          "columns": ["round_id"],
           "isUnique": false
         },
         "game_bet_user_id_index": {
           "name": "game_bet_user_id_index",
-          "columns": [
-            "user_id"
-          ],
+          "columns": ["user_id"],
           "isUnique": false
         },
         "game_bet_status_index": {
           "name": "game_bet_status_index",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "game_bet_round_user_demo_index": {
           "name": "game_bet_round_user_demo_index",
-          "columns": [
-            "round_id",
-            "user_id",
-            "is_demo"
-          ],
+          "columns": ["round_id", "user_id", "is_demo"],
           "isUnique": true
         }
       },
@@ -363,12 +337,8 @@
           "name": "game_bet_round_id_game_round_id_fk",
           "tableFrom": "game_bet",
           "tableTo": "game_round",
-          "columnsFrom": [
-            "round_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["round_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -376,12 +346,8 @@
           "name": "game_bet_user_id_user_id_fk",
           "tableFrom": "game_bet",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -491,16 +457,12 @@
       "indexes": {
         "game_round_status_index": {
           "name": "game_round_status_index",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "game_round_created_at_index": {
           "name": "game_round_created_at_index",
-          "columns": [
-            "created_at"
-          ],
+          "columns": ["created_at"],
           "isUnique": false
         }
       },
@@ -579,16 +541,12 @@
       "indexes": {
         "UQ_session_token": {
           "name": "UQ_session_token",
-          "columns": [
-            "token"
-          ],
+          "columns": ["token"],
           "isUnique": true
         },
         "session_user_id_index": {
           "name": "session_user_id_index",
-          "columns": [
-            "user_id"
-          ],
+          "columns": ["user_id"],
           "isUnique": false
         }
       },
@@ -597,12 +555,8 @@
           "name": "session_user_id_user_id_fk",
           "tableFrom": "session",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -706,9 +660,7 @@
       "indexes": {
         "UQ_user_email": {
           "name": "UQ_user_email",
-          "columns": [
-            "email"
-          ],
+          "columns": ["email"],
           "isUnique": true
         }
       },
@@ -766,9 +718,7 @@
       "indexes": {
         "verification_identifier_index": {
           "name": "verification_identifier_index",
-          "columns": [
-            "identifier"
-          ],
+          "columns": ["identifier"],
           "isUnique": false
         }
       },
@@ -840,16 +790,12 @@
       "indexes": {
         "wallet_transaction_wallet_id_index": {
           "name": "wallet_transaction_wallet_id_index",
-          "columns": [
-            "wallet_id"
-          ],
+          "columns": ["wallet_id"],
           "isUnique": false
         },
         "wallet_transaction_type_index": {
           "name": "wallet_transaction_type_index",
-          "columns": [
-            "type"
-          ],
+          "columns": ["type"],
           "isUnique": false
         }
       },
@@ -858,12 +804,8 @@
           "name": "wallet_transaction_wallet_id_wallet_id_fk",
           "tableFrom": "wallet_transaction",
           "tableTo": "wallet",
-          "columnsFrom": [
-            "wallet_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["wallet_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -871,12 +813,8 @@
           "name": "wallet_transaction_game_bet_id_game_bet_id_fk",
           "tableFrom": "wallet_transaction",
           "tableTo": "game_bet",
-          "columnsFrom": [
-            "game_bet_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["game_bet_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -936,10 +874,7 @@
       "indexes": {
         "wallet_user_id_is_demo_index": {
           "name": "wallet_user_id_is_demo_index",
-          "columns": [
-            "user_id",
-            "is_demo"
-          ],
+          "columns": ["user_id", "is_demo"],
           "isUnique": true
         }
       },
@@ -948,12 +883,8 @@
           "name": "wallet_user_id_user_id_fk",
           "tableFrom": "wallet",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }

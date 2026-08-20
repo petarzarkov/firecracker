@@ -4,14 +4,14 @@ Six changes on branch `feat/firecracker-driven-gaps` in `~/repos/dunx`, all driv
 friction recorded in this repo. Nothing is published and no version is bumped; the
 proposed semver and the draft changelog are at the end for a human to act on.
 
-| # | Item | Shipped | Where |
-| - | ---- | ------- | ----- |
-| 1 | Sync `paginate` | yes | `@dunx/infra/pagination` |
-| 2 | First-class throttle | yes | `@dunx/http` (not `@dunx/infra` - see below) |
-| 3 | WebSocket middleware | yes | `@dunx/http` |
-| 4 | Static serving 401-vs-404 | verdict + hardening, no behaviour change | `@dunx/http` |
-| 5 | Cleaner modules | yes | `@dunx/core` |
-| 6 | Teardown no longer short-circuits | yes (added scope) | `@dunx/core`, `@dunx/http`, `@dunx/infra` |
+| #   | Item                              | Shipped                                  | Where                                        |
+| --- | --------------------------------- | ---------------------------------------- | -------------------------------------------- |
+| 1   | Sync `paginate`                   | yes                                      | `@dunx/infra/pagination`                     |
+| 2   | First-class throttle              | yes                                      | `@dunx/http` (not `@dunx/infra` - see below) |
+| 3   | WebSocket middleware              | yes                                      | `@dunx/http`                                 |
+| 4   | Static serving 401-vs-404         | verdict + hardening, no behaviour change | `@dunx/http`                                 |
+| 5   | Cleaner modules                   | yes                                      | `@dunx/core`                                 |
+| 6   | Teardown no longer short-circuits | yes (added scope)                        | `@dunx/core`, `@dunx/http`, `@dunx/infra`    |
 
 ---
 
@@ -36,21 +36,29 @@ export interface PaginateSource<TTable extends Table, TResult> {
   };
 }
 
-export interface SyncRows { all: () => unknown[] }
+export interface SyncRows {
+  all: () => unknown[];
+}
 
-export interface PaginateParams<TTable extends Table> extends PaginateBase<TTable> {
+export interface PaginateParams<
+  TTable extends Table,
+> extends PaginateBase<TTable> {
   readonly db: PaginateSource<TTable, PromiseLike<unknown[]>>;
 }
-export interface SyncPaginateParams<TTable extends Table> extends PaginateBase<TTable> {
+export interface SyncPaginateParams<
+  TTable extends Table,
+> extends PaginateBase<TTable> {
   readonly db: PaginateSource<TTable, SyncRows>;
 }
 
-export function paginate<TTable extends Table, TRow extends Record<string, unknown>>(
-  params: SyncPaginateParams<TTable>,
-): Page<TRow>;
-export function paginate<TTable extends Table, TRow extends Record<string, unknown>>(
-  params: PaginateParams<TTable>,
-): Promise<Page<TRow>>;
+export function paginate<
+  TTable extends Table,
+  TRow extends Record<string, unknown>,
+>(params: SyncPaginateParams<TTable>): Page<TRow>;
+export function paginate<
+  TTable extends Table,
+  TRow extends Record<string, unknown>,
+>(params: PaginateParams<TTable>): Promise<Page<TRow>>;
 ```
 
 Why overloads and not a `paginateSync`: `db` already carries the answer.
@@ -87,10 +95,15 @@ dependency because the client is taken structurally, exactly as `RedisRelay` tak
 `Bun.RedisClient`.
 
 ```ts
-export interface ThrottleLimit { readonly limit: number; readonly windowSeconds: number }
+export interface ThrottleLimit {
+  readonly limit: number;
+  readonly windowSeconds: number;
+}
 export const THROTTLE: MetaKey<ThrottleLimit>;
 export const SKIP_THROTTLE: MetaKey<boolean>;
-export const Throttle: (limit: ThrottleLimit) => <F extends object>(target: F) => F;
+export const Throttle: (
+  limit: ThrottleLimit,
+) => <F extends object>(target: F) => F;
 export const SkipThrottle: () => <F extends object>(target: F) => F;
 
 export abstract class ThrottleStore {
@@ -102,22 +115,30 @@ export interface ThrottleRedis {
   expire(key: string, seconds: number): Promise<unknown>;
   ttl(key: string): Promise<number>;
 }
-export class RedisThrottleStore extends ThrottleStore { constructor(redis: ThrottleRedis) }
-export class MemoryThrottleStore extends ThrottleStore { constructor(maxKeys?: number) }
+export class RedisThrottleStore extends ThrottleStore {
+  constructor(redis: ThrottleRedis);
+}
+export class MemoryThrottleStore extends ThrottleStore {
+  constructor(maxKeys?: number);
+}
 
 export interface ThrottleOptionsInit extends ThrottleLimit {
-  readonly prefix: string;                                    // required, empty throws
+  readonly prefix: string; // required, empty throws
   readonly subject?: (req: BunRequest, ctx: RouteContext) => string | undefined;
-  readonly headers?: boolean;                                 // default true
-  readonly store?: ThrottleStore;                             // default MemoryThrottleStore
+  readonly headers?: boolean; // default true
+  readonly store?: ThrottleStore; // default MemoryThrottleStore
 }
-export class ThrottleOptions { constructor(init: ThrottleOptionsInit) }
+export class ThrottleOptions {
+  constructor(init: ThrottleOptionsInit);
+}
 export class ThrottleGuard implements Middleware {}
 
 export class ThrottleModule {
-  static forRoot(init: ThrottleOptionsInit): DynamicModule;            // global: true
+  static forRoot(init: ThrottleOptionsInit): DynamicModule; // global: true
   static forRootAsync<const D extends Deps>(
-    config: FactoryProvider<ThrottleOptionsInit, D> & { imports?: DynamicModule['imports'] },
+    config: FactoryProvider<ThrottleOptionsInit, D> & {
+      imports?: DynamicModule['imports'];
+    },
   ): DynamicModule;
 }
 ```
@@ -247,7 +268,7 @@ shipped here.** Two independent causes, both outside the framework:
 2. A miss is a **`throw`**, not a returned `Response`. `miss` raises
    `HttpError(404)` at `packages/http/src/server/routes.ts:175` and `compose`
    propagates it, so `SpaFallback`'s `const response = await next(); if
-   (response.status !== 404) return response;` never reaches its second line on the
+(response.status !== 404) return response;` never reaches its second line on the
    one path it exists for.
 
 No framework behaviour was changed. What changed is that the contract is now stated
@@ -285,10 +306,16 @@ the **token** and the configured binding wins - so a decorator becomes the place
 put the default:
 
 ```ts
-@Module({ providers: [provide(Options, { useValue: defaults })], exports: [Options] })
+@Module({
+  providers: [provide(Options, { useValue: defaults })],
+  exports: [Options],
+})
 export class Feature {
   static forRoot(init: Init): DynamicModule {
-    return { module: Feature, providers: [provide(Options, { useValue: new Options(init) })] };
+    return {
+      module: Feature,
+      providers: [provide(Options, { useValue: new Options(init) })],
+    };
   }
 }
 ```
@@ -302,7 +329,7 @@ with a message that now says which case it is.
 ```ts
 @Module({
   imports: [AuthModule.forRootAsync({ useFactory, inject })],
-  exports: [AuthModule],          // resolves to the configuration above
+  exports: [AuthModule], // resolves to the configuration above
 })
 export class AppAuthModule {}
 ```
@@ -319,9 +346,9 @@ registered more than once and the registrations bind the **same token**, the gra
 warns, naming the class and the token:
 
 > `AuthModule is registered 2 times, and each registration binds Auth again. A
-> configured module is keyed on the object forRoot() returned, and it returns a new
-> one per call - so these are separate scopes holding separate instances. Call it
-> once and share the result, or mark the module global: true...`
+configured module is keyed on the object forRoot() returned, and it returns a new
+one per call - so these are separate scopes holding separate instances. Call it
+once and share the result, or mark the module global: true...`
 
 Two registrations binding **different** tokens stay silent, because that is the
 supported shape - `RedisModule.forRoot()` alongside `RedisModule.forRoot({ name:
@@ -401,10 +428,10 @@ Four items the docs pass flagged as probable code bugs:
 
 ## What firecracker can now delete
 
-| File | Lines | Replaced by |
-| ---- | ----- | ----------- |
-| `apps/be/src/core/decorators/throttle.decorator.ts` | 25 | `Throttle`, `SkipThrottle`, `THROTTLE` from `@dunx/http` |
-| `apps/be/src/infra/redis/guards/throttle.guard.ts` | 94 | `ThrottleGuard` + `RedisThrottleStore` |
+| File                                                | Lines | Replaced by                                              |
+| --------------------------------------------------- | ----- | -------------------------------------------------------- |
+| `apps/be/src/core/decorators/throttle.decorator.ts` | 25    | `Throttle`, `SkipThrottle`, `THROTTLE` from `@dunx/http` |
+| `apps/be/src/infra/redis/guards/throttle.guard.ts`  | 94    | `ThrottleGuard` + `RedisThrottleStore`                   |
 
 Both go on the same day, with `ThrottleModule.forRootAsync({ useFactory: (config, redis)
 => ({ ...config.throttle, prefix: config.app.name, store: new RedisThrottleStore(redis),

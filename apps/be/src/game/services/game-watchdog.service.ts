@@ -8,7 +8,7 @@ import {
   GAME_EVENTS,
   GAME_JOBS,
   GAME_QUEUE,
-  GameEvents,
+  publishGame,
 } from '../game.events.js';
 import { GameRoundStatus } from '../schema/game-round.schema.js';
 import { GameRoundRepository } from '../repos/game-round.repository.js';
@@ -75,7 +75,7 @@ export class GameRoundWatchdog implements OnInit {
       try {
         const { refunds } = this.rounds.failAndRefund(round.id);
         for (const refund of refunds) {
-          GameEvents.publish(
+          publishGame(
             this.events,
             Topics.user(refund.userId),
             GAME_EVENTS.WALLET_UPDATED,

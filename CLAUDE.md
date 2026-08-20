@@ -135,7 +135,7 @@ Every read is synchronous now, `list` included. `paginate` used to force it asyn
 because it also served `Bun.SQL`; since dunx 2.2.0 its return type follows the
 driver, so a `bun:sqlite` handle gets a `Page` rather than a promise for one. The
 one documented exception to the synchrony rule is gone, which matters because the
-synchrony *is* the atomicity argument - `transactionSync` cannot yield.
+synchrony _is_ the atomicity argument - `transactionSync` cannot yield.
 
 All repositories extend `BaseRepository` or `CrudRepository` from
 `infra/db/base.repository.ts`. **No repository declares a constructor**: dunx's
@@ -148,7 +148,7 @@ file forbids.
 
 `Db` and `AppSchema` in `infra/db/tx.ts` name the handle. The **token and the type
 cannot share a name** - the transform slices the head of a parameter's annotation,
-so `db: Db` records an unresolved parameter and fails at *boot*, not at typecheck.
+so `db: Db` records an unresolved parameter and fails at _boot_, not at typecheck.
 Annotate with `SyncDatabase<AppSchema>`; the alias is for generics and `over()`.
 
 ### Timers are schedules, not `setInterval`
@@ -205,7 +205,7 @@ The Postgres version wrapped bets in `pg_try_advisory_xact_lock`. Three things r
 
 Never "simplify" the debit into a JavaScript balance check followed by an update.
 
-Point 3 only *answers* correctly if the catch recognises the violation. bun:sqlite
+Point 3 only _answers_ correctly if the catch recognises the violation. bun:sqlite
 names the **columns**, never the index: `UNIQUE constraint failed: game_bet.round_id,
 game_bet.user_id, game_bet.is_demo`. `GameBetService` matched on the index name for
 months, so the predicate was always false and a double bet surfaced as a raw 500
@@ -322,7 +322,7 @@ Redis must be up for rounds to advance: `docker compose up -d`.
 **Every suite takes its own `QUEUE_PREFIX`, via `testNamespace()`.** Only
 `queues.spec.ts` used to, and the other seven ran on the default - which is the
 prefix a developer's server uses. `QUEUE_CONSUME: 'false'` stops a suite
-*consuming*, not *producing*: the engine enqueues a round at `onInit`, a sign-up
+_consuming_, not _producing_: the engine enqueues a round at `onInit`, a sign-up
 enqueues an email, an upload enqueues a thumbnail. So a `bun run dev` inherited 500
 failed thumbnails pointing at deleted temp directories and 61 delayed
 `game-round-start` jobs. `dropTestNamespaces()` in `afterAll` removes them after,
@@ -344,7 +344,7 @@ Six sites are `info` and that is the whole list: the server listening, the first
 administrator seeded, the bots enabling, the model hierarchy loading, and the
 engine's two boot-recovery lines.
 
-**Never log a URL that carries a token.** `LOG_MASK_FIELDS` masks by field *name*, so
+**Never log a URL that carries a token.** `LOG_MASK_FIELDS` masks by field _name_, so
 a one-time password-reset link inside a string sails through it. `EmailService` used
 to log whole bodies at `info` whenever `EMAIL_WEBHOOK_URL` was unset - which is
 local, CI, and any deploy that forgot it.

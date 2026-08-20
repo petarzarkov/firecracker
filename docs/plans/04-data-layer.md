@@ -4,14 +4,14 @@ Branch `refactor/architecture-sweep`. Scope: the five bullets below, `apps/be/sr
 and every `apps/be/src/**/repos/**`. Nothing here is a guess — the claims that decide the
 design were each run against the real dependency tree before being written down:
 
-| Claim | How it was checked |
-| --- | --- |
+| Claim                                                                   | How it was checked                                                                                                                |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | A subclass with no constructor of its own inherits the base's DI record | ran the four inheritance shapes through `bun --preload @dunx/transform/preload` and read `Symbol.for('dunx.deps')` off each class |
-| A type-alias annotation is a boot error, not a typecheck error | same probe: the alias-annotated class recorded `{ unresolved: "db: Db" }` |
-| A value-import of a type alias is caught earlier | `tsc` → `TS1484: 'Db' is a type and must be imported using a type-only import` |
-| The two-tier `BaseRepository` compiles over all eight real tables | `tsc 7.0.2` with the root tsconfig's strict flags, all seven repositories restated against it, exit 0 |
-| drizzle writes `updatedAt` without being passed it | in-memory `SyncSqliteOptions`, `set({ name })` only, `updated_at` advanced |
-| Providers are constructed eagerly, before `listen()` | `@dunx/core`'s `AppFactory.create` awaits `injector.eager` in full, then `onInit`, and `main.ts` calls `app.listen()` afterwards |
+| A type-alias annotation is a boot error, not a typecheck error          | same probe: the alias-annotated class recorded `{ unresolved: "db: Db" }`                                                         |
+| A value-import of a type alias is caught earlier                        | `tsc` → `TS1484: 'Db' is a type and must be imported using a type-only import`                                                    |
+| The two-tier `BaseRepository` compiles over all eight real tables       | `tsc 7.0.2` with the root tsconfig's strict flags, all seven repositories restated against it, exit 0                             |
+| drizzle writes `updatedAt` without being passed it                      | in-memory `SyncSqliteOptions`, `set({ name })` only, `updated_at` advanced                                                        |
+| Providers are constructed eagerly, before `listen()`                    | `@dunx/core`'s `AppFactory.create` awaits `injector.eager` in full, then `onInit`, and `main.ts` calls `app.listen()` afterwards  |
 
 ---
 
@@ -24,9 +24,9 @@ head** and emits that identifier in a value position
 (`packages/transform/src/deps.ts`, `entryFor`):
 
 ```ts
-const token = slice(source, annotation.typeName);   // "SyncDatabase", type args ignored
-const cause = erased.get(token);                    // interface? alias? import type?
-if (cause === undefined) return token;              // emitted as a value
+const token = slice(source, annotation.typeName); // "SyncDatabase", type args ignored
+const cause = erased.get(token); // interface? alias? import type?
+if (cause === undefined) return token; // emitted as a value
 ```
 
 `erased` is built by `collectTypeOnlyNames`, which records every `TSTypeAliasDeclaration`,
@@ -43,7 +43,7 @@ every `TSInterfaceDeclaration` and every `import type` name in the file. So:
   ChildAliasCtor -> [ { unresolved: "db: Db" } ] | own record: true
   ```
 
-- **Type *arguments* are never emitted.** `DbConnection<Db>` records `DbConnection`; the
+- **Type _arguments_ are never emitted.** `DbConnection<Db>` records `DbConnection`; the
   `Db` inside is erased before the transform ever looks. This is what makes the alias
   useful even on constructor parameters: the head stays `SyncDatabase`, the noise moves.
 
@@ -101,25 +101,25 @@ No new file, and no barrel move: `infra/db/schema.ts` stays exactly as it is. Pu
 
 Sixteen literal `SyncDatabase<typeof schema>`, in nine files, at HEAD `55236e2` + branch:
 
-| File | Line | Position | After |
-| --- | --- | --- | --- |
-| `infra/db/tx.ts` | 14 | `DbHandle` union member | `Db` |
-| `infra/db/tx.ts` | 31 | `Tx.asHandle` return type | `Db` |
-| `infra/db/tx.ts` | 35 | the one cast | `Db` |
-| `infra/db/database.module.ts` | 29 | **ctor param**, as the type argument of `DbConnection<…>` | `DbConnection<Db>` |
-| `infra/db/database.module.ts` | 42 | `raw` getter return type | `SqliteConnection<AppSchema, Db>['raw']` |
-| `infra/db/database.module.ts` | 47 | the cast inside `raw` | `SqliteConnection<AppSchema, Db>` |
-| `users/repos/users.repository.ts` | 29 | **ctor param head** | deleted — inherited from the base |
-| `audit/repos/audit-log.repository.ts` | 19 | **ctor param head** | deleted |
-| `files/repos/files.repository.ts` | 12 | **ctor param head** | deleted |
-| `invites/repos/invites.repository.ts` | 17 | **ctor param head** | deleted |
-| `game/repos/game-round.repository.ts` | 23 | **ctor param head** | deleted |
-| `game/repos/game-bet.repository.ts` | 29 | **ctor param head** | deleted |
-| `game/repos/wallet.repository.ts` | 15 | **ctor param head** | deleted |
-| `auth/services/auth-admin.seeder.ts` | 27 | **ctor param head** | `SyncDatabase<AppSchema>` — head unchanged |
-| `game/services/game-round.service.ts` | 38 | **ctor param head** | `SyncDatabase<AppSchema>` |
-| `game/services/game-bet.service.ts` | 86 | **ctor param head** | `SyncDatabase<AppSchema>` |
-| `infra/db/base.repository.ts` | new | **ctor param head** | `SyncDatabase<AppSchema>` — the only one left under `repos/` |
+| File                                  | Line | Position                                                  | After                                                        |
+| ------------------------------------- | ---- | --------------------------------------------------------- | ------------------------------------------------------------ |
+| `infra/db/tx.ts`                      | 14   | `DbHandle` union member                                   | `Db`                                                         |
+| `infra/db/tx.ts`                      | 31   | `Tx.asHandle` return type                                 | `Db`                                                         |
+| `infra/db/tx.ts`                      | 35   | the one cast                                              | `Db`                                                         |
+| `infra/db/database.module.ts`         | 29   | **ctor param**, as the type argument of `DbConnection<…>` | `DbConnection<Db>`                                           |
+| `infra/db/database.module.ts`         | 42   | `raw` getter return type                                  | `SqliteConnection<AppSchema, Db>['raw']`                     |
+| `infra/db/database.module.ts`         | 47   | the cast inside `raw`                                     | `SqliteConnection<AppSchema, Db>`                            |
+| `users/repos/users.repository.ts`     | 29   | **ctor param head**                                       | deleted — inherited from the base                            |
+| `audit/repos/audit-log.repository.ts` | 19   | **ctor param head**                                       | deleted                                                      |
+| `files/repos/files.repository.ts`     | 12   | **ctor param head**                                       | deleted                                                      |
+| `invites/repos/invites.repository.ts` | 17   | **ctor param head**                                       | deleted                                                      |
+| `game/repos/game-round.repository.ts` | 23   | **ctor param head**                                       | deleted                                                      |
+| `game/repos/game-bet.repository.ts`   | 29   | **ctor param head**                                       | deleted                                                      |
+| `game/repos/wallet.repository.ts`     | 15   | **ctor param head**                                       | deleted                                                      |
+| `auth/services/auth-admin.seeder.ts`  | 27   | **ctor param head**                                       | `SyncDatabase<AppSchema>` — head unchanged                   |
+| `game/services/game-round.service.ts` | 38   | **ctor param head**                                       | `SyncDatabase<AppSchema>`                                    |
+| `game/services/game-bet.service.ts`   | 86   | **ctor param head**                                       | `SyncDatabase<AppSchema>`                                    |
+| `infra/db/base.repository.ts`         | new  | **ctor param head**                                       | `SyncDatabase<AppSchema>` — the only one left under `repos/` |
 
 Also deleted: the seven `import * as schema from '../../infra/db/schema.js'` lines in the
 repositories, which exist only to feed a `typeof`. The three services swap theirs for
@@ -141,15 +141,15 @@ there is a boot error, not a typecheck error. The token and the type cannot shar
 
 Seven repositories, and only what more than one of them really does:
 
-| | `findById` | other finders | `create` | `update` | `deleteById` | paginated read | `static over` | bespoke |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `UsersRepository` | ✅ | `findByEmail` | ✅ | ✅ | ✅ | `list` + 3 filters | — | — |
-| `FilesRepository` | ✅ | — | ✅ | ✅ | ✅ | `list` + 2 filters | — | — |
-| `InvitesRepository` | — | `findByEmail`, `findUsableByCode` | ✅ | ✅ | — | `list` + statuses | — | `accept`, `expireStale` |
-| `AuditLogRepository` | — | — | — | — | — | `list` + 4 filters | — | — |
-| `GameRoundRepository` | ✅ | `findCurrentRound`, `findRecentCrashes`, `findStuckRounds` | ✅ | ✅ | — | `list` | ✅ | `transition` |
-| `GameBetRepository` | — | four finders + a join | ✅ | ✅ | — | `listByUser` | ✅ | `settleActiveBetsAsLost`, `playerNameFor`, `displayName` |
-| `WalletRepository` | ✅ | `findByUserId` | — | — | — | `listTransactions` (a **second** table) | ✅ | `getOrCreate`, `debit`, `credit`, `recordTransaction`, `recentTransactions` |
+|                       | `findById` | other finders                                              | `create` | `update` | `deleteById` | paginated read                          | `static over` | bespoke                                                                     |
+| --------------------- | ---------- | ---------------------------------------------------------- | -------- | -------- | ------------ | --------------------------------------- | ------------- | --------------------------------------------------------------------------- |
+| `UsersRepository`     | ✅         | `findByEmail`                                              | ✅       | ✅       | ✅           | `list` + 3 filters                      | —             | —                                                                           |
+| `FilesRepository`     | ✅         | —                                                          | ✅       | ✅       | ✅           | `list` + 2 filters                      | —             | —                                                                           |
+| `InvitesRepository`   | —          | `findByEmail`, `findUsableByCode`                          | ✅       | ✅       | —            | `list` + statuses                       | —             | `accept`, `expireStale`                                                     |
+| `AuditLogRepository`  | —          | —                                                          | —        | —        | —            | `list` + 4 filters                      | —             | —                                                                           |
+| `GameRoundRepository` | ✅         | `findCurrentRound`, `findRecentCrashes`, `findStuckRounds` | ✅       | ✅       | —            | `list`                                  | ✅            | `transition`                                                                |
+| `GameBetRepository`   | —          | four finders + a join                                      | ✅       | ✅       | —            | `listByUser`                            | ✅            | `settleActiveBetsAsLost`, `playerNameFor`, `displayName`                    |
+| `WalletRepository`    | ✅         | `findByUserId`                                             | —        | —        | —            | `listTransactions` (a **second** table) | ✅            | `getOrCreate`, `debit`, `credit`, `recordTransaction`, `recentTransactions` |
 
 Identical bodies, seven times: the constructor. Five times: `create`, `update`. Four times:
 `findById`. Twice: `deleteById`. Seven times, differing only in the `where` expression: the
@@ -187,7 +187,8 @@ export type Identified = SQLiteTable & { readonly id: SQLiteColumn };
  * to `{ [x: string]: any }`. These two are that reduction, in one place, for the same
  * reason `Tx.asHandle` is one place: a cast that is unavoidable should be nameable.
  */
-const one = <TRow>(value: unknown): TRow | undefined => value as TRow | undefined;
+const one = <TRow>(value: unknown): TRow | undefined =>
+  value as TRow | undefined;
 const many = <TRow>(value: unknown): TRow[] => value as TRow[];
 
 /**
@@ -309,7 +310,11 @@ export abstract class CrudRepository<
   deleteById(id: string): boolean {
     return (
       many<TRow>(
-        this.db.delete(this.table).where(eq(this.table.id, id)).returning().all(),
+        this.db
+          .delete(this.table)
+          .where(eq(this.table.id, id))
+          .returning()
+          .all(),
       ).length > 0
     );
   }
@@ -324,11 +329,15 @@ export class FilesRepository extends CrudRepository<typeof files> {
 
   list(filters: ListFilesFilters): Promise<Page<FileRow>> {
     const clauses: SQL[] = [];
-    if (filters.userId !== undefined) clauses.push(eq(files.userId, filters.userId));
+    if (filters.userId !== undefined)
+      clauses.push(eq(files.userId, filters.userId));
     if (filters.search !== undefined) {
       clauses.push(like(files.name, `%${filters.search}%`));
     }
-    return this.page(filters, clauses.length === 0 ? undefined : and(...clauses));
+    return this.page(
+      filters,
+      clauses.length === 0 ? undefined : and(...clauses),
+    );
   }
 }
 ```
@@ -345,15 +354,15 @@ Three things, and the first is the one that usually gets missed:
 1. **The DI record is inherited, and dunx says so deliberately.** `@dunx/transform` writes
    `Object.defineProperty(Base, Symbol.for('dunx.deps'), …)` only on classes that declare
    a constructor, and `@dunx/core`'s reader is a plain property lookup —
-   `packages/core/src/di/deps.ts`: *"Plain prototype-chain lookup rather than
+   `packages/core/src/di/deps.ts`: _"Plain prototype-chain lookup rather than
    `Object.hasOwn`: a subclass that declares no constructor of its own inherits its
-   base's, so it must inherit the base's dependencies with it."* Confirmed by probe:
+   base's, so it must inherit the base's dependencies with it."_ Confirmed by probe:
    `ChildNoCtor` has no own record and still resolves `[SyncDatabase]`. **So no repository
    may declare a constructor.** One that does gets its own record, shadowing the base's,
    and must then re-annotate `db: SyncDatabase<AppSchema>` itself — which is why the table
    is an abstract field and not a constructor argument.
 2. **The static's `this` parameter carries the subclass type.** `static over<TSelf>(this:
-   new (db: Db) => TSelf, …): TSelf`. Verified through two levels of inheritance:
+new (db: Db) => TSelf, …): TSelf`. Verified through two levels of inheritance:
    `GameBetRepository.over(handle)` assigns to a `GameBetRepository` with no cast.
 3. **The cast stays in `Tx.asHandle`.** Unchanged, still the only one, still for the
    reason `tx.ts` already documents.
@@ -404,23 +413,23 @@ typechecks against all eight real tables under the repo's strict flags today.**
 
 A new top-level `apps/be/src/wallet/`, alongside `users/`, `invites/`, `files/`:
 
-| From | To |
-| --- | --- |
-| `game/schema/wallet.schema.ts` | `wallet/schema/wallet.schema.ts` |
-| `game/repos/wallet.repository.ts` | `wallet/repos/wallet.repository.ts` |
-| `game/services/wallet.service.ts` | `wallet/services/wallet.service.ts` |
-| `game/wallet.controller.ts` | `wallet/wallet.controller.ts` |
-| `game/dto/game.dto.ts` → `Wallet`, `WalletTransaction`, `PaginatedTransactions`, `TRANSACTION_TYPES`, `DemoQuery`, `walletQuery`, `listTransactions` | `wallet/dto/wallet.dto.ts` |
-| — | `wallet/wallet.module.ts` (new) |
+| From                                                                                                                                                 | To                                  |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `game/schema/wallet.schema.ts`                                                                                                                       | `wallet/schema/wallet.schema.ts`    |
+| `game/repos/wallet.repository.ts`                                                                                                                    | `wallet/repos/wallet.repository.ts` |
+| `game/services/wallet.service.ts`                                                                                                                    | `wallet/services/wallet.service.ts` |
+| `game/wallet.controller.ts`                                                                                                                          | `wallet/wallet.controller.ts`       |
+| `game/dto/game.dto.ts` → `Wallet`, `WalletTransaction`, `PaginatedTransactions`, `TRANSACTION_TYPES`, `DemoQuery`, `walletQuery`, `listTransactions` | `wallet/dto/wallet.dto.ts`          |
+| —                                                                                                                                                    | `wallet/wallet.module.ts` (new)     |
 
 `infra/db/schema.ts:13-17` re-points to `../../wallet/schema/wallet.schema.js`.
 
 ```ts
 @Module({
-  imports: [AccountsModule],          // CurrentUser, for the controller
+  imports: [AccountsModule], // CurrentUser, for the controller
   controllers: [WalletController],
   providers: [WalletService, WalletRepository],
-  exports: [WalletService],           // WalletRepository stays private, deliberately
+  exports: [WalletService], // WalletRepository stays private, deliberately
 })
 export class WalletModule {}
 ```
@@ -492,11 +501,25 @@ What changes on the game side, in `game/services/game-bet.service.ts`:
 // before
 const walletRepo = WalletRepository.over(tx);
 const wallet = walletRepo.findByUserId(userId, isDemo);
-const debited = this.wallets.debit(wallet.id, amount, type, description, null, walletRepo);
+const debited = this.wallets.debit(
+  wallet.id,
+  amount,
+  type,
+  description,
+  null,
+  walletRepo,
+);
 
 // after
 const wallet = this.wallets.findWallet(tx, userId, isDemo);
-const debited = this.wallets.debit(tx, wallet.id, amount, type, description, null);
+const debited = this.wallets.debit(
+  tx,
+  wallet.id,
+  amount,
+  type,
+  description,
+  null,
+);
 ```
 
 The trailing `repo: WalletRepository = this.wallets` parameter goes away, and with it the
@@ -656,14 +679,14 @@ so a second run is a no-op.
 `auth/services/auth-admin.seeder.ts` implements `OnInit`, is listed in
 `AccountsModule.providers`, is not exported, and returns immediately when
 `config.get('isProd')`. In non-production it creates `AUTH_SEED_ADMIN_EMAIL` through
-better-auth's own `api.signUpEmail` and promotes it. That path is *why* the drizzle seeder
+better-auth's own `api.signUpEmail` and promotes it. That path is _why_ the drizzle seeder
 no longer touches users: a row inserted directly has no `account` row and therefore no
 password hash, so it can never sign in. `users.spec.ts:62`, `e2e/setup/context.ts:48` and
 `e2e/utils/db-client.ts:18` all depend on that credential existing after boot.
 
-If "the admin seeder stays manual" is read as *the drizzle seeds must not be wired into
-startup*, that is today's state and this section is the contract that keeps it. If it is
-read as *`AuthAdminSeeder` should not run at boot either*, that is a behaviour change which
+If "the admin seeder stays manual" is read as _the drizzle seeds must not be wired into
+startup_, that is today's state and this section is the contract that keeps it. If it is
+read as _`AuthAdminSeeder` should not run at boot either_, that is a behaviour change which
 breaks three test fixtures and every fresh dev environment, and it should be raised as its
 own decision rather than folded into this workstream. Recommendation: leave it, because the
 production guard is what makes it safe and a documented default admin in a deployed

@@ -3,12 +3,12 @@
 Workstream 02. Branch `refactor/architecture-sweep`. Read against
 `apps/be/src/game` at 26 files / 4823 lines.
 
-The ask, as given: *"Game module — a lot of classes can be joined together and the
+The ask, as given: _"Game module — a lot of classes can be joined together and the
 game module itself needs to be split in different modules so it's not a monolith
-module."*
+module."_
 
 **Half of that ask is wrong and the other half is right.** Of the four merge
-candidates named, three are no-merges and the fourth wants *more* separation, not
+candidates named, three are no-merges and the fourth wants _more_ separation, not
 less — see §2. The split is right, and it buys something better than tidiness:
 it turns three invariants that are currently comments into boot errors. §3.
 
@@ -26,24 +26,24 @@ already — are `SyncDatabase`, `RedisConnection`, `AppConfigService`, `Logger`,
 `global: true`; `AccountsModule` and `ChatModule` are decorated classes the game
 module imports.
 
-| Class | File | Lines | Injects (game-internal in bold) |
-|---|---|---|---|
-| `GameRoundRepository` | `repos/game-round.repository.ts` | 145 | `SyncDatabase` |
-| `GameBetRepository` | `repos/game-bet.repository.ts` | 195 | `SyncDatabase` |
-| `WalletRepository` | `repos/wallet.repository.ts` | 135 | `SyncDatabase` |
-| `WalletService` | `services/wallet.service.ts` | 162 | **`WalletRepository`**, config, logger |
-| `GameBetService` | `services/game-bet.service.ts` | 309 | **`GameBetRepository`**, **`WalletService`**, `SyncDatabase`, config, logger |
-| `GameRoundService` | `services/game-round.service.ts` | 302 | **`GameRoundRepository`**, **`GameBetService`**, `SyncDatabase`, redis, config, logger |
-| `CrashEngineService` | `engine/crash-engine.service.ts` | 368 | **`GameRoundRepository`**, jobs, redis, events, schedules, config, logger |
-| `GameJobs` | `handlers/game.jobs.ts` | 174 | **`GameRoundService`**, jobs, redis, events, config, logger |
-| `AutoCashOutService` | `services/auto-cashout.service.ts` | 130 | **`GameBetService`**, **`WalletService`**, redis, events, logger |
-| `GameStateService` | `services/game-state.service.ts` | 79 | **`CrashEngineService`**, **`GameRoundService`**, **`GameBetService`** |
-| `GameRoundWatchdog` | `services/game-watchdog.service.ts` | 149 | **`GameRoundService`**, **`GameRoundRepository`**, jobs, events, schedules, config, logger |
-| `PlayerChatService` | `services/player-chat.service.ts` | 171 | **`GameBetRepository`**, redis, events, logger |
-| `GameBotsService` | `bots/game-bots.service.ts` | 254 | **`CrashEngineService`**, events, `AIService`, `ChatService`, config, logger |
-| `GameGateway` | `game.gateway.ts` | 649 | `Auth`, **`CrashEngineService`**, **`GameRoundService`**, **`GameBetService`**, **`WalletService`**, **`AutoCashOutService`**, **`GameStateService`**, **`PlayerChatService`**, `ChatService`, redis, events, `PubSub`, config, logger — **14** |
-| `GameController` | `game.controller.ts` | 190 | **`GameRoundService`**, **`GameBetService`**, **`CrashEngineService`**, `CurrentUser` |
-| `WalletController` | `wallet.controller.ts` | 92 | **`WalletService`**, `CurrentUser` |
+| Class                 | File                                | Lines | Injects (game-internal in bold)                                                                                                                                                                                                                 |
+| --------------------- | ----------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GameRoundRepository` | `repos/game-round.repository.ts`    | 145   | `SyncDatabase`                                                                                                                                                                                                                                  |
+| `GameBetRepository`   | `repos/game-bet.repository.ts`      | 195   | `SyncDatabase`                                                                                                                                                                                                                                  |
+| `WalletRepository`    | `repos/wallet.repository.ts`        | 135   | `SyncDatabase`                                                                                                                                                                                                                                  |
+| `WalletService`       | `services/wallet.service.ts`        | 162   | **`WalletRepository`**, config, logger                                                                                                                                                                                                          |
+| `GameBetService`      | `services/game-bet.service.ts`      | 309   | **`GameBetRepository`**, **`WalletService`**, `SyncDatabase`, config, logger                                                                                                                                                                    |
+| `GameRoundService`    | `services/game-round.service.ts`    | 302   | **`GameRoundRepository`**, **`GameBetService`**, `SyncDatabase`, redis, config, logger                                                                                                                                                          |
+| `CrashEngineService`  | `engine/crash-engine.service.ts`    | 368   | **`GameRoundRepository`**, jobs, redis, events, schedules, config, logger                                                                                                                                                                       |
+| `GameJobs`            | `handlers/game.jobs.ts`             | 174   | **`GameRoundService`**, jobs, redis, events, config, logger                                                                                                                                                                                     |
+| `AutoCashOutService`  | `services/auto-cashout.service.ts`  | 130   | **`GameBetService`**, **`WalletService`**, redis, events, logger                                                                                                                                                                                |
+| `GameStateService`    | `services/game-state.service.ts`    | 79    | **`CrashEngineService`**, **`GameRoundService`**, **`GameBetService`**                                                                                                                                                                          |
+| `GameRoundWatchdog`   | `services/game-watchdog.service.ts` | 149   | **`GameRoundService`**, **`GameRoundRepository`**, jobs, events, schedules, config, logger                                                                                                                                                      |
+| `PlayerChatService`   | `services/player-chat.service.ts`   | 171   | **`GameBetRepository`**, redis, events, logger                                                                                                                                                                                                  |
+| `GameBotsService`     | `bots/game-bots.service.ts`         | 254   | **`CrashEngineService`**, events, `AIService`, `ChatService`, config, logger                                                                                                                                                                    |
+| `GameGateway`         | `game.gateway.ts`                   | 649   | `Auth`, **`CrashEngineService`**, **`GameRoundService`**, **`GameBetService`**, **`WalletService`**, **`AutoCashOutService`**, **`GameStateService`**, **`PlayerChatService`**, `ChatService`, redis, events, `PubSub`, config, logger — **14** |
+| `GameController`      | `game.controller.ts`                | 190   | **`GameRoundService`**, **`GameBetService`**, **`CrashEngineService`**, `CurrentUser`                                                                                                                                                           |
+| `WalletController`    | `wallet.controller.ts`              | 92    | **`WalletService`**, `CurrentUser`                                                                                                                                                                                                              |
 
 Not injectable, no container behind them: `game.math.ts` (`GameMath`),
 `game.messages.ts` (`GameMessages`), `game.events.ts` (`GameEvents`),
@@ -147,18 +147,18 @@ itself is worth keeping (see Risk 4); the comments are not.
 
 Every one of these has zero callers. Verified by grep across `src` and `e2e`.
 
-| Dead | File | Lines | Note |
-|---|---|---|---|
-| `parseBet`, `parseSeed`, `parseChat`, `playerFacing` (free functions) | `game.messages.ts:9–61` | 53 | Byte-for-byte duplicates of the `GameMessages` statics below them. The gateway calls only `GameMessages.*`. |
-| `playerChatTopic` (free function) | `game.events.ts:57–58` | 2 | Duplicate of `GameEvents.playerChatTopic`, which is what the three callers use. |
-| `AutoCashOut` interface | `engine/crash-engine.service.ts:39–45` | 7 | The real shape is `Pending`, private to `auto-cashout.service.ts`. |
-| `GameGateway.spectators` getter | `game.gateway.ts:645–648` | 4 | |
-| `GameBetService.recentByUser` + `GameBetRepository.recentByUser` | both | 12 | The service method has no caller, so the repository method it wraps is unreachable too. |
-| `WalletService.getBalanceCents` | `services/wallet.service.ts:49–51` | 3 | |
-| `WalletService.scoped` | `services/wallet.service.ts:158–161` | 4 | **Keep this one** — step 6 uses it as the wallet seam. |
-| `RoundVerification` interface | `services/game-round.service.ts:293–302` | 10 | Duplicates the zod `RoundVerification` in `dto/game.dto.ts`; `GameController.verify` re-spreads it field by field. |
-| `GameMath.fromMultiplier` | `game.math.ts:30–32` | 3 | Only its own test calls it. Keep — it is the round-trip assertion's other half. |
-| `GameModule.exports` | `game.module.ts:62` | 1 | See §1.2c. |
+| Dead                                                                  | File                                     | Lines | Note                                                                                                               |
+| --------------------------------------------------------------------- | ---------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------ |
+| `parseBet`, `parseSeed`, `parseChat`, `playerFacing` (free functions) | `game.messages.ts:9–61`                  | 53    | Byte-for-byte duplicates of the `GameMessages` statics below them. The gateway calls only `GameMessages.*`.        |
+| `playerChatTopic` (free function)                                     | `game.events.ts:57–58`                   | 2     | Duplicate of `GameEvents.playerChatTopic`, which is what the three callers use.                                    |
+| `AutoCashOut` interface                                               | `engine/crash-engine.service.ts:39–45`   | 7     | The real shape is `Pending`, private to `auto-cashout.service.ts`.                                                 |
+| `GameGateway.spectators` getter                                       | `game.gateway.ts:645–648`                | 4     |                                                                                                                    |
+| `GameBetService.recentByUser` + `GameBetRepository.recentByUser`      | both                                     | 12    | The service method has no caller, so the repository method it wraps is unreachable too.                            |
+| `WalletService.getBalanceCents`                                       | `services/wallet.service.ts:49–51`       | 3     |                                                                                                                    |
+| `WalletService.scoped`                                                | `services/wallet.service.ts:158–161`     | 4     | **Keep this one** — step 6 uses it as the wallet seam.                                                             |
+| `RoundVerification` interface                                         | `services/game-round.service.ts:293–302` | 10    | Duplicates the zod `RoundVerification` in `dto/game.dto.ts`; `GameController.verify` re-spreads it field by field. |
+| `GameMath.fromMultiplier`                                             | `game.math.ts:30–32`                     | 3     | Only its own test calls it. Keep — it is the round-trip assertion's other half.                                    |
+| `GameModule.exports`                                                  | `game.module.ts:62`                      | 1     | See §1.2c.                                                                                                         |
 
 ~100 lines, deletable in one commit that changes no behaviour.
 
@@ -167,7 +167,7 @@ Every one of these has zero callers. Verified by grep across `src` and `e2e`.
 - **The round→wire projection exists three times.** `GameStateService.snapshot`
   (`recentCrashes`, `activeBets`), `GameController.#mapRound` and
   `GameController.#mapBet` all do the same `crashPointX100 === null ? {} : {
-  crashPoint: GameMath.toMultiplier(...) }` and `cashedOutAtX100` dance with
+crashPoint: GameMath.toMultiplier(...) }` and `cashedOutAtX100` dance with
   `exactOptionalPropertyTypes` spreads. Three copies of the rule "the seed and
   the crash point are absent until the round has crashed" — which the controller's
   own comment calls "the fairness guarantee expressed in one place".
@@ -176,7 +176,7 @@ Every one of these has zero callers. Verified by grep across `src` and `e2e`.
   (twice: `HSETNX` in `#placeBet`, `hset`+`expire` in `#submitSeed`),
   `handlers/game.jobs.ts` (`del`) and `game-round.service.ts` itself
   (`hgetall`). Four files, raw Redis verbs, one lifecycle — and that lifecycle
-  *is* the fairness ordering.
+  _is_ the fairness ordering.
 - **The seed/fairness logic is split across two files by accident.**
   `GameMath` holds `fairnessSeed` + `crashPointX100` + `DEFAULT_RNG_ALGORITHM`;
   `GameRoundService` holds `generateSeed`, `generateSeedHash`,
@@ -187,22 +187,22 @@ Every one of these has zero callers. Verified by grep across `src` and `e2e`.
 
 ## 2. Merge verdicts
 
-| Classes | Verdict | Reason |
-|---|---|---|
-| `GameStateService` (79) → `GameRoundService` (302) | **No** | Inverts the dependency direction. `GameRoundService` is what `GameJobs` injects and it currently has **no path to `CrashEngineService`**; `GameStateService` injects the engine. Merging gives every queue handler a transitive edge to the clock, which is the exact coupling `JobsModule` exists to prevent. It would also make the round service 380 lines straddling "lifecycle writes" and "lobby read model". |
-| `AutoCashOutService` (130) → `GameBetService` (309) | **No** | 439 lines, and it puts `RedisConnection`, `EventsPublisher` and an `await` loop into the one class whose entire correctness argument is *"`transactionSync` cannot yield — an async callback is a type error"*. The two are on opposite sides of that line: `GameBetService` is synchronous transactional money, `AutoCashOutService` is an async Redis sweep that publishes. It would also drag the publisher into `GameRoundService`→`GameJobs`, widening the job path's surface for nothing. |
-| `GameRoundWatchdog` (149) → `CrashEngineService` (368) | **No** | 517 lines, over the 500-line `max-lines` cap, and it gives the clock a transitive dependency on the wallet: the watchdog injects `GameRoundService` → `GameBetService` → `WalletService` → `WalletRepository`. The engine is deliberately a near-leaf on `GameRoundRepository` alone. They also differ in kind: the engine is an in-memory clock that publishes ticks; the watchdog is a scheduled sweep that writes, refunds and re-enqueues. The only thing they share is `ScheduleRegistry`, which is global. |
-| `game.math.ts` ↔ the fairness/seed logic | **Split further, not merge** | The right cut is not "join them" — it is to move the *fairness* half out of both. New pure `fairness/fairness.ts` holds `serverSeed()` (CSPRNG), `commit(seed)`, `combine(seeds)`, `autoClientSeed()`, `seedString()`, `crashPointX100()` and `DEFAULT_RNG_ALGORITHM` — every input a player re-runs, in one file, unit-testable with no container. `game.math.ts` keeps only the curve (`multiplierAtX100`) and the money (`payoutCents`, `toMultiplier`, `fromMultiplier`) and drops to ~60 lines. `GameRoundService` drops to ~200 and stops being where the CSPRNG lives. |
+| Classes                                                | Verdict                      | Reason                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------ | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GameStateService` (79) → `GameRoundService` (302)     | **No**                       | Inverts the dependency direction. `GameRoundService` is what `GameJobs` injects and it currently has **no path to `CrashEngineService`**; `GameStateService` injects the engine. Merging gives every queue handler a transitive edge to the clock, which is the exact coupling `JobsModule` exists to prevent. It would also make the round service 380 lines straddling "lifecycle writes" and "lobby read model".                                                                                                                                                           |
+| `AutoCashOutService` (130) → `GameBetService` (309)    | **No**                       | 439 lines, and it puts `RedisConnection`, `EventsPublisher` and an `await` loop into the one class whose entire correctness argument is _"`transactionSync` cannot yield — an async callback is a type error"_. The two are on opposite sides of that line: `GameBetService` is synchronous transactional money, `AutoCashOutService` is an async Redis sweep that publishes. It would also drag the publisher into `GameRoundService`→`GameJobs`, widening the job path's surface for nothing.                                                                               |
+| `GameRoundWatchdog` (149) → `CrashEngineService` (368) | **No**                       | 517 lines, over the 500-line `max-lines` cap, and it gives the clock a transitive dependency on the wallet: the watchdog injects `GameRoundService` → `GameBetService` → `WalletService` → `WalletRepository`. The engine is deliberately a near-leaf on `GameRoundRepository` alone. They also differ in kind: the engine is an in-memory clock that publishes ticks; the watchdog is a scheduled sweep that writes, refunds and re-enqueues. The only thing they share is `ScheduleRegistry`, which is global.                                                              |
+| `game.math.ts` ↔ the fairness/seed logic               | **Split further, not merge** | The right cut is not "join them" — it is to move the _fairness_ half out of both. New pure `fairness/fairness.ts` holds `serverSeed()` (CSPRNG), `commit(seed)`, `combine(seeds)`, `autoClientSeed()`, `seedString()`, `crashPointX100()` and `DEFAULT_RNG_ALGORITHM` — every input a player re-runs, in one file, unit-testable with no container. `game.math.ts` keeps only the curve (`multiplierAtX100`) and the money (`payoutCents`, `toMultiplier`, `fromMultiplier`) and drops to ~60 lines. `GameRoundService` drops to ~200 and stops being where the CSPRNG lives. |
 
-### 2.1 Merges that *are* worth doing (not in the ask)
+### 2.1 Merges that _are_ worth doing (not in the ask)
 
-| Classes | Verdict | Merged responsibility |
-|---|---|---|
-| `game.messages.ts` free functions → the `GameMessages` class | **Yes — delete, not merge** | Already duplicates. |
-| `GameStateService` + `GameController.#mapRound`/`#mapBet` → new pure `game.view.ts` | **Yes** | *"One place that decides what a round row looks like on the wire, including the rule that the seed and the crash point are absent until it has crashed."* Pure statics, no provider. `GameStateService` keeps its container-shaped part (it needs the engine) and drops to ~45 lines. |
-| The four client-seed call sites → new `ClientSeedService` | **Yes** | *"Owns the per-round client-seed pool in Redis, from a player's contribution to the combined value the draw consumes to the discard after the launch — and the nonce."* Four files stop naming a Redis key; the ordering that is the fairness guarantee becomes readable in one class. |
-| `GameGateway`'s `#placeBet`/`#cashOut` bodies → new `BetActionsService` | **Yes** | *"What placing a bet and cashing out mean: the phase gate, the debit, the entropy contribution, the auto-cashout registration, and the two frames each publishes."* 165 lines out of the gateway. This is the one extraction that must land with a test — see step 5. |
-| `GameGateway`'s upgrade → new `SocketAuthService` | **Yes** | *"Who is on the far end of a socket, including the `?token=` fallback and why it exists."* 60 lines out of the gateway, and the security comment gets a file of its own. |
+| Classes                                                                             | Verdict                     | Merged responsibility                                                                                                                                                                                                                                                                  |
+| ----------------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `game.messages.ts` free functions → the `GameMessages` class                        | **Yes — delete, not merge** | Already duplicates.                                                                                                                                                                                                                                                                    |
+| `GameStateService` + `GameController.#mapRound`/`#mapBet` → new pure `game.view.ts` | **Yes**                     | _"One place that decides what a round row looks like on the wire, including the rule that the seed and the crash point are absent until it has crashed."_ Pure statics, no provider. `GameStateService` keeps its container-shaped part (it needs the engine) and drops to ~45 lines.  |
+| The four client-seed call sites → new `ClientSeedService`                           | **Yes**                     | _"Owns the per-round client-seed pool in Redis, from a player's contribution to the combined value the draw consumes to the discard after the launch — and the nonce."_ Four files stop naming a Redis key; the ordering that is the fairness guarantee becomes readable in one class. |
+| `GameGateway`'s `#placeBet`/`#cashOut` bodies → new `BetActionsService`             | **Yes**                     | _"What placing a bet and cashing out mean: the phase gate, the debit, the entropy contribution, the auto-cashout registration, and the two frames each publishes."_ 165 lines out of the gateway. This is the one extraction that must land with a test — see step 5.                  |
+| `GameGateway`'s upgrade → new `SocketAuthService`                                   | **Yes**                     | _"Who is on the far end of a socket, including the `?token=` fallback and why it exists."_ 60 lines out of the gateway, and the security comment gets a file of its own.                                                                                                               |
 
 ### 2.2 The honest summary of §2
 
@@ -213,7 +213,7 @@ codebase documents as load-bearing — synchronous money vs asynchronous
 publishing, the clock vs the wallet, the read model vs the lifecycle — and each
 produces a 380–520 line class that straddles it.
 
-What *is* joinable is duplication, not classes: three copies of the round
+What _is_ joinable is duplication, not classes: three copies of the round
 projection, two copies of every inbound parser, four files touching one Redis
 hash. Those are the merges in §2.1, and they remove more lines than any of the
 merges in the ask would have.
@@ -279,53 +279,53 @@ apps/be/src/game/
 
 ### Where all 26 current files end up
 
-| # | Current file | Destination |
-|---|---|---|
-| 1 | `bots/game-bots.service.ts` | `bots/game-bots.service.ts` (unchanged) |
-| 2 | `dto/game.dto.ts` | **split**: game half → `surface/game.dto.ts`; `Wallet`, `WalletTransaction`, `PaginatedTransactions`, `DemoQuery`, `walletQuery`, `listTransactions` → `wallet/dto/wallet.dto.ts` (**WS04**) |
-| 3 | `engine/crash-engine.service.ts` | `engine/crash-engine.service.ts`; `EngineCommand` + `GAME_ENGINE_CHANNEL` → `engine/engine.commands.ts`; dead `AutoCashOut` deleted |
-| 4 | `game.controller.ts` | `surface/game.controller.ts`; `#mapRound`/`#mapBet` → `surface/game.view.ts` |
-| 5 | `game.events.ts` | stays at `game/game.events.ts`; free `playerChatTopic` deleted; `GameEvents.playerChatTopic` → `chat/chat.topics.ts` (step 7) |
-| 6 | `game.gateway.ts` | `surface/game.gateway.ts` |
-| 7 | `game.math.test.ts` | stays; fairness assertions → `fairness/fairness.test.ts` |
-| 8 | `game.math.ts` | stays; `fairnessSeed`, `crashPointX100`, `DEFAULT_RNG_ALGORITHM` → `fairness/fairness.ts` |
-| 9 | `game.messages.ts` | `surface/game.messages.ts`; five dead free exports deleted; chat parsers → `chat/chat.messages.ts` (step 7) |
-| 10 | `game.module.ts` | `game/game.module.ts`, now the facade |
-| 11 | `game.spec.ts` | stays at `game/game.spec.ts` |
-| 12 | `handlers/game.jobs.ts` | `rounds/round.jobs.ts` |
-| 13 | `repos/game-bet.repository.ts` | `betting/game-bet.repository.ts`; `playerNameFor` → chat (step 7) |
-| 14 | `repos/game-round.repository.ts` | `rounds/game-round.repository.ts` |
-| 15 | `repos/wallet.repository.ts` | `wallet/wallet.repository.ts` (**WS04**) |
-| 16 | `schema/game-bet.schema.ts` | `betting/game-bet.schema.ts` |
-| 17 | `schema/game-round.schema.ts` | `rounds/game-round.schema.ts` |
-| 18 | `schema/wallet.schema.ts` | `wallet/wallet.schema.ts` (**WS04**) |
-| 19 | `services/auto-cashout.service.ts` | `betting/auto-cashout.service.ts` |
-| 20 | `services/game-bet.service.ts` | `betting/game-bet.service.ts` |
-| 21 | `services/game-round.service.ts` | `rounds/game-round.service.ts` |
-| 22 | `services/game-state.service.ts` | `surface/game-state.service.ts` |
-| 23 | `services/game-watchdog.service.ts` | `rounds/round-watchdog.service.ts` |
-| 24 | `services/player-chat.service.ts` | `src/chat/services/player-chat.service.ts` (step 7; fallback: `surface/`) |
-| 25 | `services/wallet.service.ts` | `wallet/wallet.service.ts` (**WS04**) |
-| 26 | `wallet.controller.ts` | `wallet/wallet.controller.ts` (**WS04**) |
+| #   | Current file                        | Destination                                                                                                                                                                                  |
+| --- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `bots/game-bots.service.ts`         | `bots/game-bots.service.ts` (unchanged)                                                                                                                                                      |
+| 2   | `dto/game.dto.ts`                   | **split**: game half → `surface/game.dto.ts`; `Wallet`, `WalletTransaction`, `PaginatedTransactions`, `DemoQuery`, `walletQuery`, `listTransactions` → `wallet/dto/wallet.dto.ts` (**WS04**) |
+| 3   | `engine/crash-engine.service.ts`    | `engine/crash-engine.service.ts`; `EngineCommand` + `GAME_ENGINE_CHANNEL` → `engine/engine.commands.ts`; dead `AutoCashOut` deleted                                                          |
+| 4   | `game.controller.ts`                | `surface/game.controller.ts`; `#mapRound`/`#mapBet` → `surface/game.view.ts`                                                                                                                 |
+| 5   | `game.events.ts`                    | stays at `game/game.events.ts`; free `playerChatTopic` deleted; `GameEvents.playerChatTopic` → `chat/chat.topics.ts` (step 7)                                                                |
+| 6   | `game.gateway.ts`                   | `surface/game.gateway.ts`                                                                                                                                                                    |
+| 7   | `game.math.test.ts`                 | stays; fairness assertions → `fairness/fairness.test.ts`                                                                                                                                     |
+| 8   | `game.math.ts`                      | stays; `fairnessSeed`, `crashPointX100`, `DEFAULT_RNG_ALGORITHM` → `fairness/fairness.ts`                                                                                                    |
+| 9   | `game.messages.ts`                  | `surface/game.messages.ts`; five dead free exports deleted; chat parsers → `chat/chat.messages.ts` (step 7)                                                                                  |
+| 10  | `game.module.ts`                    | `game/game.module.ts`, now the facade                                                                                                                                                        |
+| 11  | `game.spec.ts`                      | stays at `game/game.spec.ts`                                                                                                                                                                 |
+| 12  | `handlers/game.jobs.ts`             | `rounds/round.jobs.ts`                                                                                                                                                                       |
+| 13  | `repos/game-bet.repository.ts`      | `betting/game-bet.repository.ts`; `playerNameFor` → chat (step 7)                                                                                                                            |
+| 14  | `repos/game-round.repository.ts`    | `rounds/game-round.repository.ts`                                                                                                                                                            |
+| 15  | `repos/wallet.repository.ts`        | `wallet/wallet.repository.ts` (**WS04**)                                                                                                                                                     |
+| 16  | `schema/game-bet.schema.ts`         | `betting/game-bet.schema.ts`                                                                                                                                                                 |
+| 17  | `schema/game-round.schema.ts`       | `rounds/game-round.schema.ts`                                                                                                                                                                |
+| 18  | `schema/wallet.schema.ts`           | `wallet/wallet.schema.ts` (**WS04**)                                                                                                                                                         |
+| 19  | `services/auto-cashout.service.ts`  | `betting/auto-cashout.service.ts`                                                                                                                                                            |
+| 20  | `services/game-bet.service.ts`      | `betting/game-bet.service.ts`                                                                                                                                                                |
+| 21  | `services/game-round.service.ts`    | `rounds/game-round.service.ts`                                                                                                                                                               |
+| 22  | `services/game-state.service.ts`    | `surface/game-state.service.ts`                                                                                                                                                              |
+| 23  | `services/game-watchdog.service.ts` | `rounds/round-watchdog.service.ts`                                                                                                                                                           |
+| 24  | `services/player-chat.service.ts`   | `src/chat/services/player-chat.service.ts` (step 7; fallback: `surface/`)                                                                                                                    |
+| 25  | `services/wallet.service.ts`        | `wallet/wallet.service.ts` (**WS04**)                                                                                                                                                        |
+| 26  | `wallet.controller.ts`              | `wallet/wallet.controller.ts` (**WS04**)                                                                                                                                                     |
 
 ### The six modules, declared
 
-| Module | Decorated or configured | Provides | Exports | Imports |
-|---|---|---|---|---|
-| `GameFairnessModule` | **`@Module`** — nothing to vary | `ClientSeedService` | `ClientSeedService` | none (`RedisConnection`, config, `Logger` are global) |
-| `GameBettingModule` | **`@Module`** | `GameBetRepository`, `GameBetService`, `AutoCashOutService` | all three | `WalletModule` (WS04) |
-| `GameRoundsModule` | **`@Module`** | `GameRoundRepository`, `GameRoundService`, `RoundJobs`, `RoundWatchdogService` | `GameRoundRepository`, `GameRoundService` | `GameBettingModule`, `GameFairnessModule` |
-| `GameEngineModule` | **`@Module`** — and this is the one where it matters | `CrashEngineService` | `CrashEngineService` | `GameRoundsModule` |
-| `GameBotsModule` | **`@Module`** | `GameBotsService` | nothing | `GameEngineModule`, `ChatModule` |
-| `GameSurfaceModule` | **`@Module`** | `GameGateway`, `SocketAuthService`, `BetActionsService`, `GameStateService`; controllers: `GameController` | nothing | `GameEngineModule`, `GameRoundsModule`, `GameBettingModule`, `GameFairnessModule`, `AccountsModule`, `ChatModule`, `WalletModule` (WS04) |
-| `GameModule` (facade) | **`@Module`** | nothing | nothing (§1.2c) | the six above |
+| Module                | Decorated or configured                              | Provides                                                                                                   | Exports                                   | Imports                                                                                                                                  |
+| --------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `GameFairnessModule`  | **`@Module`** — nothing to vary                      | `ClientSeedService`                                                                                        | `ClientSeedService`                       | none (`RedisConnection`, config, `Logger` are global)                                                                                    |
+| `GameBettingModule`   | **`@Module`**                                        | `GameBetRepository`, `GameBetService`, `AutoCashOutService`                                                | all three                                 | `WalletModule` (WS04)                                                                                                                    |
+| `GameRoundsModule`    | **`@Module`**                                        | `GameRoundRepository`, `GameRoundService`, `RoundJobs`, `RoundWatchdogService`                             | `GameRoundRepository`, `GameRoundService` | `GameBettingModule`, `GameFairnessModule`                                                                                                |
+| `GameEngineModule`    | **`@Module`** — and this is the one where it matters | `CrashEngineService`                                                                                       | `CrashEngineService`                      | `GameRoundsModule`                                                                                                                       |
+| `GameBotsModule`      | **`@Module`**                                        | `GameBotsService`                                                                                          | nothing                                   | `GameEngineModule`, `ChatModule`                                                                                                         |
+| `GameSurfaceModule`   | **`@Module`**                                        | `GameGateway`, `SocketAuthService`, `BetActionsService`, `GameStateService`; controllers: `GameController` | nothing                                   | `GameEngineModule`, `GameRoundsModule`, `GameBettingModule`, `GameFairnessModule`, `AccountsModule`, `ChatModule`, `WalletModule` (WS04) |
+| `GameModule` (facade) | **`@Module`**                                        | nothing                                                                                                    | nothing (§1.2c)                           | the six above                                                                                                                            |
 
 `RoundJobs` and `RoundWatchdogService` are **not exported**: nothing injects
 them. BullMQ finds `@JobHandler` by walking `collectModules(root)` over the whole
 graph and resolving through `app.get`, so a private job handler in a nested module
 is discovered exactly as it is today. `game.spec.ts` reaches
-`GameRoundWatchdog` the same way — `app.get` without a `from` falls back to *"any
-single scope that declares the token"*, so **the spec needs no export and no
+`GameRoundWatchdog` the same way — `app.get` without a `from` falls back to _"any
+single scope that declares the token"_, so **the spec needs no export and no
 change beyond import paths.** The corollary is a hard rule: a provider class must
 appear in exactly one `providers` array in the whole graph, or `app.get` becomes
 ambiguous.
@@ -355,19 +355,19 @@ imports one module. Anything that wants the clock says so in its `imports`.
 boot error. So there is exactly one legal move: **the class keeps every `@OnX`
 handler and delegates the body.** Concretely:
 
-| Piece | Now | After | Where the code goes |
-|---|---|---|---|
-| `#authHeaders` + `@OnUpgrade upgrade` + its 47-line comment | 63 | ~4 | `surface/socket-auth.service.ts` |
-| `@OnOpen opened` | 61 | ~18 | four `socket.send`s become a loop over `GameStateService.connectFrames(player)`; the `socket.subscribe` calls **stay** — subscription is per-socket |
-| `#placeBet` | 83 | 0 | `BetActionsService.place()` |
-| `#cashOut` | 82 | 0 | `BetActionsService.cashOut()` |
-| `#submitSeed` | 31 | ~5 | `ClientSeedService.contribute()` |
-| `joinPlayerChat` participant fan-out + `announce` | 53 | ~20 | `PlayerChatService.joined()`; `socket.subscribe` stays |
-| `globalChat` line construction + publish + record | 33 | ~10 | `ChatService.say(player, text)` |
-| `onInit` callback wiring | 21 | ~10 | stays, comment corrected (Risk 4) |
-| `spectators` getter | 4 | 0 | dead |
-| imports | 38 | ~23 | |
-| `oxlint-disable max-lines` header | 6 | 0 | |
+| Piece                                                       | Now | After | Where the code goes                                                                                                                                 |
+| ----------------------------------------------------------- | --- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `#authHeaders` + `@OnUpgrade upgrade` + its 47-line comment | 63  | ~4    | `surface/socket-auth.service.ts`                                                                                                                    |
+| `@OnOpen opened`                                            | 61  | ~18   | four `socket.send`s become a loop over `GameStateService.connectFrames(player)`; the `socket.subscribe` calls **stay** — subscription is per-socket |
+| `#placeBet`                                                 | 83  | 0     | `BetActionsService.place()`                                                                                                                         |
+| `#cashOut`                                                  | 82  | 0     | `BetActionsService.cashOut()`                                                                                                                       |
+| `#submitSeed`                                               | 31  | ~5    | `ClientSeedService.contribute()`                                                                                                                    |
+| `joinPlayerChat` participant fan-out + `announce`           | 53  | ~20   | `PlayerChatService.joined()`; `socket.subscribe` stays                                                                                              |
+| `globalChat` line construction + publish + record           | 33  | ~10   | `ChatService.say(player, text)`                                                                                                                     |
+| `onInit` callback wiring                                    | 21  | ~10   | stays, comment corrected (Risk 4)                                                                                                                   |
+| `spectators` getter                                         | 4   | 0     | dead                                                                                                                                                |
+| imports                                                     | 38  | ~23   |                                                                                                                                                     |
+| `oxlint-disable max-lines` header                           | 6   | 0     |                                                                                                                                                     |
 
 **649 → ~300**, comfortably under the 500-line `max-lines` cap, so the
 `oxlint-disable` at the top comes off — which is the real test of whether this
@@ -378,7 +378,7 @@ services, and `WalletService` all leave.
 
 **Rejected alternative, for the record:** dunx's `discoverGateway` calls
 `markedMethods` over the **prototype chain**, so `class GameGateway extends
-ChatHandlers` with `@OnMessage` on the base *would* work and *would* keep one
+ChatHandlers` with `@OnMessage` on the base _would_ work and _would_ keep one
 path and one connection. Reject it anyway: `@dunx/transform` records the
 **concrete** class's constructor parameter types, so every dependency still has
 to be listed on `GameGateway` and threaded through `super(...)`. Inheritance
@@ -398,34 +398,34 @@ gets over-generalised into "shared bindings need `global: true`":
 - `collectModules` dedupes a **decorated class** by reference (`seenClasses`), so
   the same `@Module` class imported by five modules is resolved **once**, into
   one scope, with one instance per binding.
-- `buildScopes` treats two import paths carrying the *same binding object* as a
-  diamond and **stays silent** — the code comment says so explicitly: *"Two
+- `buildScopes` treats two import paths carrying the _same binding object_ as a
+  diamond and **stays silent** — the code comment says so explicitly: _"Two
   imports exporting the same binding is a diamond… and has one answer, so it must
-  stay silent."*
+  stay silent."_
 - `forRoot()` returns a **new object per call**, and scopes are keyed on the
-  module reference. *That* is what produces two scopes and two instances.
+  module reference. _That_ is what produces two scopes and two instances.
 
 So: **as long as every game sub-module is `@Module`-decorated with no static
 factory, sharing is free.** `global: true` is the escape hatch for a binding whose
-owner *must* be configured — which is exactly why `EventsPublisherModule` exists
+owner _must_ be configured — which is exactly why `EventsPublisherModule` exists
 (its `publisher: 'socket' | 'relay'` genuinely varies between `AppModule` and
 `JobsModule`). Nothing in the game varies.
 
-| Binding | Owner after the split | Needed by | Resolution | Hazard if done wrong |
-|---|---|---|---|---|
-| **`CrashEngineService`** | `GameEngineModule` (decorated) | `GameSurfaceModule`, `GameBotsModule` | both import `GameEngineModule` → one scope, one engine | **Two clocks.** Two engines each tick their own multiplier and each enqueue their own crash job; a client sees the number stutter between two timelines. Occurs if `GameEngineModule` ever gains a `static forRoot()`, or if the engine is declared in two `providers` arrays. Guarded by the identity assertion in step 6. |
-| `GameRoundService` | `GameRoundsModule` | `GameSurfaceModule` (gateway, controller, state), `RoundJobs`, `RoundWatchdogService` | exported; jobs and watchdog live in the same module | Two round services means two loggers and two Redis handles — harmless in itself, but it hides the real problem, which is that somebody configured a module that had nothing to configure. |
-| `GameRoundRepository` | `GameRoundsModule` | `GameEngineModule`, `RoundWatchdogService`, `game.spec.ts` | exported | none — repositories are stateless over `SyncDatabase` |
-| `GameBetService` | `GameBettingModule` | `GameRoundsModule` (`settleCrash`, `failAndRefund` call it inside the caller's transaction), `GameSurfaceModule` | exported; **`GameRoundsModule` imports `GameBettingModule`, never the reverse** | If betting ever imports rounds you get a module-import cycle. dunx survives it (`exportSets` iterates to a fixed point) but it destroys the argument that bots cannot reach the money. |
-| `GameBetRepository` | `GameBettingModule` | `PlayerChatService` (`playerNameFor`) | exported — **or, better, step 7 removes this edge entirely** | A DM service reaching into the bet repository for a display name is the one genuinely wrong edge in the current graph. |
-| `ClientSeedService` | `GameFairnessModule` | `GameRoundsModule` (collect + draw at launch), `RoundJobs` (discard after launch), `GameSurfaceModule` (a player's contribution) | exported | **Two client-seed services is two nonce counters.** They both `INCR` the same Redis key so the value stays monotonic, but it is the clearest example of why `forRoot()` is banned here. |
-| **`WalletService`** (+ `WalletRepository`) | `WalletModule`, **WS04** | `GameBettingModule` (`GameBetService`, `AutoCashOutService`), `GameSurfaceModule` (the demo-wallet connect frame) | **WS04 must make `WalletModule` a decorated class**, and must export `WalletRepository` as well as `WalletService` — `GameBetService.placeBet` and `refundBetsForRound` call `WalletRepository.over(tx)` **directly**. The alternative, and the better one: switch those to `this.wallets.scoped(tx)`, which already exists on `WalletService` and currently has no caller. | A configured `WalletModule.forRoot()` imported by both betting and surface = **two wallet services**. They share one SQLite file so balances stay correct, but this is money and the graph should not be ambiguous about it. Flag to WS04. |
-| `ChatService` | `ChatModule` (already decorated) | `GameSurfaceModule`, `GameBotsModule` | both import `ChatModule` — already correct today | none |
-| `EventsPublisher` | `EventsPublisherModule` (`global: true`) | engine, round jobs, watchdog, auto-cashout, bots, surface — **six of the seven modules** | **Nothing to do and nothing to import.** Do not add it to any sub-module's `imports` and do not re-provide it anywhere. | Importing `EventsPublisherModule.forRoot()` from a sub-module binds a second publisher. This is the trap the module's own doc comment documents. |
-| `AIService` | `AIModule` (`global: true`) | bots | nothing to do | as above |
-| `ScheduleRegistry` | `SchedulesModule` (`global: true`) | engine (the per-round tick), watchdog (the sweep), bots (`@Interval`) | nothing to do | a second `ScheduleRegistry` means two copies of every schedule |
-| `JobPublisher` | `QueuesModule` (`global: true`) | engine, round jobs, watchdog | nothing to do | — |
-| `SyncDatabase`, `RedisConnection`, `AppConfigService`, `Logger`, `PubSub`, `Auth`, `CurrentUser` | global / `AccountsModule` | everywhere | nothing to do | — |
+| Binding                                                                                          | Owner after the split                    | Needed by                                                                                                                        | Resolution                                                                                                                                                                                                                                                                                                                                                                  | Hazard if done wrong                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------------------------ | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`CrashEngineService`**                                                                         | `GameEngineModule` (decorated)           | `GameSurfaceModule`, `GameBotsModule`                                                                                            | both import `GameEngineModule` → one scope, one engine                                                                                                                                                                                                                                                                                                                      | **Two clocks.** Two engines each tick their own multiplier and each enqueue their own crash job; a client sees the number stutter between two timelines. Occurs if `GameEngineModule` ever gains a `static forRoot()`, or if the engine is declared in two `providers` arrays. Guarded by the identity assertion in step 6. |
+| `GameRoundService`                                                                               | `GameRoundsModule`                       | `GameSurfaceModule` (gateway, controller, state), `RoundJobs`, `RoundWatchdogService`                                            | exported; jobs and watchdog live in the same module                                                                                                                                                                                                                                                                                                                         | Two round services means two loggers and two Redis handles — harmless in itself, but it hides the real problem, which is that somebody configured a module that had nothing to configure.                                                                                                                                   |
+| `GameRoundRepository`                                                                            | `GameRoundsModule`                       | `GameEngineModule`, `RoundWatchdogService`, `game.spec.ts`                                                                       | exported                                                                                                                                                                                                                                                                                                                                                                    | none — repositories are stateless over `SyncDatabase`                                                                                                                                                                                                                                                                       |
+| `GameBetService`                                                                                 | `GameBettingModule`                      | `GameRoundsModule` (`settleCrash`, `failAndRefund` call it inside the caller's transaction), `GameSurfaceModule`                 | exported; **`GameRoundsModule` imports `GameBettingModule`, never the reverse**                                                                                                                                                                                                                                                                                             | If betting ever imports rounds you get a module-import cycle. dunx survives it (`exportSets` iterates to a fixed point) but it destroys the argument that bots cannot reach the money.                                                                                                                                      |
+| `GameBetRepository`                                                                              | `GameBettingModule`                      | `PlayerChatService` (`playerNameFor`)                                                                                            | exported — **or, better, step 7 removes this edge entirely**                                                                                                                                                                                                                                                                                                                | A DM service reaching into the bet repository for a display name is the one genuinely wrong edge in the current graph.                                                                                                                                                                                                      |
+| `ClientSeedService`                                                                              | `GameFairnessModule`                     | `GameRoundsModule` (collect + draw at launch), `RoundJobs` (discard after launch), `GameSurfaceModule` (a player's contribution) | exported                                                                                                                                                                                                                                                                                                                                                                    | **Two client-seed services is two nonce counters.** They both `INCR` the same Redis key so the value stays monotonic, but it is the clearest example of why `forRoot()` is banned here.                                                                                                                                     |
+| **`WalletService`** (+ `WalletRepository`)                                                       | `WalletModule`, **WS04**                 | `GameBettingModule` (`GameBetService`, `AutoCashOutService`), `GameSurfaceModule` (the demo-wallet connect frame)                | **WS04 must make `WalletModule` a decorated class**, and must export `WalletRepository` as well as `WalletService` — `GameBetService.placeBet` and `refundBetsForRound` call `WalletRepository.over(tx)` **directly**. The alternative, and the better one: switch those to `this.wallets.scoped(tx)`, which already exists on `WalletService` and currently has no caller. | A configured `WalletModule.forRoot()` imported by both betting and surface = **two wallet services**. They share one SQLite file so balances stay correct, but this is money and the graph should not be ambiguous about it. Flag to WS04.                                                                                  |
+| `ChatService`                                                                                    | `ChatModule` (already decorated)         | `GameSurfaceModule`, `GameBotsModule`                                                                                            | both import `ChatModule` — already correct today                                                                                                                                                                                                                                                                                                                            | none                                                                                                                                                                                                                                                                                                                        |
+| `EventsPublisher`                                                                                | `EventsPublisherModule` (`global: true`) | engine, round jobs, watchdog, auto-cashout, bots, surface — **six of the seven modules**                                         | **Nothing to do and nothing to import.** Do not add it to any sub-module's `imports` and do not re-provide it anywhere.                                                                                                                                                                                                                                                     | Importing `EventsPublisherModule.forRoot()` from a sub-module binds a second publisher. This is the trap the module's own doc comment documents.                                                                                                                                                                            |
+| `AIService`                                                                                      | `AIModule` (`global: true`)              | bots                                                                                                                             | nothing to do                                                                                                                                                                                                                                                                                                                                                               | as above                                                                                                                                                                                                                                                                                                                    |
+| `ScheduleRegistry`                                                                               | `SchedulesModule` (`global: true`)       | engine (the per-round tick), watchdog (the sweep), bots (`@Interval`)                                                            | nothing to do                                                                                                                                                                                                                                                                                                                                                               | a second `ScheduleRegistry` means two copies of every schedule                                                                                                                                                                                                                                                              |
+| `JobPublisher`                                                                                   | `QueuesModule` (`global: true`)          | engine, round jobs, watchdog                                                                                                     | nothing to do                                                                                                                                                                                                                                                                                                                                                               | —                                                                                                                                                                                                                                                                                                                           |
+| `SyncDatabase`, `RedisConnection`, `AppConfigService`, `Logger`, `PubSub`, `Auth`, `CurrentUser` | global / `AccountsModule`                | everywhere                                                                                                                       | nothing to do                                                                                                                                                                                                                                                                                                                                                               | —                                                                                                                                                                                                                                                                                                                           |
 
 ### Two invariants to write into the facade's doc comment
 
@@ -587,7 +587,7 @@ test('there is exactly one clock', () => {
 
 `app.warnings` is the free half of that: dunx pushes a warning for every
 ambiguous import and every shadowed binding, so asserting it is empty catches a
-diamond over two *different* bindings — which is exactly the failure mode
+diamond over two _different_ bindings — which is exactly the failure mode
 `forRoot()` produces.
 
 ### Step 7 — player chat leaves the game module (optional; coordinate with WS03)
@@ -635,7 +635,7 @@ This plan's steps 1–7 are all valid whether wallet has moved or not.
    collects the client seeds and the code that discards them, and the draw sits
    between them. A reviewer should read that commit against the four-stage
    ordering in `CLAUDE.md` line by line. The plan keeps the draw's call site
-   byte-identical in position, but the guarantee is in the *sequence*, and no
+   byte-identical in position, but the guarantee is in the _sequence_, and no
    test asserts the sequence — `game.spec.ts` drives rounds through the
    repository, so it never exercises `transitionToRunning`'s seed path. Consider
    adding one integration assertion in step 3: place a bet, submit a seed,
@@ -672,7 +672,7 @@ This plan's steps 1–7 are all valid whether wallet has moved or not.
 5. **Step 6 is a big rename and it will collide with other workstreams.** WS04
    moves wallet out of the same directory; WS05 rewrites comments across every
    file in it; WS01 may change what `game.events.ts` re-exports. Step 6 should
-   land *after* WS04's wallet move if both are happening on this branch, because
+   land _after_ WS04's wallet move if both are happening on this branch, because
    rebasing a file move over a file move is the worst case. Steps 1–5 are all
    small and local and can interleave freely.
 
@@ -708,7 +708,7 @@ lines than the four in the ask would have.
 **Do not consider "split the gateway" as anything other than delegation.**
 Already a stated constraint, and worth restating with the specific dunx detail
 that makes the tempting workaround tempting: `discoverGateway` walks the
-prototype chain, so handlers on a base class *are* found and *would* keep one
+prototype chain, so handlers on a base class _are_ found and _would_ keep one
 path. It is still wrong, because `@dunx/transform` reads the concrete class's
 constructor — so inheritance moves the handler bodies while leaving all 14
 dependencies on `GameGateway`. §3 rejects it there too.
@@ -724,7 +724,7 @@ one edit away from putting the engine in every BullMQ fork.
 **Seven sub-modules would be over-splitting; six is the line.** I considered
 separate modules for the read model (`GameStateService` + projections) and for
 HTTP (`GameController` + dto). Both are rejected: a `view` module needs the
-engine *and* rounds *and* betting, which makes it a fourth importer of everything
+engine _and_ rounds _and_ betting, which makes it a fourth importer of everything
 for two files; and a separate `http` module cannot import `GameSurfaceModule`
 without dragging the gateway in, so it would duplicate five imports to own one
 controller. Both live in `surface/` — the presentation layer, HTTP and socket,
@@ -735,7 +735,7 @@ things, and `CLAUDE.md` already describes the gateway that way.
 record.** The split adds 7 module files, 5 genuinely new units
 (`fairness.ts`, `client-seed.service.ts`, `game.view.ts`,
 `socket-auth.service.ts`, `bet-actions.service.ts`) and 2 tests, against ~110
-lines of deletion and a 649→300 gateway. Only 3 of those are new *providers*. I
+lines of deletion and a 649→300 gateway. Only 3 of those are new _providers_. I
 think it pays for itself, but the thing it actually buys is not "smaller files" —
 it is that `GameBotsService` can no longer reach `GameBetService`, and
 `GameEngineModule` exporting one class makes "one clock" a property of the graph

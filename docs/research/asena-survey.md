@@ -121,7 +121,9 @@ per route**:
 ```ts
 @Middleware({ validator: true })
 export class CreateUserValidator extends ValidationService {
-  json() { return z.object({ name: z.string().min(3), email: z.string().email() }); }
+  json() {
+    return z.object({ name: z.string().min(3), email: z.string().email() });
+  }
 }
 ```
 
@@ -140,10 +142,10 @@ is the biggest ergonomic cost in Asena.
 VERIFIED. A real `AsenaAdapter` abstraction with
 `registerRoute(method, path, handler)`. Two official adapters in separate repos:
 
-| Adapter | Underneath | Portable | README benchmark |
-|---|---|---|---|
-| `@asenajs/ergenecore` | `Bun.serve()` + native Bun APIs, zero deps | Bun only | 294,962 req/s |
-| `@asenajs/hono-adapter` | Hono, whose router does the matching | Node too | 233,182 req/s |
+| Adapter                 | Underneath                                 | Portable | README benchmark |
+| ----------------------- | ------------------------------------------ | -------- | ---------------- |
+| `@asenajs/ergenecore`   | `Bun.serve()` + native Bun APIs, zero deps | Bun only | 294,962 req/s    |
+| `@asenajs/hono-adapter` | Hono, whose router does the matching       | Node too | 233,182 req/s    |
 
 Their comparison numbers: bare Hono 266,476; NestJS-on-Bun 100,975;
 NestJS-on-Node 88,083. Treat vendor benchmarks accordingly.
@@ -164,9 +166,9 @@ VERIFIED, and this is the second idea worth taking. `@asenajs/asena-cli` provide
 `asena build`, quoted verbatim:
 
 > 1. Reads asena-config.ts 2. Scans source folder for controllers, services,
-> middlewares, configs, and websockets 3. Generates a temporary build file with all
-> imports 4. Bundles the application using Bun's bundler 5. Outputs compiled files
-> to buildOptions.outdir
+>    middlewares, configs, and websockets 3. Generates a temporary build file with all
+>    imports 4. Bundles the application using Bun's bundler 5. Outputs compiled files
+>    to buildOptions.outdir
 
 Config is **`asena-config.ts`**, a TypeScript file - not a JSON rc file - plus an
 auto-generated `.asena/config.json` holding `{"adapter":"hono","suffixes":true}`.
@@ -209,7 +211,7 @@ part, and dunx has the transform records to do the same thing more cheaply.
   via `z.toJSONSchema()`, `@Hidden()` to exclude. dunx has `@ApiHidden()` already.
 - **Config and errors**: exactly one `@Config` class with `serveOptions()`,
   `onError()`, `onNotFound()`, `globalMiddlewares()`. `HttpException(status, body,
-  options?)`, and use `isHttpException()` **not** `instanceof`.
+options?)`, and use `isHttpException()` **not** `instanceof`.
 - **Events**: in-process only, `@EventService`/`@On`, wildcards, fire-and-forget.
 - **Schedules**: `@Schedule({cron})` validated at decorator-eval time by
   `Bun.cron.parse()`, so a bad cron **blocks boot**. Nice. But COULD NOT DETERMINE
@@ -222,14 +224,14 @@ part, and dunx has the transform records to do the same thing more cheaply.
 
 ## Ergonomics deltas vs dunx
 
-| | dunx | Asena |
-|---|---|---|
-| Metadata | no reflect-metadata, transform preload | reflect-metadata, two tsconfig flags |
-| Injection | constructor, types inferred | field, always-explicit token |
-| Modules | yes, with `global: true` | none, flat registry |
-| Cycles | self-resolve via thunks | must refactor, or mediate via Ulak |
-| Validation | zod inline on the route decorator | a `ValidationService` class per route |
-| Build | none needed | required for production |
+|            | dunx                                   | Asena                                 |
+| ---------- | -------------------------------------- | ------------------------------------- |
+| Metadata   | no reflect-metadata, transform preload | reflect-metadata, two tsconfig flags  |
+| Injection  | constructor, types inferred            | field, always-explicit token          |
+| Modules    | yes, with `global: true`               | none, flat registry                   |
+| Cycles     | self-resolve via thunks                | must refactor, or mediate via Ulak    |
+| Validation | zod inline on the route decorator      | a `ValidationService` class per route |
+| Build      | none needed                            | required for production               |
 
 ## Recommendation, ranked by value for effort
 

@@ -15,9 +15,9 @@ The headline is item 7, because it is the one that is broken in production today
 ### The shape of every module in `apps/be/src`
 
 `resolveRef` (`packages/core/src/di/module.ts:155-181`) confirms both rules CLAUDE.md
-states. A `DynamicModule` whose `module` class *also* carries `@Module` has its
+states. A `DynamicModule` whose `module` class _also_ carries `@Module` has its
 `imports`/`providers`/`controllers`/`exports` **concatenated**, not overridden
-(`concat`, line 149) — so decorated *and* configured really does register twice. And
+(`concat`, line 149) — so decorated _and_ configured really does register twice. And
 `collectModules` (line 189-215) dedupes a **bare class** by identity (`seenClasses`)
 but a `DynamicModule` only by object reference (`seen`) — so `X.forRoot()` called
 twice is two scopes, deliberately not deduped.
@@ -26,30 +26,30 @@ The corollary matters for the table: **a decorated class is the only shape that
 dedupes.** `@Module({ global: true })` is supported (`ModuleOptions.global`, read at
 `module.ts:169`), so a decorated class loses nothing a zero-argument `forRoot()` gave.
 
-| module | file | shape | varies per call? | verdict |
-| --- | --- | --- | --- | --- |
-| `AppModule` | `app.module.ts:106` | undecorated + `forRoot(options)` | **yes** — `source`, `logLevel`, and the `CLIENT_DIST` branch | must stay configurable: every `*.spec.ts` passes an env literal |
-| `JobsModule` | `app.module.ts:150` | undecorated + `forRoot(options)` | **yes** — same options, `publisher: 'relay'` | must stay configurable |
-| `Foundation` | `app.module.ts:39` | not a module — `static for()` returning `ModuleRef[]` | n/a | fine; it is a list builder, not a scope |
-| `AppConfigModule` | `config/app.config.module.ts:23` | undecorated + `forRoot({ source? })` | **yes** — suites pass a literal | keep configured |
-| `DatabaseModule` | `infra/db/database.module.ts:92` | undecorated + `forRoot()` **zero args** | **no** | should be `@Module({ global: true, … })`. *Workstream 04 owns this file* — verdict only |
-| `RedisCacheModule` | `infra/redis/redis.module.ts:24` | undecorated + `forRoot()` **zero args** | **no** | → decorated `@Module({ global: true })` |
-| `StorageModule` | `infra/files/storage.module.ts:28` | undecorated + `forRoot()` **zero args** | **no** | → decorated, *if* item 2 keeps `files` |
-| `ImagesConfigModule` | `infra/images/images.module.ts:15` | undecorated + `forRoot()` **zero args** | **no** | → decorated, *if* item 2 keeps `files` |
-| `ServiceModule` | `infra/health/health.module.ts:38` | undecorated + `forRoot()` **zero args** | **no** | → decorated |
-| `NotificationsModule` | `notifications/notifications.module.ts:20` | undecorated + `forRoot()` **zero args** | **no** | → decorated |
-| `QueuesModule` | `infra/queue/queue.module.ts:33` | undecorated + `forRoot({ controllers? })` | **yes** — `JobsModule` passes `false` | must stay configurable |
-| `FilesFeatureModule` | `files/files.module.ts:34` | undecorated + `forRoot({ controllers? })` | **yes** — `JobsModule` passes `false` | must stay configurable |
-| `AIModule` | `ai/ai.module.ts:29` | undecorated + `forRoot({ controllers? })` | **yes today** — becomes **no** once item 2 drops `AIController` | → decorated `@Module({ global: true })` after item 2 |
-| `SchedulesModule` | `infra/schedule/schedule.module.ts:27` | undecorated + `forRoot({ enabled? })` | **yes** — `false` in a job child | must stay configurable (see item 6 for the dunx ask that deletes the file) |
-| `EventsPublisherModule` | `notifications/events/events-publisher.module.ts:36` | undecorated + `forRoot({ publisher })` | **yes** — `socket` vs `relay` | must stay configurable |
-| `ClientModule` | `client/client.module.ts:80` | undecorated + `forRoot(dist)` | **yes** — the dist path, and absence is meaningful | must stay configurable |
-| `AccountsModule` | `auth/auth.module.ts:155` | **decorated `@Module`** over a file-scope `const auth = AuthModule.forRootAsync(…)` | n/a | right shape, wrong contents — see below |
-| `AuditModule` | `audit/audit.module.ts:17` | decorated | n/a | **delete** (item 3) |
-| `ChatModule` | `chat/chat.module.ts:20` | decorated | n/a | correct as written |
-| `UsersModule` | `users/users.module.ts:21` | decorated | n/a | correct as written |
-| `InvitesModule` | `invites/invites.module.ts:25` | decorated | n/a | right shape, dead feature (item 2) |
-| `GameModule` | `game/game.module.ts:64` | decorated | n/a | correct as written |
+| module                  | file                                                 | shape                                                                               | varies per call?                                                | verdict                                                                                 |
+| ----------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `AppModule`             | `app.module.ts:106`                                  | undecorated + `forRoot(options)`                                                    | **yes** — `source`, `logLevel`, and the `CLIENT_DIST` branch    | must stay configurable: every `*.spec.ts` passes an env literal                         |
+| `JobsModule`            | `app.module.ts:150`                                  | undecorated + `forRoot(options)`                                                    | **yes** — same options, `publisher: 'relay'`                    | must stay configurable                                                                  |
+| `Foundation`            | `app.module.ts:39`                                   | not a module — `static for()` returning `ModuleRef[]`                               | n/a                                                             | fine; it is a list builder, not a scope                                                 |
+| `AppConfigModule`       | `config/app.config.module.ts:23`                     | undecorated + `forRoot({ source? })`                                                | **yes** — suites pass a literal                                 | keep configured                                                                         |
+| `DatabaseModule`        | `infra/db/database.module.ts:92`                     | undecorated + `forRoot()` **zero args**                                             | **no**                                                          | should be `@Module({ global: true, … })`. _Workstream 04 owns this file_ — verdict only |
+| `RedisCacheModule`      | `infra/redis/redis.module.ts:24`                     | undecorated + `forRoot()` **zero args**                                             | **no**                                                          | → decorated `@Module({ global: true })`                                                 |
+| `StorageModule`         | `infra/files/storage.module.ts:28`                   | undecorated + `forRoot()` **zero args**                                             | **no**                                                          | → decorated, _if_ item 2 keeps `files`                                                  |
+| `ImagesConfigModule`    | `infra/images/images.module.ts:15`                   | undecorated + `forRoot()` **zero args**                                             | **no**                                                          | → decorated, _if_ item 2 keeps `files`                                                  |
+| `ServiceModule`         | `infra/health/health.module.ts:38`                   | undecorated + `forRoot()` **zero args**                                             | **no**                                                          | → decorated                                                                             |
+| `NotificationsModule`   | `notifications/notifications.module.ts:20`           | undecorated + `forRoot()` **zero args**                                             | **no**                                                          | → decorated                                                                             |
+| `QueuesModule`          | `infra/queue/queue.module.ts:33`                     | undecorated + `forRoot({ controllers? })`                                           | **yes** — `JobsModule` passes `false`                           | must stay configurable                                                                  |
+| `FilesFeatureModule`    | `files/files.module.ts:34`                           | undecorated + `forRoot({ controllers? })`                                           | **yes** — `JobsModule` passes `false`                           | must stay configurable                                                                  |
+| `AIModule`              | `ai/ai.module.ts:29`                                 | undecorated + `forRoot({ controllers? })`                                           | **yes today** — becomes **no** once item 2 drops `AIController` | → decorated `@Module({ global: true })` after item 2                                    |
+| `SchedulesModule`       | `infra/schedule/schedule.module.ts:27`               | undecorated + `forRoot({ enabled? })`                                               | **yes** — `false` in a job child                                | must stay configurable (see item 6 for the dunx ask that deletes the file)              |
+| `EventsPublisherModule` | `notifications/events/events-publisher.module.ts:36` | undecorated + `forRoot({ publisher })`                                              | **yes** — `socket` vs `relay`                                   | must stay configurable                                                                  |
+| `ClientModule`          | `client/client.module.ts:80`                         | undecorated + `forRoot(dist)`                                                       | **yes** — the dist path, and absence is meaningful              | must stay configurable                                                                  |
+| `AccountsModule`        | `auth/auth.module.ts:155`                            | **decorated `@Module`** over a file-scope `const auth = AuthModule.forRootAsync(…)` | n/a                                                             | right shape, wrong contents — see below                                                 |
+| `AuditModule`           | `audit/audit.module.ts:17`                           | decorated                                                                           | n/a                                                             | **delete** (item 3)                                                                     |
+| `ChatModule`            | `chat/chat.module.ts:20`                             | decorated                                                                           | n/a                                                             | correct as written                                                                      |
+| `UsersModule`           | `users/users.module.ts:21`                           | decorated                                                                           | n/a                                                             | correct as written                                                                      |
+| `InvitesModule`         | `invites/invites.module.ts:25`                       | decorated                                                                           | n/a                                                             | right shape, dead feature (item 2)                                                      |
+| `GameModule`            | `game/game.module.ts:64`                             | decorated                                                                           | n/a                                                             | correct as written                                                                      |
 
 **Six zero-argument factories** (`DatabaseModule`, `RedisCacheModule`, `StorageModule`,
 `ImagesConfigModule`, `ServiceModule`, `NotificationsModule`) exist purely to wrap a
@@ -64,7 +64,7 @@ static factories, and 6 of those 11 configure nothing.**
 
 ### What is concretely weird about the auth module
 
-`AccountsModule` (`auth/auth.module.ts`) is the one module that is *both* things at
+`AccountsModule` (`auth/auth.module.ts`) is the one module that is _both_ things at
 once without tripping the `concat` rule — the decorated class is `AccountsModule`, the
 configured one is `@dunx/auth`'s `AuthModule`. That is legal. Four things are still
 wrong with it:
@@ -78,14 +78,14 @@ wrong with it:
 2. **It is the only one-per-process root in the app that is not `global: true`.**
    `DatabaseModule`, `RedisCacheModule`, `StorageModule`, `ImagesConfigModule`,
    `SchedulesModule`, `QueuesModule`, `AIModule` and `EventsPublisherModule` are all
-   global. The doc comment at lines 130-140 argues for a decorated class *because*
+   global. The doc comment at lines 130-140 argues for a decorated class _because_
    `forRoot()` returns a new object per call — correct, but that argument produces
    `@Module({ global: true })`, not four hand-threaded `imports: [AccountsModule]`
    lines. Adding `global: true` deletes all four.
 3. **It carries three unrelated things that are not auth.** `ProfileController` (four
    routes across three unrelated concerns — see item 4), `AuthAdminSeeder` (a boot task
    bound only so the container constructs it, explicitly not exported, line 151), and
-   `AvatarsService` — a **BetterTTV emote proxy** that injects the *AI module's* named
+   `AvatarsService` — a **BetterTTV emote proxy** that injects the _AI module's_ named
    HTTP client (`auth/services/avatars.service.ts:29`) and has nothing to do with
    authentication. Its own doc comment calls the pairing "slightly odd".
 4. **It imports `AuditModule` for a dead route.** Line 142 imports it, and line 37-38
@@ -128,14 +128,14 @@ which also deletes the four `imports: [AccountsModule]` lines and the dead
 `FilesFeatureModule` is in both graphs (`app.module.ts:122`, `:158`). All six routes
 are live and none has a caller outside tests:
 
-| route | `files/files.controller.ts` | caller |
-| --- | --- | --- |
-| `GET /api/files` | :39 | none (spec/e2e only) |
-| `POST /api/files` | :59 | none |
-| `GET /api/files/:fileId` | :66 | none |
-| `GET /api/files/:fileId/download` | :78 | none |
-| `GET /api/files/:fileId/link` | :88 | none |
-| `DELETE /api/files/:fileId` | :95 | none |
+| route                             | `files/files.controller.ts` | caller               |
+| --------------------------------- | --------------------------- | -------------------- |
+| `GET /api/files`                  | :39                         | none (spec/e2e only) |
+| `POST /api/files`                 | :59                         | none                 |
+| `GET /api/files/:fileId`          | :66                         | none                 |
+| `GET /api/files/:fileId/download` | :78                         | none                 |
+| `GET /api/files/:fileId/link`     | :88                         | none                 |
+| `DELETE /api/files/:fileId`       | :95                         | none                 |
 
 The frontend has exactly **two** `apiFetch` call sites in the whole app —
 `components/game/PlayerHistory.tsx:170` (`GET /api/game/my-bets`) and
@@ -224,13 +224,13 @@ as HTTP-less.**
 
 Three separable pieces:
 
-| piece | file | lines | who reads it |
-| --- | --- | --- | --- |
-| `AuditController` `GET /api/audit-logs` (admin) | `audit/audit.controller.ts` | 23 | **nobody** — no FE, no spec, no e2e |
-| `AuditService` → `AuditLogRepository` → `audit_log` | `audit/services`, `audit/repos`, `audit/schema`, `audit/dto` | 156 | only `AuditController` and `ProfileController.entries()` |
-| `ProfileController` `GET /api/profile/audit` (admin) | `auth/profile.controller.ts:46-56` | 11 | **nobody** |
-| `AuditContextMiddleware` | `core/middlewares/audit-context.middleware.ts` | 40 | the triggers |
-| `AuditTriggers` | `infra/db/triggers.ts` | 92 | writes `audit_log` |
+| piece                                                | file                                                         | lines | who reads it                                             |
+| ---------------------------------------------------- | ------------------------------------------------------------ | ----- | -------------------------------------------------------- |
+| `AuditController` `GET /api/audit-logs` (admin)      | `audit/audit.controller.ts`                                  | 23    | **nobody** — no FE, no spec, no e2e                      |
+| `AuditService` → `AuditLogRepository` → `audit_log`  | `audit/services`, `audit/repos`, `audit/schema`, `audit/dto` | 156   | only `AuditController` and `ProfileController.entries()` |
+| `ProfileController` `GET /api/profile/audit` (admin) | `auth/profile.controller.ts:46-56`                           | 11    | **nobody**                                               |
+| `AuditContextMiddleware`                             | `core/middlewares/audit-context.middleware.ts`               | 40    | the triggers                                             |
+| `AuditTriggers`                                      | `infra/db/triggers.ts`                                       | 92    | writes `audit_log`                                       |
 
 So: rows are written by SQLite triggers on every `INSERT`/`UPDATE`/`DELETE` of the
 `user` table (`triggers.ts:10-16` — one table, four columns), attributed by a middleware
@@ -258,6 +258,7 @@ touched here.
 **Verdict: drop entirely.**
 
 Files to delete:
+
 - `apps/be/src/audit/audit.controller.ts`
 - `apps/be/src/audit/audit.module.ts`
 - `apps/be/src/audit/dto/audit-log.dto.ts`
@@ -268,6 +269,7 @@ Files to delete:
 - `apps/be/src/infra/db/triggers.ts`
 
 References to remove:
+
 - `apps/be/src/app.module.ts:5` (`AuditModule` import), `:8` (`AuditContextMiddleware`
   import), `:124` (`AuditModule` in imports), `:137` (`AuditContextMiddleware` in
   providers, and the doc comment above it)
@@ -295,12 +297,12 @@ they have to be hand-added to the generated file, and they must come **before** 
 
 Yes, but one route out of four.
 
-| route | line | evidence |
-| --- | --- | --- |
-| `GET /api/profile` | :36 | **no FE caller.** The client resolves its session through better-auth's own `/api/auth/get-session` (`apps/fe/src/systems/auth/auth-api.ts:254`). Referenced only by tests: `users.spec.ts:70,187`, `infra/redis/redis.spec.ts:122,196`, `e2e/invites/invites.e2e.ts:65` |
-| `GET /api/profile/audit` | :48 | **zero callers repo-wide** |
-| `GET /api/profile/avatars/trending` | :67 | **live** — `apps/fe/src/components/ui/AvatarPicker.tsx:42`. One of only two `apiFetch` calls in the entire frontend |
-| `GET /api/profile/anonymous` | :85 | **no FE caller.** One test: `users.spec.ts:154` |
+| route                               | line | evidence                                                                                                                                                                                                                                                                 |
+| ----------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET /api/profile`                  | :36  | **no FE caller.** The client resolves its session through better-auth's own `/api/auth/get-session` (`apps/fe/src/systems/auth/auth-api.ts:254`). Referenced only by tests: `users.spec.ts:70,187`, `infra/redis/redis.spec.ts:122,196`, `e2e/invites/invites.e2e.ts:65` |
+| `GET /api/profile/audit`            | :48  | **zero callers repo-wide**                                                                                                                                                                                                                                               |
+| `GET /api/profile/avatars/trending` | :67  | **live** — `apps/fe/src/components/ui/AvatarPicker.tsx:42`. One of only two `apiFetch` calls in the entire frontend                                                                                                                                                      |
+| `GET /api/profile/anonymous`        | :85  | **no FE caller.** One test: `users.spec.ts:154`                                                                                                                                                                                                                          |
 
 `/anonymous` is a demonstration of `@Public()` + `CurrentUser.optional()`, not a
 feature: the socket already tells the client whether it is a spectator
@@ -470,20 +472,20 @@ passes — stale. Only consumer is `ThumbnailsService`.
 
 ### Total
 
-| | now | after dunx asks |
-| --- | --- | --- |
-| `infra/db` (workstream 04) | ≈114 | ≈114 |
-| `infra/redis` | ≈115 | ≈115 |
-| `infra/queue` | 215 | 215 |
-| `infra/schedule` | 0 | 48 |
-| `infra/health` | ≈8 | ≈63 |
-| `infra/files` + `infra/images` | ≈16 | ≈16 |
-| **total** | **≈468** | **≈571** |
+|                                | now      | after dunx asks |
+| ------------------------------ | -------- | --------------- |
+| `infra/db` (workstream 04)     | ≈114     | ≈114            |
+| `infra/redis`                  | ≈115     | ≈115            |
+| `infra/queue`                  | 215      | 215             |
+| `infra/schedule`               | 0        | 48              |
+| `infra/health`                 | ≈8       | ≈63             |
+| `infra/files` + `infra/images` | ≈16      | ≈16             |
+| **total**                      | **≈468** | **≈571**        |
 
 **Verdict: about a fifth of `infra/` goes, but almost none of it for the reason the
 bullet assumes.** The wrappers are not redundant — `maxRetries: 0`, the pragma order,
 `isolation: 'process'`, `global: true` and `critical: false` are each a specific bug
-that was fixed. What actually goes is *dead code inside* `infra/` (`CacheService`, and
+that was fixed. What actually goes is _dead code inside_ `infra/` (`CacheService`, and
 `triggers.ts` via item 3), one hand-rolled ops UI that dunx ships better
 (`QueuesController` vs `@dunx/dashboard`), and the six zero-argument factory wrappers
 from item 1. Three more files go only if dunx accepts two one-field options.
@@ -545,11 +547,11 @@ const response = await next();
 if (response.status !== HttpStatusCode.NOT_FOUND) return response;
 ```
 
-On an unmatched path `await next()` *throws*, so that line never executes. **The rewrite
+On an unmatched path `await next()` _throws_, so that line never executes. **The rewrite
 branch is unreachable for exactly the case it was written for.**
 
 A second, targeted experiment (bare dunx app, one middleware that logs whether `next()`
-returned or threw, one controller route that *returns* a 404 `Response`) shows the
+returned or threw, one controller route that _returns_ a 404 `Response`) shows the
 inversion in full:
 
 ```
@@ -559,7 +561,7 @@ routed 404 /thing/missing  → 200 REWRITTEN       (rewrite applied)
 ```
 
 So `SpaFallback` does the opposite of both halves of its doc comment: it never rewrites
-an unmatched path, and it *does* rewrite a real route's own 404 — the case the comment
+an unmatched path, and it _does_ rewrite a real route's own 404 — the case the comment
 promises is safe ("a real route's own 404 for a missing record is never replaced by a
 page saying nothing is wrong"). Today no firecracker controller returns a bare 404
 `Response`, so only the first half bites; the second is a live trap for the next one
@@ -653,6 +655,7 @@ Commit-sized, each independently shippable, ordered so nothing is deleted before
 last reference goes.
 
 **Step 1 — Fix the SPA fallback (item 7).** The one user-visible bug.
+
 - `apps/be/src/client/client.module.ts` — catch the thrown `HttpError` and gate on
   `UNMATCHED`; keep the three existing conditions; update the doc comment to say the
   miss is a throw and why.
@@ -664,6 +667,7 @@ last reference goes.
   returns its own 404 is left alone.
 
 **Step 2 — Two throttle defects (item 5).** Small, unblocks nothing, costs nothing.
+
 - `apps/be/src/config/dto/redis-vars.dto.ts:34` — `THROTTLE_PREFIX` default becomes
   `'firecracker'`.
 - `apps/be/src/files/files.controller.ts:58` — delete the no-op `@Throttle` or lower it
@@ -671,6 +675,7 @@ last reference goes.
 
 **Step 3 — Drop the audit module (item 3).** The file list and reference list are in
 item 3 above, plus the hand-edited migration.
+
 - Delete: `apps/be/src/audit/` (6 files),
   `apps/be/src/core/middlewares/audit-context.middleware.ts`,
   `apps/be/src/infra/db/triggers.ts`.
@@ -683,6 +688,7 @@ item 3 above, plus the hand-edited migration.
   no consumer.
 
 **Step 4 — Delete the invites feature (item 2).**
+
 - Delete: `apps/be/src/invites/` (6 files), `apps/be/e2e/invites/invites.e2e.ts`.
 - Edit: `apps/be/src/app.module.ts` (import + registration),
   `apps/be/src/infra/db/schema.ts:7`, `libs/contracts` (`InviteStatus`),
@@ -691,6 +697,7 @@ item 3 above, plus the hand-edited migration.
 - New migration dropping the `invites` table.
 
 **Step 5 — Delete the AI controller and `CacheService` (items 2 and 6).**
+
 - Delete: `apps/be/src/ai/ai.controller.ts`, `apps/be/src/ai/dto/ai.dto.ts`,
   `apps/be/src/infra/redis/services/cache.service.ts`.
 - Edit: `apps/be/src/ai/ai.module.ts` (drop `AIModuleOptions` and the `controllers`
@@ -699,6 +706,7 @@ item 3 above, plus the hand-edited migration.
   `apps/be/src/infra/redis/redis.spec.ts` (drop the `CacheService` blocks).
 
 **Step 6 — Decorate the zero-argument modules (item 1).** Mechanical, one commit.
+
 - `apps/be/src/infra/redis/redis.module.ts`,
   `apps/be/src/infra/files/storage.module.ts`,
   `apps/be/src/infra/images/images.module.ts`,
@@ -711,8 +719,9 @@ item 3 above, plus the hand-edited migration.
 - Leave `apps/be/src/infra/db/database.module.ts` to workstream 04.
 
 **Step 7 — Split `AccountsModule` (item 1).**
+
 - `apps/be/src/auth/auth.module.ts` — `@Module({ global: true, imports: [auth],
-  providers: [CurrentUser, AuthAdminSeeder], exports: [auth, CurrentUser] })`.
+providers: [CurrentUser, AuthAdminSeeder], exports: [auth, CurrentUser] })`.
 - New `apps/be/src/auth/profile.module.ts` — `ProfileController` + `AvatarsService`.
 - `apps/be/src/app.module.ts` — register `ProfileModule`.
 - Drop `imports: [AccountsModule]` from `apps/be/src/users/users.module.ts:17`,
@@ -723,6 +732,7 @@ item 3 above, plus the hand-edited migration.
 
 **Step 8 — Wire `files` to avatars (item 2).** The commit that makes `files`,
 `StorageModule`, `ImagesConfigModule` and the sandboxed `media` queue load-bearing.
+
 - `apps/be/src/auth/profile.controller.ts` — `POST /api/profile/avatar`, multipart,
   `FilesService.upload` → `users.image`.
 - `apps/be/src/auth/profile.module.ts` — import whatever exports `FilesService`
@@ -733,6 +743,7 @@ item 3 above, plus the hand-edited migration.
 
 **Step 9 — Replace `QueuesController` with `@dunx/dashboard` (item 6).** Last, because
 it adds a dependency and re-points a spec.
+
 - Delete: `apps/be/src/infra/queue/queues.controller.ts`,
   `apps/be/src/infra/queue/queue-unavailable.middleware.ts`.
 - Edit: `apps/be/src/infra/queue/queue.module.ts` (the `controllers` option now only
@@ -763,7 +774,9 @@ export interface ThrottleLimit {
 export const THROTTLE: MetaKey<ThrottleLimit>;
 
 /** Method or class scope. A handler's own value wins over its class's. */
-export const Throttle: (limit: ThrottleLimit) => MethodDecorator & ClassDecorator;
+export const Throttle: (
+  limit: ThrottleLimit,
+) => MethodDecorator & ClassDecorator;
 export const SkipThrottle: () => MethodDecorator & ClassDecorator;
 
 export abstract class ThrottleStore {
@@ -786,7 +799,10 @@ export class ThrottleOptions {
     /** REQUIRED. No default - see (4). Throw on an empty string. */
     readonly prefix: string;
     /** Default: `ClientAddress.of(req) ?? 'anonymous'`. */
-    readonly subject?: (req: BunRequest, ctx: RouteContext) => string | undefined;
+    readonly subject?: (
+      req: BunRequest,
+      ctx: RouteContext,
+    ) => string | undefined;
     /** Default true: RateLimit-Limit / -Remaining / -Reset and Retry-After on a 429. */
     readonly headers?: boolean;
   });
@@ -797,9 +813,14 @@ export class ThrottleGuard implements Middleware {}
 
 export class ThrottleModule {
   /** global: true; exports ThrottleOptions, ThrottleStore and ThrottleGuard. */
-  static forRoot(init: ConstructorParameters<typeof ThrottleOptions>[0]): DynamicModule;
+  static forRoot(
+    init: ConstructorParameters<typeof ThrottleOptions>[0],
+  ): DynamicModule;
   static forRootAsync<const D extends Deps>(
-    config: FactoryProvider<ConstructorParameters<typeof ThrottleOptions>[0], D>,
+    config: FactoryProvider<
+      ConstructorParameters<typeof ThrottleOptions>[0],
+      D
+    >,
   ): DynamicModule;
 }
 ```
@@ -813,7 +834,7 @@ Behaviour that must hold, each because firecracker's copy learned it:
 2. **Fails open.** A store error allows the request and logs **once per process**, never
    once per request. An unreachable Redis must degrade a route, never become a 503.
 3. **Key shape `${prefix}:throttle:${ctx.controller}:${ctx.handler}:${subject}`.**
-   Per *handler*, not per path: two verbs on one path count separately, and a
+   Per _handler_, not per path: two verbs on one path count separately, and a
    parameterised path does not fragment into a key per id.
 4. **`prefix` has no default and an empty one throws.** firecracker inherited
    `'dunx-template'` from the template and shipped with it
@@ -846,7 +867,7 @@ schedule, which is why firecracker has a 48-line wrapper whose only job is
 ### C. `RedisIndicator` should take `critical` as an option (item 6)
 
 ```ts
-new RedisIndicator(redis, { critical: false })
+new RedisIndicator(redis, { critical: false });
 ```
 
 `RedisIndicator` is critical by default, which is right for an app whose sessions live

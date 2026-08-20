@@ -1,7 +1,7 @@
 import type { RouteSchemas } from '@dunx/http';
 import { TRANSACTION_TYPES } from '@firecracker/contracts';
 import { z } from 'zod';
-import { Paginated, pageOptionsSchema } from '../../core/pagination.dto.js';
+import { pageOptionsSchema } from '../../core/pagination.dto.js';
 
 export const Wallet = z
   .object({
@@ -25,11 +25,6 @@ export const WalletTransaction = z
   })
   .meta({ id: 'WalletTransaction', title: 'One movement on a balance' });
 export type WalletTransaction = z.infer<typeof WalletTransaction>;
-
-export const PaginatedTransactions = Paginated.of(
-  WalletTransaction,
-  'PaginatedTransactions',
-);
 
 /**
  * Which of the caller's two wallets a route is about.

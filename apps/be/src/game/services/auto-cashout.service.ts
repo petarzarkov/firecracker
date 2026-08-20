@@ -2,7 +2,7 @@ import { Logger } from '@dunx/core';
 import { RedisConnection } from '@dunx/infra/redis';
 import { EventsPublisher } from '../../notifications/events/events.publisher.js';
 import { Topics } from '../../notifications/events/events.js';
-import { GAME_EVENTS, GAME_TOPIC, GameEvents } from '../game.events.js';
+import { GAME_EVENTS, GAME_TOPIC, publishGame } from '../game.events.js';
 import { GameMath } from '../game.math.js';
 import { GameBetService } from './game-bet.service.js';
 import { WalletService } from '../../wallet/services/wallet.service.js';
@@ -88,7 +88,7 @@ export class AutoCashOutService {
         const bet = this.bets.cashOut(userId, roundId, at, entry.isDemo);
         const wallet = this.wallets.getWallet(userId, entry.isDemo);
 
-        GameEvents.publish(
+        publishGame(
           this.events,
           Topics.user(userId),
           GAME_EVENTS.WALLET_UPDATED,
@@ -97,21 +97,16 @@ export class AutoCashOutService {
             isDemo: entry.isDemo,
           },
         );
-        GameEvents.publish(
-          this.events,
-          GAME_TOPIC,
-          GAME_EVENTS.BET_CASHED_OUT,
-          {
-            // The auto-cashout's whole point is that the player is not watching.
-            // Without their id the client cannot tell the frame is about them, and
-            // the bet panel keeps offering a cash-out that already happened.
-            userId,
-            username: entry.username,
-            multiplier: GameMath.toMultiplier(at),
-            payoutCents: bet.payoutCents ?? 0,
-            isDemo: entry.isDemo,
-          },
-        );
+        publishGame(this.events, GAME_TOPIC, GAME_EVENTS.BET_CASHED_OUT, {
+          // The auto-cashout's whole point is that the player is not watching.
+          // Without their id the client cannot tell the frame is about them, and
+          // the bet panel keeps offering a cash-out that already happened.
+          userId,
+          username: entry.username,
+          multiplier: GameMath.toMultiplier(at),
+          payoutCents: bet.payoutCents ?? 0,
+          isDemo: entry.isDemo,
+        });
       } catch (error) {
         // Already cashed out by hand, or the round ended underneath us. Neither
         // is worth an error - the bet is settled either way.
