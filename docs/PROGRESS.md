@@ -8,7 +8,7 @@ Status vocabulary: `research` → `planned` → `in progress` → `done` / `bloc
 |---|-----------|--------|-------|
 | 01 | Contracts | planned | **3 live drift bugs found, 2 shipped**; 12-step plan; 11 raw `publish` holes |
 | 02 | Game module | planned | 6 sub-modules + facade; 3 of 4 proposed merges rejected; 7 steps |
-| 03 | Module hygiene | research | audit/files/profile-controller usage unknown |
+| 03 | Module hygiene | planned | **SPA deep links never worked**; drop audit + invites; infra verdict is mostly "keep" |
 | 04 | Data layer | research | — |
 | 05 | Noise reduction | queued | runs last, touches every file |
 | 06 | Multi-replica | done | design doc delivered; found 2 single-replica bugs + a stale prefix |
@@ -56,6 +56,28 @@ Verified by hand. These matter because they are the reason the code reads the wa
    comment in `config/dto/db-vars.dto.ts`.
 3. The gateway's `onInit` justifies itself with `GameModule.forRoot({ engine: false })`,
    which no longer exists.
+
+## The 404/401 root cause
+
+Firecracker owns this, not dunx.
+
+`@dunx/http` signals an unmatched path by **throwing** `HttpError(404)` from the
+innermost fallback (`packages/http/src/server/routes.ts:175`), and `compose`
+propagates throws untouched (`server/middleware.ts:25`). `SpaFallback` inspects
+`(await next()).status === NOT_FOUND` (`apps/be/src/client/client.module.ts:48`) - a
+line that never executes on a miss, because `next()` threw. **SPA deep links have
+never worked.** `notFound` only picks which wrong answer you get: `'guarded'` (the
+dunx default) gives 401, `'public'` (what `http.options.ts:35` sets) gives 404 JSON.
+
+The inversion is worse than the miss: a route that *returns* a 404 Response **is**
+rewritten to `index.html` - exactly the case the doc comment promises is protected.
+
+Fix is about ten lines in the app, using `UNMATCHED`, `HttpError` and
+`HttpStatusCode`, all already exported from `@dunx/http`. No framework change.
+
+Related: `CLIENT_DIST=''` is a boot failure. `app.module.ts:128` gates the module on
+`length > 0`, `http.options.ts:75` gates the middleware on `=== undefined`, so an
+empty string registers `SpaFallback` without the module that provides it.
 
 ## Decisions taken up front
 
