@@ -76,15 +76,12 @@ describe('the generated OpenAPI document', () => {
   });
 
   test('named request-body schemas become components', () => {
-    // `AIQuery`, `AcceptInvite`, `CreateInvite`, `CreateUser`, `UpdateUser` and
-    // `ValidationError` are this app's; `User`,
-    // `Session`, `Account` and `Verification` came from Better Auth's own schema
-    // through `contribute`, and the merge keeps both without a prefix.
+    // `AIQuery`, `CreateUser`, `UpdateUser` and `ValidationError` are this app's;
+    // `User`, `Session`, `Account` and `Verification` came from Better Auth's own
+    // schema through `contribute`, and the merge keeps both without a prefix.
     expect(Object.keys(doc.components.schemas).sort()).toEqual([
       'AIQuery',
-      'AcceptInvite',
       'Account',
-      'CreateInvite',
       'CreateUser',
       'Session',
       'UpdateUser',

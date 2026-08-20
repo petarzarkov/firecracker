@@ -40,19 +40,6 @@ export class DbClient {
     return row?.n ?? 0;
   }
 
-  /**
-   * An invitation's code, which is the one thing the API deliberately never
-   * returns - see the note on the `Invite` schema. This is the database standing
-   * in for the email the invitee would have received.
-   */
-  inviteCodeFor(email: string): string {
-    const row = this.#db
-      .query('SELECT code FROM invite WHERE email = ?')
-      .get(email) as { code: string } | null;
-    if (row === null) throw new Error(`no invite for ${email}`);
-    return row.code;
-  }
-
   /** The newest round, whatever phase it is in. */
   currentRound(): { id: string; status: string } | null {
     return this.#db

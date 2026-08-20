@@ -51,8 +51,7 @@ export class EmailService {
     const { webhookUrl, timeoutMs, maxRetries } = this.config.get('email');
 
     if (webhookUrl === undefined) {
-      // Never the body. A password-reset body carries better-auth's one-time link
-      // and an invite body carries a code that grants account creation at a role,
+      // Never the body. A password-reset body carries better-auth's one-time link,
       // so logging it turns anyone with log access into an account-takeover path.
       // `LOG_MASK_FIELDS` cannot help: it masks by field name, and a token inside
       // a URL string is not a field.

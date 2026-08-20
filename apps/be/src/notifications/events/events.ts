@@ -26,7 +26,6 @@ export const JOBS = Object.freeze({
   USER_REGISTERED: 'user.registered',
   USER_BANNED: 'user.banned',
   PASSWORD_RESET: 'user.password-reset',
-  USER_INVITED: 'user.invited',
   FILE_THUMBNAIL: 'file.thumbnail',
 } as const);
 export type JobName = (typeof JOBS)[keyof typeof JOBS];
@@ -64,14 +63,6 @@ export interface UserBannedJob {
   readonly userId: string;
   readonly email: string;
   readonly reason: string;
-}
-
-export interface UserInvitedJob {
-  readonly email: string;
-  readonly role: string;
-  /** The one-time link, already carrying the code. */
-  readonly url: string;
-  readonly expiresAt: string;
 }
 
 export interface PasswordResetJob {

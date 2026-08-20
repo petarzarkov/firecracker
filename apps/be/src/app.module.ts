@@ -9,7 +9,6 @@ import { StorageModule } from './infra/files/storage.module.js';
 import { ImagesConfigModule } from './infra/images/images.module.js';
 import { AppConfigService } from './config/app.config.service.js';
 import { GameModule } from './game/game.module.js';
-import { InvitesModule } from './invites/invites.module.js';
 import { DatabaseModule } from './infra/db/database.module.js';
 import { ServiceModule } from './infra/health/health.module.js';
 import { QueuesModule } from './infra/queue/queue.module.js';
@@ -118,7 +117,6 @@ export class AppModule {
         ServiceModule.forRoot(),
         UsersModule,
         FilesFeatureModule.forRoot(),
-        InvitesModule,
         // Last: the engine's `onInit` recovers the in-flight round and needs the
         // queue, the database and Redis all constructed before it runs.
         GameModule,
