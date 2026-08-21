@@ -2,6 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { Storage } from '@dunx/infra/files';
 import { Images } from '@dunx/infra/images';
 import { createTestServer, type TestServer } from '@dunx/testing';
 import { UnrecoverableError, type Job } from 'bullmq';
@@ -273,6 +274,26 @@ describe('the thumbnail job', () => {
     expect(result.key).toBe(`${uploaded.body.key}.thumb.webp`);
     expect(result.width).toBe(4);
     expect(result.bytes).toBeGreaterThan(0);
+    expect(result.recorded).toBe(true);
+  });
+
+  /**
+   * The render outlives the row it was for - a source still readable, an id that no
+   * longer names anything, which is what a file deleted mid-encode looks like from
+   * in here. A player replacing an avatar seconds after uploading it is the way to
+   * get there: the delete takes the thumbnail *the row names*, and this one was not
+   * on the row yet.
+   */
+  test('a thumbnail whose file vanished is deleted rather than orphaned', async () => {
+    const uploaded = await upload(png(), adminToken);
+    const media = server.app.get(MediaJobs);
+
+    const result = await media.thumbnail({
+      data: { fileId: crypto.randomUUID(), key: uploaded.body.key, width: 4 },
+    } as Job<FileThumbnailJob>);
+
+    expect(result.recorded).toBe(false);
+    expect(await server.app.get(Storage).exists(result.key)).toBe(false);
   });
 });
 

@@ -15,6 +15,8 @@ export interface ThumbnailResult {
   readonly width: number;
   readonly height: number;
   readonly bytes: number;
+  /** `false` when the file was deleted while this rendered - see {@link MediaJobs}. */
+  readonly recorded: boolean;
 }
 
 /**
@@ -46,15 +48,29 @@ export class MediaJobs {
     const thumbnailKey = `${key}.thumb.webp`;
 
     await this.storage.write(thumbnailKey, encoded.bytes);
-    this.repo.update(fileId, { thumbnailKey });
+    /**
+     * The row can be **gone by the time this lands**, and the write above would
+     * then be an object nothing names. A player who replaces an avatar within a
+     * second of uploading it does exactly that: `FilesService.remove` deletes the
+     * source and the thumbnail *the row knows about*, and this one is not on the
+     * row yet - so it survived the delete that was meant to take it.
+     *
+     * The update says which happened: `undefined` is no such row.
+     */
+    const recorded = this.repo.update(fileId, { thumbnailKey }) !== undefined;
+    if (!recorded) await this.storage.delete(thumbnailKey);
 
     const result: ThumbnailResult = {
       key: thumbnailKey,
       width: encoded.width,
       height: encoded.height,
       bytes: encoded.bytes.byteLength,
+      recorded,
     };
-    this.logger.debug('thumbnail rendered', { fileId, ...result });
+    this.logger.debug(
+      recorded ? 'thumbnail rendered' : 'thumbnail discarded, its file is gone',
+      { fileId, ...result },
+    );
     return result;
   }
 
