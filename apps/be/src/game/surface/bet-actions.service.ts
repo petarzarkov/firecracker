@@ -20,11 +20,10 @@ import type { SocketPlayer } from './socket-auth.service.js';
 /**
  * What placing a bet and cashing out actually mean.
  *
- * The phase gate, the debit, the entropy contribution, the auto-cashout
- * registration and the two frames each publishes - 165 lines that were private
- * methods on `GameGateway` and had no test, because reaching them meant a socket.
- * They are money, and money that only a browser can exercise is money nobody
- * checks: every case in `bet-actions.service.test.ts` is a bug that shipped once.
+ * The phase gate, the debit, the entropy contribution, the auto-cashout registration
+ * and the two frames each publishes. Not the gateway's, because money that only a
+ * browser can exercise is money nobody checks: every case in
+ * `bet-actions.service.test.ts` is a bug that shipped once.
  *
  * Every path returns an **ack**, never a throw. A socket handler has no error
  * mapper behind it, so a refusal that throws reaches the player as nothing at all.
@@ -147,9 +146,9 @@ export class BetActionsService {
      * and rejecting every demo cash-out - silently, because a rejection is an ack
      * rather than an error. That shipped, and only a browser caught it.
      *
-     * The old gateway kept `client.data.isDemo` on the socket. Reading the bet row
-     * is better than that was: it survives a reconnect, it cannot drift from the
-     * database, and it is right when a player has bets in both modes.
+     * Reading the bet row also survives a reconnect, cannot drift from the database,
+     * and is right when a player holds bets in both modes - none of which a flag on
+     * the socket manages.
      */
     const requested =
       typeof data === 'object' && data !== null && 'isDemo' in data

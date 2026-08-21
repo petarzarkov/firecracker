@@ -13,8 +13,6 @@ import {
 /**
  * Balances and the ledger behind them.
  *
- * ## The seam
- *
  * This class is the only wallet symbol anything outside this module may name. The
  * game imports no `WalletRepository`, no `wallets` table and no `WalletRow` -
  * which is what makes the guard below unroutable-around rather than merely
@@ -27,23 +25,16 @@ import {
  *  - **Required, and first.** Money moves only inside somebody's transaction, and
  *    an optional handle is how that stops being true - the default quietly becomes
  *    the injected connection and the debit commits on its own, outside the bet it
- *    belongs to. This replaced a trailing `repo: WalletRepository = this.wallets`,
- *    which was exactly that default.
+ *    belongs to.
  *  - **Synchronous.** `GameBetService` calls three of these between the first and
  *    last statement of a `transactionSync` callback, whose return type refuses a
- *    promise. That refusal is the whole of what replaced
- *    `pg_try_advisory_xact_lock`: read-check-write cannot interleave because it
- *    cannot yield. An `async` method here would remove that guarantee without
- *    breaking a single test.
+ *    promise. That refusal is the only thing standing in for a lock:
+ *    read-check-write cannot interleave because it cannot yield. An `async` method
+ *    here would remove that guarantee without breaking a single test.
  *
- * ## What left with the billing module
- *
- * The Postgres version constructed a `Stripe` client in this constructor and
- * carried `deposit`, `withdraw` and a webhook handler. Billing is out of scope for
- * this build, so there is no funding path: a real wallet opens at zero and stays
- * there until one is added back, and the demo wallet is where the game is actually
- * played. `WalletTransactionType.DEPOSIT` survives in the enum because old ledger
- * rows still carry it - see the note on the schema.
+ * There is no funding path - a real wallet opens at zero and the demo wallet is
+ * where the game is actually played. `WalletTransactionType.DEPOSIT` survives in the
+ * enum because old ledger rows still carry it.
  *
  * Every mutation writes a ledger row beside it, which is what makes a disputed
  * balance replayable instead of arguable.

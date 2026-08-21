@@ -29,10 +29,10 @@ export type SocketFrame = {
  * The lobby's read model: one object describing the whole game as it stands, and
  * the frames a socket is owed the moment it opens.
  *
- * Split out of `GameGateway` because it is a projection rather than transport - it
- * composes the engine's in-memory clock with the database's round and bets, and
- * nothing about it needs a socket. What it does *not* own is subscription: that is
- * per-connection, so the `socket.subscribe` calls stay in the gateway.
+ * A projection rather than transport - it composes the engine's in-memory clock with
+ * the database's round and bets, and nothing about it needs a socket. What it does
+ * *not* own is subscription: that is per-connection, so the `socket.subscribe` calls
+ * stay in the gateway.
  */
 export class GameStateService {
   constructor(
@@ -47,9 +47,7 @@ export class GameStateService {
    * Everything a client is sent on connect, in order, and addressed to it alone.
    *
    * Published to nobody: this is one client's own view of the round, its own
-   * scrollback, its own identity and its own balance. It was four `socket.send`
-   * calls in `@OnOpen` with the payloads built inline; as a list it is testable and
-   * the gateway's handler is a loop.
+   * scrollback, its own identity and its own balance.
    */
   async connectFrames(
     player: SocketPlayer | null,

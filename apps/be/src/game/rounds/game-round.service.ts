@@ -15,16 +15,9 @@ import type { AppSchema } from '../../infra/db/tx.js';
 /**
  * The lifecycle of a round, and the provably-fair record that goes with it.
  *
- * The order of operations here is the fairness guarantee and is not free to
- * change: the server seed is committed (as its hash) when the round is *created*,
- * the players contribute entropy during WAITING, and only at the transition to
- * RUNNING - once the window is shut - is the crash point drawn. Drawing it any
- * earlier would mean the players' seeds could not have influenced it; drawing it
- * any later would mean we chose it knowing the bets.
- *
- * The values themselves live in `fairness/fairness.ts`, which has no container
- * behind it. This class decides *when* each one is produced, which is the half a
- * unit test cannot see.
+ * The values live in `fairness/fairness.ts`, which has no container behind it. This
+ * class decides *when* each one is produced, and that ordering is the guarantee -
+ * `ClientSeedService` states the sequence and what moving a step would cost.
  */
 export class GameRoundService {
   constructor(

@@ -20,29 +20,17 @@ import { GAME_ENGINE_CHANNEL, type EngineCommand } from './engine.commands.js';
  * The clock. It holds the current round in memory, ticks the multiplier, and
  * decides the moment of the crash.
  *
- * ## One process, and why
- *
- * The tick loop must run in **exactly one** process. Two would each publish their
- * own crash job and each broadcast their own ticks, so a client would see the
- * multiplier stutter between two timelines. The module that declares this class is
- * decorated and carries no static factory for exactly that reason: dunx dedupes a
- * decorated module by reference, so however many modules import it there is one
- * scope and one engine, where a `forRoot()` would hand each importer its own. It is
- * also why the `app` service in docker-compose.prod.yml cannot be scaled past one
- * replica.
+ * The tick loop must run in **exactly one** process, or a client sees the multiplier
+ * stutter between two timelines. `EngineModule` is decorated and carries no static
+ * factory for exactly that reason: dunx dedupes a decorated module by reference, so
+ * however many modules import it there is one scope and one engine, where a
+ * `forRoot()` would hand each importer its own.
  *
  * The database is the truth and this is a cache of it: everything here is
  * recoverable from `game_round` at boot, which is what `#recover` does.
  *
- * ## One callback survived, and it is not scaffolding
- *
- * The NestJS version also had `registerTickEmitter()`, installed from the gateway to
- * break a circular module import. That one is gone - dunx records a dependency as a
- * thunk evaluated at resolution, so a cycle resolves on its own and this class
- * publishes its own ticks.
- *
- * {@link CrashEngineService.registerAutoCashOutHandler} stays, for a different
- * reason: injecting `AutoCashOutService` would give the clock a path to
+ * {@link CrashEngineService.registerAutoCashOutHandler} is a callback rather than an
+ * injection because injecting `AutoCashOutService` would give the clock a path to
  * `GameBetService` and through it to the wallet. This class's only game dependency
  * is `GameRoundRepository`, and the callback is what keeps it that way.
  */
@@ -81,8 +69,6 @@ export class CrashEngineService implements OnInit, OnShutdown {
   onShutdown(): void {
     this.#clear();
   }
-
-  // What the gateway and the controller read
 
   get roundId(): string | null {
     return this.#roundId;
@@ -135,8 +121,6 @@ export class CrashEngineService implements OnInit, OnShutdown {
   ): void {
     this.#autoCashOut = fn;
   }
-
-  // Transitions, driven by the worker over pub/sub
 
   setWaiting(roundId: string): void {
     this.#clear();
@@ -236,7 +220,7 @@ export class CrashEngineService implements OnInit, OnShutdown {
   /**
    * `RedisConnection.subscribe` opens its own second connection - a client in
    * subscriber mode refuses every data command - so this needs no separate
-   * client of its own. The NestJS version managed that connection by hand.
+   * client of its own.
    */
   async #listenForCommands(): Promise<void> {
     try {

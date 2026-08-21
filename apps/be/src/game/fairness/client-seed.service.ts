@@ -17,17 +17,9 @@ export interface CollectedSeeds {
 
 /**
  * The per-round client-seed pool, from a player's contribution to the value the
- * draw consumes to the discard after the launch - and the nonce.
- *
- * ## Why this is a class and not four `redis.send` calls
- *
- * It was four. `GameRoundService.clientSeedsKey` was a `static` reached from the
- * gateway (`HSETNX` when a bet arrived, `hset` + `expire` when a seed did), from the
- * start job (`del`), and from the round service itself (`hgetall`) - four files
- * naming one Redis key with raw verbs. That lifecycle *is* the fairness ordering,
- * and it could not be read anywhere.
- *
- * ## The ordering, which is the guarantee
+ * draw consumes to the discard after the launch - and the nonce. One class rather
+ * than four files reaching for one Redis key with raw verbs, because that lifecycle
+ * *is* the fairness ordering and it has to be readable in one place:
  *
  * 1. The round is created with `SHA256(serverSeed)` committed and **no crash point**.
  * 2. The betting window: {@link ClientSeedService.contribute} for a player who sends

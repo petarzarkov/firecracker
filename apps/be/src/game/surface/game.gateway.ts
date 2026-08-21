@@ -44,26 +44,14 @@ import {
 /**
  * The one socket. Chat, notifications and the game all arrive here.
  *
- * ## Why one gateway and not two
+ * One class because one connection - dunx mounts a gateway as a route, so a second
+ * class is a second path and a second upgrade to authenticate. The only way to make
+ * it smaller is to keep every `@OnX` here and move the bodies out, so what is left
+ * is transport: subscribe, parse, delegate, send.
  *
- * The NestJS version had two `@WebSocketGateway()` classes, and Nest merged them
- * onto a single socket.io server - so a browser opened one connection and received
- * both `chatMessage` and `gameTick` on it. dunx mounts a gateway as a **route**, so
- * two classes means two paths, two connections, and two upgrades to authenticate.
- * A path claimed by two gateways is a boot error rather than a merge.
- *
- * One connection is the behaviour worth keeping, so this is one class - and the
- * only way to make it smaller is to keep every `@OnX` here and move the bodies
- * out. What is left is transport: subscribe, parse, delegate, send. The upgrade is
- * `SocketAuthService`, a bet and a cash-out are `BetActionsService`, the connect
- * frames are `GameStateService`, and the seed pool is `ClientSeedService`.
- *
- * ## The upgrade does not refuse anonymous callers
- *
- * The template's `EventsGateway` returned a 401 from `@OnUpgrade` when there was no
- * session. This one must not: watching the rocket climb is what a visitor does
- * before signing up, and the crash history and the lobby are public. A spectator
- * gets `context.player === null`, and every handler that spends money checks it.
+ * The upgrade never refuses an anonymous caller - see `SocketAuthService` for why.
+ * A spectator gets `context.player === null`, and every handler that spends money
+ * checks it.
  */
 @Gateway('/ws')
 export class GameGateway {
@@ -159,7 +147,7 @@ export class GameGateway {
    *
    * `ServerPayloads` is the merged map from `@firecracker/contracts`: this is the
    * one socket the game, the chat and the rooms all ride, so a frame leaving here
-   * can be any of them - and `data: unknown` was the last untyped `send` left.
+   * can be any of them.
    */
   #send<E extends keyof ServerPayloads>(
     socket: Socket<GameSocketContext>,
@@ -301,8 +289,6 @@ export class GameGateway {
   }
 
   /**
-   * Global chat, folded in from the template's `EventsGateway`.
-   *
    * The ack goes out under `chatAck`, explicitly, like every other handler here.
    * Returning it instead sent it back as a `chatMessage` - the name the client had
    * just used to ask - so both rejections below were dropped in the browser and a

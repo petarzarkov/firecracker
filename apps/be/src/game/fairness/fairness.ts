@@ -2,13 +2,8 @@ import { Rng, type RngAlgorithm } from '@arkv/rng';
 
 /**
  * Everything a player re-runs to check us, in one file with no container behind it.
- *
- * It was spread over two: `GameMath` held the seed string and the draw, and
- * `GameRoundService` held the server seed, the commitment and the client-seed
- * combination - so the fairness contract was half arithmetic and half lifecycle,
- * and the dividing line was "does it need injecting" rather than "is it part of
- * the promise". Every input to a published crash point is here now, and
- * `game.math.ts` keeps the curve and the money.
+ * Every input to a published crash point is here; `game.math.ts` keeps the curve
+ * and the money.
  *
  * The order these are called in is the guarantee, and it is not free to change:
  * {@link Fairness.serverSeed} and {@link Fairness.commit} at creation, player

@@ -20,13 +20,12 @@ interface Pending {
 /**
  * "Cash me out at 2x", and the tick loop that honours it.
  *
- * Split out of `GameGateway` because it is a mechanism rather than transport: it
- * owns a Redis hash, its lifetime is the round's rather than a connection's, and a
- * player who sets an auto-cashout and then closes the tab must still be paid.
+ * Not the gateway's, because its lifetime is the round's rather than a connection's:
+ * a player who sets an auto-cashout and then closes the tab must still be paid.
  *
- * Redis rather than memory for exactly that last reason, and for one more: the
- * gateway process can restart mid-round, and a promise made to a player should not
- * depend on which process was holding it.
+ * Redis rather than memory for that reason and one more: the process can restart
+ * mid-round, and a promise made to a player should not depend on which process was
+ * holding it.
  */
 export class AutoCashOutService {
   constructor(

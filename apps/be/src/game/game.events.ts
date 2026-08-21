@@ -57,16 +57,10 @@ export interface RoundJob {
  * Publish a game frame, with the payload checked against the event name.
  *
  * A thin wrapper over `EventsPublisher.publish`, which takes `unknown` because it
- * serves chat and notifications too.
- *
- * ## Why every game publish goes through here
- *
- * Nothing checked that a frame matched the interface named after it. Three
- * separate bugs came out of that gap, all the same shape: `betPlaced`, `betAck`
- * and `betCashedOut` each went out without the `userId` a client needs to
- * recognise itself, and each was found by a person looking at a screen rather than
- * by a compiler. With `@firecracker/contracts` on both sides, the missing field is
- * now an error here *and* at the handler that would have read it.
+ * serves chat and notifications too. Every game publish goes through here because
+ * nothing else checks that a frame matches the interface named after it: `betPlaced`,
+ * `betAck` and `betCashedOut` each shipped without the `userId` a client needs to
+ * recognise itself, and each was found by a person looking at a screen.
  */
 export function publishGame<E extends keyof GamePayloads>(
   events: EventsPublisher,

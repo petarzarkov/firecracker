@@ -19,15 +19,9 @@ export interface GameSocketContext {
  * Who is on the far end of a socket, and the one uncomfortable thing the answer
  * depends on.
  *
- * A file of its own because that discomfort deserves the space: 60 lines of the
- * gateway were this, and most of them were the comment below.
- *
- * ## This never refuses the upgrade
- *
- * The template's `EventsGateway` returned a 401 from `@OnUpgrade` when there was no
- * session. This must not: watching the rocket climb is what a visitor does before
- * signing up, and the crash history and the lobby are public. A spectator gets
- * `player === null`, and every handler that spends money checks for it.
+ * This never refuses the upgrade: watching the rocket climb is what a visitor does
+ * before signing up, and the crash history and the lobby are public. A spectator
+ * gets `player === null`, and every handler that spends money checks for it.
  */
 export class SocketAuthService {
   /**
@@ -49,8 +43,6 @@ export class SocketAuthService {
 
   /**
    * The session, if there is one.
-   *
-   * ## Why a token can arrive in the query string
    *
    * A browser's `WebSocket` constructor takes a URL and nothing else: there is no
    * way to set an `Authorization` header on the handshake. That leaves the cookie,

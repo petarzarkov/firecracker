@@ -57,10 +57,9 @@ export class GameBetRepository extends CrudRepository<
   /**
    * The player's open bet in this round, whichever wallet it is against.
    *
-   * A cash-out should not need the client to say which mode it is in. The old
-   * gateway kept `client.data.isDemo` on the socket and read it back, which broke
-   * across a reconnect and disagreed with the database whenever the two drifted;
-   * the bet row already knows, so this asks it.
+   * A cash-out should not need the client to say which mode it is in - the bet row
+   * already knows, and unlike a flag on the socket it survives a reconnect and
+   * cannot drift from the database.
    *
    * A player *can* hold one bet per mode in a round - the unique index is per
    * mode - so this returns the newest, and the caller may still pass an explicit
@@ -100,9 +99,8 @@ export class GameBetRepository extends CrudRepository<
   /**
    * Every bet in a round with its player's name, for the lobby list.
    *
-   * One join rather than the N+1 the TypeORM version did through a `user` relation
-   * on each row - this runs on every socket connect, so it is on the hot path for a
-   * player opening the page mid-round.
+   * One join rather than a per-row lookup: this runs on every socket connect, so it
+   * is on the hot path for a player opening the page mid-round.
    */
   findByRoundWithPlayers(roundId: string): BetWithPlayer[] {
     const rows = this.db

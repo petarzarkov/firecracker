@@ -43,9 +43,8 @@ export const wallets = sqliteTable(
  * The ledger. Every balance change writes one row carrying the balance *after* it,
  * so a disputed balance can be replayed rather than argued about.
  *
- * `stripePaymentIntentId` is gone with the billing module. Deposits are out of
- * scope for this build, so `DEPOSIT` currently has no writer - the type is kept
- * because the ledger's history still contains them and dropping the variant would
+ * `DEPOSIT` has no writer - there is no funding path in this build - but the variant
+ * is kept because the ledger's history still contains them and dropping it would
  * make old rows unreadable.
  */
 export const walletTransactions = sqliteTable(

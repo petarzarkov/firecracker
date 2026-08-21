@@ -20,14 +20,10 @@ export { BET_STATUSES, GameBetStatus } from '@firecracker/contracts';
 /**
  * One player's stake in one round.
  *
- * ## The unique index is now load-bearing
- *
- * `game_bet_round_user_demo_index` existed in the Postgres schema too, but it was
- * belt-and-braces behind a `pg_try_advisory_xact_lock` the bet path took first.
- * There is no advisory lock in SQLite and there no longer needs to be - a
- * `bun:sqlite` transaction is synchronous, so a double-bet cannot interleave
- * inside one process - but this index is what refuses the second bet when the two
- * arrive on **different** processes, which the lock used to cover.
+ * `game_bet_round_user_demo_index` is load-bearing and not belt-and-braces. There is
+ * no lock on the bet path: a `bun:sqlite` transaction is synchronous, so a double bet
+ * cannot interleave inside one process, and this index is the only thing that refuses
+ * the second when the two arrive on **different** processes.
  *
  * So a `SQLITE_CONSTRAINT_UNIQUE` here is not a bug, it is the duplicate check
  * firing. `GameBetService.placeBet` catches it and answers "you already have an

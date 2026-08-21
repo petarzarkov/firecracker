@@ -8,15 +8,10 @@ export { GameRoundStatus, ROUND_STATUSES } from '@firecracker/contracts';
 /**
  * One round of the crash game, and the provably-fair record for it.
  *
- * ## Multipliers are integer hundredths, not decimals
- *
- * `crashPointX100` is the one deliberate schema change in this migration.
- * Postgres held this as `decimal(10,2)`, which TypeORM handed back as a **string**,
- * so every read site in the old code said `Number(round.crashPoint)` - and every
- * comparison then happened in float64, where `1.07` is not `1.07`.
- *
- * SQLite has no decimal type at all, so the choice was `real` or an integer. An
- * integer count of hundredths is exact, and it lets the engine's
+ * **Multipliers are integer hundredths, never a float.** SQLite has no decimal
+ * type, and a `real` puts every `multiplier >= crashPoint` test in float64, where
+ * `1.07` is not `1.07`. An integer count of hundredths is exact, and it lets the
+ * engine's
  * `multiplier >= crashPoint` test and the payout multiply both run in integer
  * space. A round that crashes at 1.07x stores `107`.
  *

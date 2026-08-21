@@ -21,11 +21,8 @@ import { GameRoundService } from './game-round.service.js';
 import { ClientSeedService } from '../fairness/client-seed.service.js';
 
 /**
- * The round lifecycle, as three jobs. The fourth was `cleanup`; it is a schedule now,
- * in `GameRoundWatchdog`.
- *
- * `RoundJobs` rather than `GameJobs`, which read as a sibling of the `GAME_JOBS`
- * name map it uses in every decorator below.
+ * The round lifecycle, as three jobs. The stuck-round sweep is a schedule rather
+ * than a fourth, in `GameRoundWatchdog`, which says why.
  *
  * Jobs rather than method calls even with one process consuming, and the reason is
  * retry: a `crash` that fails mid-settlement must be attempted again or a round's bets

@@ -6,9 +6,8 @@ import { WalletController } from './wallet.controller.js';
 /**
  * Balances, their ledger, and the two routes that read them.
  *
- * It used to live inside `GameModule`, which had the dependency backwards: a
- * wallet is not part of the crash game any more than a user is. The game is one
- * caller of it.
+ * Not part of `GameModule`: a wallet is no more part of the crash game than a user
+ * is, and the game is one caller of it.
  *
  * **Decorated, and it must stay decorated.** `forRoot()` returns a new object per
  * call and a scope is keyed on the module reference, so two importers would get

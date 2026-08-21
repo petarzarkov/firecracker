@@ -66,8 +66,6 @@ interface Bot {
 /**
  * Simulated players, so an empty lobby does not look broken.
  *
- * ## These are cosmetic and that is enforced, not just intended
- *
  * A bot **never** touches the database, a wallet, the ledger or the client-seed
  * pool. This class has no repository and no `GameBetService` in its constructor,
  * which is the enforcement: it publishes `betPlaced` and `betCashedOut` frames and
@@ -78,10 +76,9 @@ interface Bot {
  * house deciding some of the players' seeds is exactly the thing provable fairness
  * exists to rule out. Bots stay outside the fairness boundary entirely.
  *
- * They are also invisible to every read path: `game/state`, `my-bets`, the round
- * history and the lobby list on connect all come from `game_bet`, which has no bot
- * rows in it. A player who joins mid-round sees only the real bets - which is a
- * real inconsistency with the live feed, and the honest cost of not writing rows.
+ * The cost is that every read path comes from `game_bet` and has no bot rows in it,
+ * so a player joining mid-round sees only the real bets. That inconsistency with the
+ * live feed is what not writing rows buys.
  *
  * Off unless `GAME_BOTS_ENABLED=true`.
  */
@@ -101,9 +98,8 @@ export class GameBotsService implements OnInit {
   ) {}
 
   /**
-   * All that is left of a `setInterval`/`clearInterval` pair and an `onShutdown`.
-   * `GAME_BOTS_ENABLED` cannot move into the decorator's own `enabled` option, because
-   * a decorator argument is evaluated before the validated config exists.
+   * `GAME_BOTS_ENABLED` cannot move into `@Interval`'s own `enabled` option, because a
+   * decorator argument is evaluated before the validated config exists.
    */
   onInit(): void {
     const { bots } = this.config.get('game');

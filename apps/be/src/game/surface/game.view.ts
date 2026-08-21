@@ -14,19 +14,12 @@ import {
 } from '../rounds/game-round.schema.js';
 
 /**
- * What a round and a bet look like on the wire, decided once.
- *
- * ## Why this is a file and not three copies
- *
- * It was three: `GameController.#mapRound`, `GameController.#mapBet` and
- * `GameStateService.snapshot` each did their own `crashPointX100 === null ? {} : {
- * crashPoint: … }` dance, over the same rows, for the same reason. The controller's
- * own comment called that conditional "the fairness guarantee expressed in one
- * place" while two other copies of it existed - and the rule it states is the one
- * that must not be forgotten by a fourth caller: **the server seed and the crash
- * point are absent until the round has CRASHED.** A `RUNNING` round already holds
- * its `crash_point_x100`, drawn at the launch, so a projection that returned it
- * unconditionally would hand a player the outcome of the round they are betting in.
+ * What a round and a bet look like on the wire, decided once - because the rule
+ * below must not be forgotten by the next caller that writes its own projection:
+ * **the server seed and the crash point are absent until the round has CRASHED.** A
+ * `RUNNING` round already holds its `crash_point_x100`, drawn at the launch, so a
+ * projection that returned it unconditionally would hand a player the outcome of the
+ * round they are betting in.
  *
  * Pure statics, no provider. Every method takes a row and returns a payload, so it
  * is unit-testable and cannot reach a database by accident.

@@ -31,14 +31,8 @@ export class BetRejected extends HttpError {
  * Placing and settling bets - the one place in the app where two players' money
  * and one shared round meet.
  *
- * ## The advisory lock is gone, and nothing replaced it
- *
- * The Postgres version wrapped both mutations in
- * `pg_try_advisory_xact_lock(hash('game_bet_<user>_<round>_<mode>'))` and answered
- * "please try again" when the lock was already held. That existed to stop a player
- * double-betting or double-cashing-out by firing two sockets at once.
- *
- * Three things together mean this code needs none of it:
+ * Neither mutation takes a lock, and three things together mean none is needed
+ * against a player firing two sockets at once:
  *
  *  1. **`transactionSync` cannot yield.** The callback's return type refuses a promise, so
  *     an `async` one is a type error rather than a transaction that commits
@@ -48,13 +42,12 @@ export class BetRejected extends HttpError {
  *  2. **The debit is guarded in SQL**, `WHERE balance_cents >= ?`, so an
  *     overdraft is impossible even against the other process.
  *  3. **`game_bet_round_user_demo_index` is unique**, so the second of two bets
- *     racing from *different* processes fails on the constraint. That is the case
- *     the lock genuinely covered, and the index covers it without a round trip.
+ *     racing from *different* processes fails on the constraint - the one case a
+ *     lock genuinely covered, without a round trip.
  *
- * What this buys beyond deleting a service: the old code answered a lost race with
- * "could not place bet - please try again", which is a retry prompt for something
- * that was never going to succeed. Here the same race produces the real answer:
- * "you already have an active bet in this round".
+ * The loser of that race gets the real answer, "you already have an active bet in
+ * this round", rather than a retry prompt for something that was never going to
+ * succeed.
  */
 export class GameBetService {
   /**
