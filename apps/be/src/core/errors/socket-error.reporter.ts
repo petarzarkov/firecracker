@@ -29,6 +29,14 @@ import { ErrorMapper } from './error-mapper.js';
  * an ack the handler never sent, and every handler in this gateway sends its own.
  */
 export class SocketErrorReporter implements SocketMiddleware {
+  /**
+   * The declaration `@dunx/http` 2.2.1 looks for at boot. Nothing warns today because
+   * `SocketLoggingMiddleware` also sets it, but this class is the one that actually
+   * reports: turn `socketLogging` off and the warning would fire while errors were
+   * still being logged, which is a lie in the more dangerous direction.
+   */
+  readonly reportsErrors = true;
+
   constructor(private readonly logger: Logger) {}
 
   handle(frame: SocketFrame, ctx: SocketContext, next: SocketNext): unknown {
