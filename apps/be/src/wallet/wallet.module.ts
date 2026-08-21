@@ -9,12 +9,10 @@ import { WalletController } from './wallet.controller.js';
  * Not part of `GameModule`: a wallet is no more part of the crash game than a user
  * is, and the game is one caller of it.
  *
- * **Decorated, and it must stay decorated.** `forRoot()` returns a new object per
- * call and a scope is keyed on the module reference, so two importers would get
- * two scopes and two `WalletService`s. They would share one SQLite file, so the
- * balances would still come out right - but this is money, and the graph should
- * not be ambiguous about which instance moved it. There is nothing here to
- * configure, so there is nothing to buy with a factory.
+ * **Decorated, and it must stay decorated.** Two importers of a configured module are
+ * two `WalletService`s. They would share one SQLite file, so the balances would still
+ * come out right - but this is money, and the graph should not be ambiguous about
+ * which instance moved it.
  *
  * `WalletRepository` is deliberately **not** exported. `WalletService` is the seam
  * (see its doc comment): every method that moves money takes the caller's

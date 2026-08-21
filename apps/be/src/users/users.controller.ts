@@ -23,10 +23,9 @@ import { UserRole } from './schema/user.schema.js';
 import { UsersService } from './services/users.service.js';
 
 /**
- * NestJS reads the body with `@Body()` and the params with `@Param()`. There are
- * no parameter decorators in the TC39 proposal, so dunx hands the handler one
- * `input` argument whose shape comes from the route's own schemas. The schemas
- * are declared once and both the validation and the type follow from them.
+ * There are no parameter decorators in the TC39 proposal, so a handler takes one
+ * `input` argument whose shape comes from the route's own schemas. The schemas are
+ * declared once and both the validation and the type follow from them.
  */
 @ApiDoc({ tags: ['users'], description: 'Read and administer user accounts.' })
 @Controller('users')

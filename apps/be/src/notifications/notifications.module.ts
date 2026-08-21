@@ -31,8 +31,8 @@ const email = HttpModule.forRootAsync({
  * `EventsPublisherModule`'s and the socket is `GameGateway`'s; neither is here.
  *
  * Decorated, because there is nothing for a caller to vary: `AppModule` and
- * `JobsModule` both name it with no arguments, and a factory returns a new object per
- * call - so the only thing the ceremony would buy is the chance of two scopes.
+ * `JobsModule` both name it with no arguments, so a factory would buy nothing but the
+ * chance of two scopes.
  */
 @Module({
   imports: [email],

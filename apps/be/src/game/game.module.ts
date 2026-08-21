@@ -22,11 +22,8 @@ import { GameSurfaceModule } from './surface/surface.module.js';
  * were `GameEngineModule`, or anything that transitively imports it, every BullMQ
  * fork would be a second clock.
  *
- * **No game sub-module carries a `static forRoot()`.** A factory buys per-caller
- * configuration, which is precisely the mechanism that produces two engines and two
- * nonce counters: `forRoot()` returns a new object per call and scopes are keyed on
- * the module reference, where a decorated class is deduped by reference and five
- * importers share one instance.
+ * **No game sub-module carries a `static forRoot()`.** Per-caller configuration is
+ * what produces two engines and two nonce counters - see `GameEngineModule`.
  *
  * Import order is construction order: fairness and betting have no game-internal
  * dependencies, rounds needs both, the engine needs rounds, and the surface needs

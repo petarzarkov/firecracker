@@ -141,7 +141,7 @@ export function LoginForm() {
     setStatus({ isLoading: true, error: '', success: '' });
     try {
       // A real user row with a demo wallet and no credential - better-auth's
-      // `anonymous()` plugin. The old `/api/auth/demo` did the same by hand.
+      // `anonymous()` plugin.
       const { token, user } = await authApi.signInAnonymous();
       setAuth(token, user);
       setIsDemoMode(true);

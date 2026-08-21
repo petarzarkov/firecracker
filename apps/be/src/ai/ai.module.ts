@@ -11,12 +11,9 @@ import { OpenRouterService } from './services/openrouter.service.js';
 /**
  * The model providers.
  *
- * **`global: true`**, because the game's bots reach `AIService` and this module
- * has no other consumer worth making import it - and because a second
- * `forRoot()` would have built a second Gemini client with its own pacing state,
- * which would then breach the rate limit the first one is carefully respecting.
- * Decorated for exactly that reason: a class is one reference however many modules
- * name it.
+ * **`global: true` and decorated**, because a second scope would be a second Gemini
+ * client with its own pacing state, which would then breach the rate limit the first
+ * one is carefully respecting.
  *
  * Every provider is constructed whether or not it has a key. They report
  * `configured` instead of failing, so an app with no AI configured still boots,

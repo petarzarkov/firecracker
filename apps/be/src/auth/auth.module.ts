@@ -125,10 +125,9 @@ const options = {
  * `@dunx/auth`'s. **The better-auth root and nothing else** - the profile routes and
  * the avatar proxy are `ProfileModule`'s, because neither is authentication.
  *
- * **A decorated class rather than a `forRoot()` that takes no arguments.** A scope is
- * keyed on the module reference and `forRoot()` returns a new object per call, so
- * `UsersModule` importing `AccountsModule.forRoot()` would build a *second*
- * better-auth against a second session store.
+ * **A decorated class rather than a `forRoot()` that takes no arguments**, so
+ * `UsersModule` naming it cannot build a *second* better-auth against a second
+ * session store.
  *
  * **`global: true`**, because this is a one-per-process root like `DatabaseModule`.
  * There is one by construction, so making every feature that wants `CurrentUser` name

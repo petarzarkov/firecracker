@@ -32,9 +32,8 @@ export class ProfileController {
   /**
    * Avatar suggestions for the sign-up form.
    *
-   * `@Public()` because it is reached *before* anybody has an account - that is
-   * the whole point of it. It was `GET /api/auth/avatars/trending` on the NestJS
-   * auth controller; better-auth owns `/auth` now, so it lives here.
+   * `@Public()` because it is reached *before* anybody has an account - that is the
+   * whole point of it. Under `/profile` rather than `/auth`, which better-auth owns.
    */
   @ApiDoc({ tags: ['profile'], summary: 'Trending avatars to choose from' })
   @Public()

@@ -12,10 +12,9 @@ import { AppConfigService } from '../../config/app.config.service.js';
  * process never exits; with `0` it exits cleanly. `eager` is left at its default of
  * `false` for the same reason - finding out at startup is the opposite of the point.
  *
- * `global: true` for the same reason as `DatabaseModule`: one client, built once by
- * `Foundation.for()`, read by auth, notifications, the throttler and the health
- * probe - and decorated rather than configured for the same reason too, since a
- * second `forRoot()` call was a second scope with a second client.
+ * `global: true` and decorated for the same reasons as `DatabaseModule`: one client,
+ * built once by `Foundation.for()`, read by auth, notifications, the throttler and
+ * the health probe.
  *
  * `exports: [RedisModule]` names the class, which resolves to the configuration
  * imported beside it.

@@ -309,9 +309,8 @@ export class GameBetService {
 }
 
 /**
- * One player's stake, handed back. Declared beside the method that produces it -
- * it used to live on `GameRoundService`, which made the two look mutually
- * dependent when the only edge was this type and types erase at build time.
+ * One player's stake, handed back. Declared beside the method that produces it, so
+ * `GameRoundService` importing it does not read as a mutual dependency.
  */
 export interface RefundedBet {
   readonly userId: string;

@@ -18,8 +18,7 @@ import { PlayerChatService } from './services/player-chat.service.js';
  * `PlayerDirectory` stays private. It is a read over the `users` table, and nothing
  * outside chat should acquire a second way to read users.
  *
- * Decorated rather than configured, because it takes no options - so a class is
- * one reference however many modules import it. Everything it injects
+ * Decorated rather than configured: it takes no options. Everything it injects
  * (`RedisConnection`, `SyncDatabase`, `EventsPublisher`, `Logger`) is `global: true`.
  */
 @Module({
