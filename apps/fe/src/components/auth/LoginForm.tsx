@@ -14,7 +14,6 @@ import { Button } from '../ui/Button';
 import { GradientDivider } from '../ui/GradientDivider';
 import { InputField } from '../ui/InputField';
 
-// --- Types ---
 type FormMode = 'login' | 'register' | 'requestReset' | 'resetPassword';
 
 interface FormData {
@@ -37,7 +36,6 @@ const INITIAL_STATE: FormData = {
   customPictureUrl: '',
 };
 
-// --- Config ---
 const MODE_CONFIG: Record<
   FormMode,
   { title: string; submitLabel: string; loadingLabel: string }
@@ -63,8 +61,6 @@ const MODE_CONFIG: Record<
     loadingLabel: 'Resetting password...',
   },
 };
-
-// --- Sub-Components ---
 
 const SocialButtons = ({
   isLoading,
@@ -123,8 +119,6 @@ const SocialButtons = ({
     </Box>
   </>
 );
-
-// --- Main Component ---
 
 export function LoginForm() {
   const [mode, setMode] = useState<FormMode>('login');

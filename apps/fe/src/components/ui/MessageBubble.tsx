@@ -34,12 +34,10 @@ export function MessageBubble({
   isOwnMessage,
   themeColor,
 }: MessageBubbleProps) {
-  // --- STYLING CONSTANTS ---
   const userBg = `${themeColor}20`; // 20% opacity
   const botBg = 'whiteAlpha.100';
   const borderColor = isOwnMessage ? `${themeColor}40` : 'transparent';
 
-  // --- MARKDOWN COMPONENTS (The Secret Sauce for formatting) ---
   const markdownComponents: Components = useMemo(
     () => ({
       // Handle Code Blocks & Inline Code
