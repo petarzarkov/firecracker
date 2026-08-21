@@ -82,6 +82,11 @@ describe('the generated OpenAPI document', () => {
     // through `contribute`, and the merge keeps both without a prefix.
     expect(Object.keys(doc.components.schemas).sort()).toEqual([
       'Account',
+      // The avatar routes: what a caller may point `users.image` at, and what
+      // comes back. The second is only in the document because the handler
+      // returns a `Response`, so nothing else could describe it.
+      'AvatarSource',
+      'AvatarUpdated',
       'CreateUser',
       'Session',
       'UpdateUser',

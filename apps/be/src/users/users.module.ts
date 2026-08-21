@@ -10,12 +10,18 @@ import { UsersService } from './services/users.service.js';
  * `global: true` `AccountsModule`. There is one better-auth per process, so naming
  * it here drew no boundary.
  *
- * Nothing is exported. `UsersRepository` is the table and `UsersService` is this
- * feature's own logic; a second feature that needs a user reads it through
- * better-auth, which is the one source that stays in step with sessions.
+ * `UsersService` is not exported: it is this feature's own logic, and a second
+ * feature that wants to *change* a user goes through better-auth, which is the one
+ * source that stays in step with sessions.
+ *
+ * `UsersRepository` is, and only because a read of `user.image` cannot come from
+ * better-auth: `ProfileModule` serves an uploaded avatar to anyone, so it has to
+ * ask whether the object is still the one its owner chose - about a user who is not
+ * the caller, and therefore has no session here to read.
  */
 @Module({
   controllers: [UsersController],
   providers: [UsersService, UsersRepository],
+  exports: [UsersRepository],
 })
 export class UsersModule {}

@@ -1,5 +1,5 @@
 /**
- * The HTTP responses the client reads, as interfaces.
+ * The HTTP bodies the client reads and the one it writes, as interfaces.
  *
  * The **schemas** stay on the server. They are zod, they carry `.meta({ id })` for
  * the OpenAPI document, and sharing them would put zod in the browser bundle for
@@ -56,4 +56,46 @@ export interface GameBetView {
 /** `GET /api/profile/avatars/trending`, which is public and never empty. */
 export interface TrendingAvatars {
   readonly avatars: readonly string[];
+}
+
+/**
+ * One stored object, as `POST /api/files` answers with it.
+ *
+ * The client reads `id` and nothing else - it hands it straight back to
+ * `POST /api/profile/avatar` - but the whole row is declared, because a partial
+ * copy of a response is how a field silently means two things.
+ *
+ * `thumbnailKey` is `null` on the way out of the upload and stays that way until
+ * the `media` queue's child has rendered one. Do not wait for it: the avatar route
+ * serves the original until it appears.
+ */
+export interface UploadedFile {
+  readonly id: string;
+  readonly userId: string;
+  readonly key: string;
+  readonly name: string;
+  readonly mimeType: string;
+  readonly size: number;
+  readonly width: number | null;
+  readonly height: number | null;
+  readonly thumbnailKey: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+/**
+ * The body of `POST /api/profile/avatar`: where the new avatar comes from.
+ *
+ * A union, so "both" and "neither" cannot be sent. `fileId` is an object the
+ * caller uploaded and the server checks they own it; `url` is what the trending
+ * grid and the custom-URL field have always produced, and what sign-up writes
+ * through better-auth.
+ */
+export type AvatarSource =
+  | { readonly fileId: string }
+  | { readonly url: string };
+
+/** What `POST /api/profile/avatar` answers: `users.image`, as everything reads it. */
+export interface AvatarUpdated {
+  readonly picture: string;
 }
