@@ -275,6 +275,10 @@ mergeable, CI green.
   `MediaJobs` exist for nothing. Verdict was "wire it to avatar upload".
 - `QueuesController` kept deliberately until `@dunx/dashboard` is a dependency.
 - Multi-replica is a design document by decision; SQLite on local disk is the wall.
-- Two unexplained flakes, both unreproduced: `page walks a cursor to the end` (twice
-  in ~40 runs) and one e2e failure after the banners commit. Five consecutive clean
-  e2e runs since.
+- **The two "flakes" were not flakes.** Sixty runs in an isolated `git worktree` at
+  HEAD - 40 of the named test, 12 full unit suites, 8 e2e suites - produced zero
+  failures. Both original sightings came from an agent running tests while a *second*
+  agent was mid-edit in the same working tree, and one of them said so at the time:
+  "the other agent is live in this tree and transiently broke `DatabaseModule.forRoot`
+  mid-session". A test run racing a concurrent edit is not flakiness. The lesson is
+  about how the work was parallelised, not about the suite.
