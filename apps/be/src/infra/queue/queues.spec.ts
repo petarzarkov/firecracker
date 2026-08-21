@@ -10,12 +10,11 @@ import { JOBS, QUEUES } from '../../notifications/events/events.js';
 /**
  * Publish here, consume in a **forked child**.
  *
- * This suite used to spawn `bun src/worker.ts` and wait 2.5 seconds for it. There is no
- * such entrypoint now: `notifications` and `media` are `background`, so bullmq forks
- * `src/jobs.processor.ts` from this very test server - `consume` is on here, unlike
- * every other spec, which is the whole subject. The result is still computed in another
- * process and read back through Redis, and the fork is the mechanism the deployed app
- * uses.
+ * There is no worker entrypoint to spawn: `notifications` and `media` are
+ * `background`, so bullmq forks `src/jobs.processor.ts` from this very test server -
+ * `consume` is on here, unlike every other spec, which is the whole subject. The
+ * result is computed in another process and read back through Redis, which is the
+ * mechanism the deployed app uses.
  *
  * Broker assertions are skipped when Redis is unreachable, because `bun test` has to
  * pass on a machine with nothing running; the degraded side is in `redis.spec.ts`.

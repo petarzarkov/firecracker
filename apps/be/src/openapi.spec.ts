@@ -92,8 +92,6 @@ describe('the generated OpenAPI document', () => {
   });
 
   /**
-   * Replaced the upload-route test, which went with the files module.
-   *
    * The verification route is the one that most needs documenting: it is the
    * public contract a player checks a round against, and a client written from
    * this document has to know it can 404 before the crash.
@@ -166,13 +164,6 @@ describe('the generated OpenAPI document', () => {
   });
 
   /**
-   * Locks in a second gap. The top-level `tags` list is derived from the
-   * controllers' class names and ignores `@ApiDoc({ tags })` completely, while
-   * the operations carry the `@ApiDoc` values. The result is a document whose
-   * operations reference tags it never declares, and whose declared tags nothing
-   * uses, so a viewer's sidebar and its operation list disagree.
-   */
-  /**
    * This was a KNOWN GAP pinning a real defect: `doc.tags` was derived from
    * controller class names while operations carried their `@ApiDoc` tags, so the
    * document declared tags nothing used and used tags nothing declared. Fixed in
@@ -213,9 +204,8 @@ describe('the generated OpenAPI document', () => {
    * Better Auth serves `<basePath>/*` from one handler, so route discovery sees a
    * single wildcard and the document would otherwise describe an API with no
    * authentication surface at all. `contribute: [betterAuthDocument(...)]` asks the
-   * library for its own schema and merges it - which is the counterpart of the
-   * NestJS template's `mergeBetterAuthSchema`, except a declared route wins a
-   * collision rather than being overwritten.
+   * library for its own schema and merges it. A declared route wins a collision
+   * rather than being overwritten.
    */
   test('Better Auth contributes its own endpoints', () => {
     const paths = Object.keys(doc.paths);
@@ -266,7 +256,7 @@ describe('the generated OpenAPI document', () => {
   /**
    * `page()` is async: the 456 KB explorer bundle lives behind `@dunx/openapi/ui`
    * and is reached with `await import()`, so importing `@dunx/openapi` does not pull
-   * a React app in with it. It was synchronous before that split.
+   * a React app in with it.
    */
   test('the explorer renders a self-contained page', async () => {
     const page = await app.get(OpenApiExplorer).page('api');

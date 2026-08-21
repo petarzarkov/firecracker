@@ -153,11 +153,7 @@ describe('SessionGuard', () => {
     expect(response.headers.get('set-auth-token')).toBeNull();
   });
 
-  /**
-   * `api/service/config` rather than the `api/profile/anonymous` this used to
-   * call: that route existed only to be this assertion's target, and the guard's
-   * behaviour is the same on any route carrying the metadata.
-   */
+  /** Any `@Public()` route does: the guard reads the metadata, not the path. */
   test('@Public() on a route skips the session lookup entirely', async () => {
     const { status, body } = await server.json<{ name: string }>(
       'api/service/config',
@@ -392,15 +388,10 @@ describe('routing', () => {
    * metadata, so there was no `@Public()` for the guard to read: an anonymous
    * request for a path that did not exist was answered 401 rather than 404.
    *
-   * The note used to say this was "arguably better, since it stops an anonymous
-   * caller probing which paths exist", and that there was "no way to keep the
-   * logging without also authenticating the miss". The second half was wrong -
-   * `HttpOptions.notFound: 'public'` reports the miss as `@Public()` and keeps the
-   * log line and the request id - and the first half does not hold for this app,
-   * whose route table is published at `/api/docs`. It also charged a better-auth
-   * session lookup to every unmatched request.
-   *
-   * See http.options.ts. A miss is a 404 here, as it is in NestJS.
+   * `HttpOptions.notFound: 'public'` reports the miss as `@Public()`, which keeps the
+   * log line and the request id without charging a better-auth session lookup to every
+   * unmatched request. Refusing the miss instead would only hide a route table this
+   * app publishes at `/api/docs` anyway. See http.options.ts.
    */
   test('an anonymous request for a missing path is a 404', async () => {
     const { status, body } = await server.json<{ error: string }>(

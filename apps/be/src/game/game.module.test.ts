@@ -63,10 +63,10 @@ describe('bots cannot reach the money', () => {
 });
 
 /**
- * Chat is generic and the game is the application, so the dependency points one
- * way. `PlayerChatService` used to sit in `game/` and inject `GameBetRepository`
- * for a display name; it reads `PlayerDirectory` now and lives in `chat/`, and the
- * fix would be undone by an import in either direction.
+ * Chat is generic and the game is the application, so the dependency points one way.
+ * An import in either direction undoes it - the shape to watch for is a chat service
+ * reaching `GameBetRepository` for a display name, which `PlayerDirectory` exists to
+ * make unnecessary.
  */
 describe('chat does not depend on the game', () => {
   test.each([
