@@ -222,7 +222,6 @@ refuse to launch. **Not fixed.**
 failed twice in roughly forty runs and nobody has reproduced it. The test is
 deterministic by construction, so the cause is elsewhere. Still open.
 
-
 ## Final state, 2026-08-21
 
 The branch is **69 commits**. Source: 192 files, +8,345 / -4,507. Docs: 11 files,
@@ -230,13 +229,13 @@ The branch is **69 commits**. Source: 192 files, +8,345 / -4,507. Docs: 11 files
 
 Green on every gate, verified from the repo root:
 
-| Gate | Result |
-|---|---|
-| `bun run typecheck` | exit 0, all four workspaces |
-| `bun run test` | contracts 11, stage 50, fe 9, be **228** - 0 fail anywhere |
-| `bun run test:e2e` | **33 pass, 0 fail**, five consecutive runs |
-| `bun run lint:check` | exit 0 |
-| `bun run format:check` | exit 0 |
+| Gate                   | Result                                                     |
+| ---------------------- | ---------------------------------------------------------- |
+| `bun run typecheck`    | exit 0, all four workspaces                                |
+| `bun run test`         | contracts 11, stage 50, fe 9, be **228** - 0 fail anywhere |
+| `bun run test:e2e`     | **33 pass, 0 fail**, five consecutive runs                 |
+| `bun run lint:check`   | exit 0                                                     |
+| `bun run format:check` | exit 0                                                     |
 
 ### Bugs found and fixed that nobody was looking for
 
