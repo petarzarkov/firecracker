@@ -221,3 +221,61 @@ refuse to launch. **Not fixed.**
 `page walks a cursor to the end and no further` in `base.repository.test.ts` has
 failed twice in roughly forty runs and nobody has reproduced it. The test is
 deterministic by construction, so the cause is elsewhere. Still open.
+
+
+## Final state, 2026-08-21
+
+The branch is **69 commits**. Source: 192 files, +8,345 / -4,507. Docs: 11 files,
++5,727. 24 files deleted, 12 new test files.
+
+Green on every gate, verified from the repo root:
+
+| Gate | Result |
+|---|---|
+| `bun run typecheck` | exit 0, all four workspaces |
+| `bun run test` | contracts 11, stage 50, fe 9, be **228** - 0 fail anywhere |
+| `bun run test:e2e` | **33 pass, 0 fail**, five consecutive runs |
+| `bun run lint:check` | exit 0 |
+| `bun run format:check` | exit 0 |
+
+### Bugs found and fixed that nobody was looking for
+
+1. A Redis failure launched a round whose crash point came from the server seed
+   alone, recorded as provably fair, in a record indistinguishable from an idle
+   lobby's.
+2. Password-reset and invite links were logged in full at `info` whenever
+   `EMAIL_WEBHOOK_URL` was unset - local, CI, and any deploy that forgot it.
+3. The duplicate-bet catch matched an index name bun:sqlite never emits, so the one
+   case the unique index exists for surfaced as a raw 500.
+4. SPA deep links had never worked: the miss is a throw, and the fallback inspected
+   a response.
+5. `crashPoint` was rendered by the client and never sent.
+6. Chat errors were replied under the inbound event name and silently dropped.
+7. `game.round.schedule` had no dedupe, so two boots started two rounds.
+8. Test suites shared the developer's queue namespace: 1686 orphaned keys, including
+   61 delayed round-starts.
+9. `THROTTLE_PREFIX` and `WS_RELAY_CHANNEL` still said `dunx-template`.
+10. A throwing socket handler bypassed the structured logger entirely.
+
+### Upstream
+
+dunx **2.2.0** released - sync `paginate`, a throttle, websocket middleware, module
+composition, and a teardown that finishes. PR #4 (monotonic-clock uptime) is open,
+mergeable, CI green.
+
+### Still open
+
+- `reportedByMiddleware` in `@dunx/http` is `() => undefined`, so **any** socket
+  middleware silences the console fallback whether or not it reports errors. Worked
+  around here with an explicit reporter; the framework should warn at boot.
+- 10 of 21 dunx guides and 4 architecture docs are unrewritten.
+- Four flagged dunx defects unfixed by decision: no `x-request-id` on failures, the
+  `OPTIONS` method-miss running the global chain, silent `override` of an unbound
+  class token, `'trust proxy'`.
+- The files module is still unreachable, so `infra/files`, `infra/images` and
+  `MediaJobs` exist for nothing. Verdict was "wire it to avatar upload".
+- `QueuesController` kept deliberately until `@dunx/dashboard` is a dependency.
+- Multi-replica is a design document by decision; SQLite on local disk is the wall.
+- Two unexplained flakes, both unreproduced: `page walks a cursor to the end` (twice
+  in ~40 runs) and one e2e failure after the banners commit. Five consecutive clean
+  e2e runs since.
