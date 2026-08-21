@@ -10,7 +10,7 @@ import {
   GAME_QUEUE,
   publishGame,
 } from '../game.events.js';
-import { GameRoundStatus } from '../schema/game-round.schema.js';
+import { GameRoundStatus } from './game-round.schema.js';
 import { GameRoundRepository } from './game-round.repository.js';
 import { GameRoundService } from './game-round.service.js';
 

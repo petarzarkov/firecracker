@@ -22,7 +22,7 @@ import { users } from '../../users/schema/user.schema.js';
 import { GameBetRepository } from './game-bet.repository.js';
 import { GameRoundRepository } from '../rounds/game-round.repository.js';
 import { WalletRepository } from '../../wallet/repos/wallet.repository.js';
-import { GameBetStatus, gameBets } from '../schema/game-bet.schema.js';
+import { GameBetStatus, gameBets } from './game-bet.schema.js';
 import {
   walletTransactions,
   WalletTransactionType,

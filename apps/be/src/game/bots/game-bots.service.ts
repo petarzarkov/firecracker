@@ -8,7 +8,7 @@ import { EventsPublisher } from '../../notifications/events/events.publisher.js'
 import { CrashEngineService } from '../engine/crash-engine.service.js';
 import { GAME_EVENTS, GAME_TOPIC, publishGame } from '../game.events.js';
 import { GameMath } from '../game.math.js';
-import { GameRoundStatus } from '../schema/game-round.schema.js';
+import { GameRoundStatus } from '../rounds/game-round.schema.js';
 
 /**
  * How often the watcher looks for a phase change. A literal, because `@Interval` is a

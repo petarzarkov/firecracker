@@ -8,7 +8,7 @@ import { AppConfigService } from '../../config/app.config.service.js';
 import type { AppSchema, DbHandle } from '../../infra/db/tx.js';
 import { WalletService } from '../../wallet/services/wallet.service.js';
 import { GameMath } from '../game.math.js';
-import { GameBetStatus, type GameBetRow } from '../schema/game-bet.schema.js';
+import { GameBetStatus, type GameBetRow } from './game-bet.schema.js';
 import {
   GameBetRepository,
   type BetWithCrash,

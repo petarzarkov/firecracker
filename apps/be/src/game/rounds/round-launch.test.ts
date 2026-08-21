@@ -11,7 +11,7 @@ import type { AppSchema } from '../../infra/db/tx.js';
 import { ClientSeedService } from '../fairness/client-seed.service.js';
 import { Fairness } from '../fairness/fairness.js';
 import { GameRoundRepository } from './game-round.repository.js';
-import { GameRoundStatus } from '../schema/game-round.schema.js';
+import { GameRoundStatus } from './game-round.schema.js';
 import { GameRoundService } from './game-round.service.js';
 import type { GameBetService } from '../betting/game-bet.service.js';
 

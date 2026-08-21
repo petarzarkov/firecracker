@@ -11,7 +11,7 @@ import type {
 import {
   GameRoundStatus,
   type GameRoundRow,
-} from '../schema/game-round.schema.js';
+} from '../rounds/game-round.schema.js';
 
 /**
  * What a round and a bet look like on the wire, decided once.

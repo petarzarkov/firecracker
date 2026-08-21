@@ -8,7 +8,7 @@ import {
 import { users } from '../../users/schema/user.schema.js';
 import { Columns } from '../../infra/db/columns.js';
 import { TRANSACTION_TYPES } from '@firecracker/contracts';
-import { gameBets } from '../../game/schema/game-bet.schema.js';
+import { gameBets } from '../../game/betting/game-bet.schema.js';
 
 /** The transaction kinds, from `@firecracker/contracts`. */
 export {

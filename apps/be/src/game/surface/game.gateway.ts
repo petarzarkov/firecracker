@@ -32,7 +32,7 @@ import {
   type SeedAckPayload,
 } from '../game.events.js';
 import { GameMessages } from './game.messages.js';
-import { GameRoundStatus } from '../schema/game-round.schema.js';
+import { GameRoundStatus } from '../rounds/game-round.schema.js';
 import { AutoCashOutService } from '../betting/auto-cashout.service.js';
 import { GameStateService } from './game-state.service.js';
 import { BetActionsService } from './bet-actions.service.js';

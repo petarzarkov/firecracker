@@ -6,7 +6,7 @@ import { CrashEngineService } from '../engine/crash-engine.service.js';
 import { GAME_EVENTS, type GameRoundStatePayload } from '../game.events.js';
 import type { SocketPlayer } from './socket-auth.service.js';
 import { GameMath } from '../game.math.js';
-import { GameRoundStatus } from '../schema/game-round.schema.js';
+import { GameRoundStatus } from '../rounds/game-round.schema.js';
 import { GameView } from './game.view.js';
 import { GameBetService } from '../betting/game-bet.service.js';
 import { GameRoundService } from '../rounds/game-round.service.js';

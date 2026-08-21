@@ -4,8 +4,8 @@ import type { WalletService } from '../../wallet/services/wallet.service.js';
 import type { CrashEngineService } from '../engine/crash-engine.service.js';
 import type { ClientSeedService } from '../fairness/client-seed.service.js';
 import { GAME_EVENTS, GAME_TOPIC } from '../game.events.js';
-import type { GameBetRow } from '../schema/game-bet.schema.js';
-import { GameRoundStatus } from '../schema/game-round.schema.js';
+import type { GameBetRow } from '../betting/game-bet.schema.js';
+import { GameRoundStatus } from '../rounds/game-round.schema.js';
 import type { AutoCashOutService } from '../betting/auto-cashout.service.js';
 import {
   BetRejected,

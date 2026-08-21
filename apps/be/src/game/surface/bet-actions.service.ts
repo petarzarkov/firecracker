@@ -12,7 +12,7 @@ import {
 } from '../game.events.js';
 import { GameMath } from '../game.math.js';
 import { GameMessages } from './game.messages.js';
-import { GameRoundStatus } from '../schema/game-round.schema.js';
+import { GameRoundStatus } from '../rounds/game-round.schema.js';
 import { AutoCashOutService } from '../betting/auto-cashout.service.js';
 import { GameBetService } from '../betting/game-bet.service.js';
 import type { SocketPlayer } from './socket-auth.service.js';

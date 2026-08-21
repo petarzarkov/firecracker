@@ -4,10 +4,7 @@ import type { Page, PageOptions } from '@dunx/infra/pagination';
 import { AppConfigService } from '../../config/app.config.service.js';
 import { ClientSeedService } from '../fairness/client-seed.service.js';
 import { Fairness } from '../fairness/fairness.js';
-import {
-  GameRoundStatus,
-  type GameRoundRow,
-} from '../schema/game-round.schema.js';
+import { GameRoundStatus, type GameRoundRow } from './game-round.schema.js';
 import { GameRoundRepository } from './game-round.repository.js';
 import {
   GameBetService,

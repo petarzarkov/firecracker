@@ -6,8 +6,8 @@ export { files } from '../../files/schema/file.schema.js';
 export {
   gameRounds,
   GameRoundStatus,
-} from '../../game/schema/game-round.schema.js';
-export { gameBets, GameBetStatus } from '../../game/schema/game-bet.schema.js';
+} from '../../game/rounds/game-round.schema.js';
+export { gameBets, GameBetStatus } from '../../game/betting/game-bet.schema.js';
 export {
   wallets,
   walletTransactions,

@@ -6,7 +6,7 @@ import {
   GameRoundStatus,
   type GameRoundRow,
   type NewGameRoundRow,
-} from '../schema/game-round.schema.js';
+} from './game-round.schema.js';
 
 export class GameRoundRepository extends CrudRepository<
   typeof gameRounds,

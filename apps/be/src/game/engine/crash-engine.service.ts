@@ -12,7 +12,7 @@ import {
   publishGame,
 } from '../game.events.js';
 import { GameMath } from '../game.math.js';
-import { GameRoundStatus } from '../schema/game-round.schema.js';
+import { GameRoundStatus } from '../rounds/game-round.schema.js';
 import { GameRoundRepository } from '../rounds/game-round.repository.js';
 import { GAME_ENGINE_CHANNEL, type EngineCommand } from './engine.commands.js';
 

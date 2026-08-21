@@ -8,8 +8,8 @@ import {
   GameBetStatus,
   type GameBetRow,
   type NewGameBetRow,
-} from '../schema/game-bet.schema.js';
-import { gameRounds, GameRoundStatus } from '../schema/game-round.schema.js';
+} from './game-bet.schema.js';
+import { gameRounds, GameRoundStatus } from '../rounds/game-round.schema.js';
 
 /** A bet with the display name the lobby shows next to it. */
 export interface BetWithPlayer extends GameBetRow {

@@ -8,7 +8,7 @@ import {
 import { users } from '../../users/schema/user.schema.js';
 import { Columns } from '../../infra/db/columns.js';
 import { BET_STATUSES, GameBetStatus } from '@firecracker/contracts';
-import { gameRounds } from './game-round.schema.js';
+import { gameRounds } from '../rounds/game-round.schema.js';
 
 /**
  * The status values, from `@firecracker/contracts` - the same declaration the
