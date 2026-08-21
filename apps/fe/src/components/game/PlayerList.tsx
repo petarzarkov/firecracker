@@ -50,10 +50,8 @@ function betCashoutColor(status: BetEntry['status'], phase: GamePhase): string {
 /**
  * Opens a direct message with another player.
  *
- * The lobby is the only place one player sees another, so this is where a DM has
- * to start. The old client had no entry point at all - conversations were opened
- * from the 3D world that used to wrap this game, and when that went the receive
- * and reply handlers were left with nothing to trigger them.
+ * The lobby is the only place one player sees another, so this is where a DM has to
+ * start - without it the receive and reply handlers have nothing to trigger them.
  *
  * The server derives the room id from the two user ids, so this sends who to talk
  * to and nothing else - there is no room to create first.

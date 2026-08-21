@@ -2,29 +2,13 @@ import type { User } from '@/store/authStore';
 import { UserRole } from '@/types';
 
 /**
- * Better Auth over `fetch`, in the shape this app already had.
+ * Better Auth over `fetch`, hand-written rather than through `better-auth/client`.
  *
- * ## Why this is hand-written and not `better-auth/client`
- *
- * The official client is good and would work. It also pulls the whole library
- * into a browser bundle to call seven endpoints, and it owns session storage - a
- * job zustand already does here, with `persist`, and which the socket depends on
- * because the WebSocket upgrade carries `?token=`. Two things believing they own
- * the session is worse than one small module.
- *
- * ## The endpoints changed, not the flow
- *
- * The NestJS version had hand-rolled routes. Better Auth's own are close enough
- * that only this file moved:
- *
- * | was                             | now                             |
- * | ------------------------------- | ------------------------------- |
- * | `POST /auth/login`              | `POST /auth/sign-in/email`      |
- * | `POST /auth/register`           | `POST /auth/sign-up/email`      |
- * | `GET  /auth/github` (redirect)  | `POST /auth/sign-in/social`     |
- * | `POST /auth/demo`               | `POST /auth/sign-in/anonymous`  |
- * | `POST /auth/forgotten-password` | `POST /auth/request-password-reset` |
- * | `POST /auth/password-reset`     | `POST /auth/reset-password`     |
+ * The official client is good and would work. It also pulls the whole library into a
+ * browser bundle to call seven endpoints, and it owns session storage - a job zustand
+ * already does here, with `persist`, and which the socket depends on because the
+ * WebSocket upgrade carries `?token=`. Two things believing they own the session is
+ * worse than one small module.
  */
 
 const API = import.meta.env.VITE_API_URL ?? '';

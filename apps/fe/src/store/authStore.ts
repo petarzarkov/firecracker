@@ -33,8 +33,6 @@ interface AuthState {
 /**
  * Whether two users are the same as far as this app is concerned.
  *
- * ## Why identity is worth this much care
- *
  * `user` is a dependency of the effect in `useWebSocket`, so **a new object with
  * identical contents tears the socket down and opens another one**. That is not
  * hypothetical - it shipped, and the loop was:

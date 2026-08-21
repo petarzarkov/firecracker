@@ -233,11 +233,8 @@ function InlineChatPanel({ full = false }: { full?: boolean }) {
 export function Game() {
   useGameSocket();
 
-  /**
-   * Only the live layout is mounted. Both used to be, with one hidden by
-   * `display` - which meant two `CrashChart`s, and so two PIXI renderers, one of
-   * them animating a box nobody could see.
-   */
+  // Only the live layout is mounted - see `useWideLayout` for what mounting both
+  // costs.
   const wide = useWideLayout();
   const socket = useSocket();
   const { globalChat, closeGlobalChat, playerChats } = useChatStore(

@@ -2,17 +2,12 @@
  * The plot's geometry: one object that owns the mapping from a multiplier to a y,
  * from an elapsed time to an x, and the list of gridlines.
  *
- * ## Why it is one object
- *
- * It used to be two. The canvas mapped a multiplier through the chart's real
- * height; the axis labels were DOM nodes positioned by percentage against a
- * hardcoded `REF_H = 360`. They agreed only on a chart that happened to be 360px
- * tall - measured on a 1600x1000 desktop, the `1x` label sat 43px below its own
- * gridline and `50x` sat 82px below, and the drift grew with the chart. Two
- * declarations of one mapping is the same bug shape as the client and the server
- * declaring one payload, and it has the same fix: declare it once.
- *
- * Everything that needs to know where a number goes asks this.
+ * **One object, because two declarations of one mapping drift.** When the curve
+ * mapped a multiplier through the chart's real height and the axis labels were
+ * positioned by percentage against a hardcoded 360px, they agreed only on a chart
+ * that happened to be 360px tall: measured on a 1600x1000 desktop the `1x` label sat
+ * 43px below its own gridline and `50x` sat 82px below, and the drift grew with the
+ * chart. Everything that needs to know where a number goes asks this.
  */
 
 /**

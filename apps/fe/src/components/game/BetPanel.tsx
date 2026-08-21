@@ -83,9 +83,7 @@ function BetStatusBar({
 
   /**
    * Narrow deps on purpose: the loop reads only these two fields of `myBet`, and
-   * depending on the object would restart the RAF on every settle. (The
-   * `biome-ignore` that used to sit here named a linter this repo does not have —
-   * oxlint replaced it, and its react rules are not switched on yet.)
+   * depending on the object would restart the RAF on every settle.
    */
   useEffect(() => {
     if (!myBet || myBet.status !== 'ACTIVE') return;

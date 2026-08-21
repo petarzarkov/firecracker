@@ -4,14 +4,11 @@ import { Particle, ParticleContainer, type Texture } from 'pixi.js';
  * A fixed pool of motes: the shape behind the starfield, the trail, the wick
  * sparks and the fireworks.
  *
- * ## Fixed, and never resized
- *
- * The canvas version pushed a fresh object per spawn, `splice`d dead ones out of
- * the middle of the array, and trimmed with `particles.splice(0, n)` when it grew
- * past a cap - allocation and array shuffling every frame, during the seconds a
- * player is watching most closely. Here the particles are allocated once and
- * recycled: a spawn claims a dead slot, a death sets `alpha = 0`, and nothing is
- * ever added to or removed from the container after construction.
+ * **Fixed, and never resized.** Pushing a fresh object per spawn and `splice`ing dead
+ * ones out of the middle is allocation and array shuffling every frame, during the
+ * seconds a player is watching most closely. Here the particles are allocated once and
+ * recycled: a spawn claims a dead slot, a death sets `alpha = 0`, and nothing is ever
+ * added to or removed from the container after construction.
  *
  * That also suits what {@link ParticleContainer} is for. It uploads its children
  * as one batched buffer, so a stable child list is the fast path and a changing

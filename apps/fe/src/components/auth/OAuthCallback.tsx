@@ -5,17 +5,11 @@ import * as authApi from '../../systems/auth/auth-api';
 /**
  * Where a social sign-in lands.
  *
- * ## What changed
- *
- * The NestJS version redirected here with `?token=…&user=…` in the query string -
- * the callback controller signed a JWT, serialised the user, and put both in a
- * URL. That is gone, and good riddance: a session token in a URL lands in browser
- * history, in the `Referer` of the next request, and in any access log between
- * here and there.
- *
- * better-auth sets an `HttpOnly` session cookie on its own callback and redirects.
- * So there is nothing to parse: this asks the server who the caller is, which
- * works because the request carries that cookie.
+ * **Nothing is parsed out of the URL.** better-auth sets an `HttpOnly` session cookie
+ * on its own callback and redirects, so this asks the server who the caller is and the
+ * request carries the cookie. Putting a token in the query string instead lands it in
+ * browser history, in the `Referer` of the next request, and in every access log
+ * between here and there.
  */
 export function OAuthCallback() {
   const setAuth = useAuthStore((state) => state.setAuth);

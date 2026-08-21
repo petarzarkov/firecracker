@@ -1,24 +1,13 @@
 /**
  * A socket.io-shaped client over a plain WebSocket.
  *
- * ## Why this exists
+ * The server's gateways are native `Bun.serve` WebSockets and the wire is one JSON
+ * object, `{ event, data }`. This provides `emit` and `on` over that envelope, so
+ * `useGameSocket`, `BetPanel`, `GlobalChat` and the rest never had to change.
  *
- * The server moved from socket.io to `@dunx/http`, whose gateways are native
- * `Bun.serve` WebSockets. dunx cannot speak the socket.io protocol and never will -
- * that protocol is a framing layer, a handshake, an ack scheme and a transport
- * negotiation, and Bun's WebSocket is none of it.
- *
- * What the wire actually needs is small: one JSON object, `{ event, data }`. So
- * rather than rewrite every component that calls `socket.emit('placeBet', …)` and
- * `socket.on('gameTick', …)`, this file provides those two methods over that
- * envelope. `useGameSocket`, `BetPanel`, `GlobalChat` and the rest are unchanged.
- *
- * ## What it deliberately does not reimplement
- *
- * socket.io has acks, rooms addressed from the client, binary attachments,
- * multiplexed namespaces and long-polling fallback. None of them were used by this
- * app, and each one reimplemented here would be a bug waiting to happen. Rooms are
- * server-side (Bun topics), replies come back as ordinary events, and there is no
+ * It deliberately reimplements none of the rest of socket.io - acks, client-addressed
+ * rooms, binary attachments, multiplexed namespaces, long-polling fallback. Rooms are
+ * server-side Bun topics, replies come back as ordinary events, and there is no
  * fallback transport because Bun requires a real WebSocket anyway.
  */
 
@@ -165,9 +154,7 @@ export class Socket {
    * `{"event":name,"data":payload}` - the envelope `@OnMessage(name)` decodes.
    *
    * The body is checked against the name, against the same `ClientPayloads` map the
-   * server's parsers return - the client half used to be an object literal in a
-   * component and a hand-written interface on the server, with nothing comparing
-   * them.
+   * server's parsers return, so the two halves cannot drift.
    *
    * `data` is omitted entirely when undefined so that `emit('cashOut')` sends
    * `{"event":"cashOut"}`, which is what a handler taking no payload expects - and

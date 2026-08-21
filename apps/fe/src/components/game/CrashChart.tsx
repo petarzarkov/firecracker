@@ -21,20 +21,16 @@ const STAGE_PHASE = {
 /**
  * The round, drawn by `@firecracker/stage`, with the readouts left in the DOM.
  *
- * ## What moved, and what did not
+ * Everything drawn - grid, axis labels, curve, starfield, rocket, sparks, embers and
+ * fireworks - is a PIXI scene in its own workspace. What stays in the DOM is the text
+ * a person reads rather than watches: the multiplier, the countdown and the crash
+ * result.
  *
- * The canvas half - grid, axis labels, curve, starfield, rocket, sparks, embers
- * and fireworks - is now a PIXI scene in its own workspace. What stayed here is
- * the text: the multiplier, the countdown and the crash result. Those are worth
- * keeping in the DOM because they are the parts a person reads rather than
- * watches, and the theme already styles them.
- *
- * The axis labels went the other way for the opposite reason. They were DOM nodes
- * positioned against a hardcoded 360px reference height while the gridlines were
- * drawn against the canvas's real one, so on a 652px chart the `1x` label sat 43px
- * below its own line. Inside the stage there is one scale, so they cannot
- * disagree - and they have to be there now anyway, since the axis rescales as a
- * round climbs and DOM labels would mean re-rendering React mid-round.
+ * The axis labels are the stage's on purpose. As DOM nodes they were positioned
+ * against a hardcoded reference height while the gridlines were drawn against the
+ * canvas's real one, so on a 652px chart the `1x` label sat 43px below its own line -
+ * and the axis rescales as a round climbs, so keeping them here would mean
+ * re-rendering React mid-round.
  */
 export function CrashChart() {
   const boxRef = useRef<HTMLDivElement>(null);

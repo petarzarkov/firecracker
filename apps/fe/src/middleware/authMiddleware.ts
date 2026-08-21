@@ -5,23 +5,16 @@ import * as authApi from '../systems/auth/auth-api';
 const CHECK_INTERVAL_MS = 5 * 60 * 1000;
 
 /**
- * Keeps the client's idea of "signed in" honest.
+ * Keeps the client's idea of "signed in" honest, by **asking the server** rather
+ * than reading the token.
  *
- * ## What this used to do, and why it was a bug waiting for the migration
+ * Do not reintroduce a client-side expiry check. A better-auth session token is
+ * `<id>.<hmac>`, where the second segment is a signature and not base64 JSON, so
+ * decoding it as a JWT throws - and a `catch` that reads a throw as expiry logs
+ * **every signed-in user out within a minute of loading the page**, forever, with
+ * the reason buried in a `console.error`. That shipped.
  *
- * It decoded the stored token as a JWT - `JSON.parse(atob(token.split('.')[1]))` -
- * read `exp`, and signed the user out five minutes before it. That worked against
- * the NestJS app, which issued JWTs.
- *
- * better-auth does not. Its session token is `<id>.<hmac>`, where the second
- * segment is a signature and not base64 JSON, so `JSON.parse` throws - and the old
- * `catch` treated a throw as expiry. Left alone, **every signed-in user would have
- * been logged out within a minute of loading the page**, forever, with the reason
- * buried in a `console.error`.
- *
- * The replacement does not guess. Sessions live on the server; the server is the
- * thing that knows whether one is still valid, so this asks it. That also covers
- * the cases the old code could not see at all: a session revoked elsewhere, a
+ * Asking also covers what no local check can see: a session revoked elsewhere, a
  * banned user, a token deleted on sign-out from another tab.
  */
 export class AuthMiddleware {
@@ -47,18 +40,12 @@ export class AuthMiddleware {
   /**
    * Asks the server who the caller is, and makes the store agree.
    *
-   * ## The boot call must run even with an empty store
-   *
-   * This used to open with `if (user === null) return;`, which made the cookie
-   * unreachable: the session's real carrier is better-auth's `HttpOnly` cookie and
-   * only `user` is persisted, so anything that clears `localStorage` without clearing
-   * cookies - a rebuild, "clear site data" on one origin, a `clearAuth()` from a
-   * blip - left a live session the client could not see. The app rendered the login
-   * form, and "Try Demo" then asked for a second anonymous session and was refused
-   * with `ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY`. No route out of the UI.
-   *
-   * `authStore`'s own comment already promised this - "a reload rehydrates the session
-   * from the cookie through `AuthMiddleware`" - and the guard is what stopped it.
+   * **No `if (user === null) return;` guard.** The session's real carrier is
+   * better-auth's `HttpOnly` cookie and only `user` is persisted, so anything that
+   * clears `localStorage` without clearing cookies - a rebuild, "clear site data" on
+   * one origin, a `clearAuth()` from a blip - leaves a live session the client cannot
+   * see. The app then renders the login form, and "Try Demo" is refused with
+   * `ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY`: no route out of the UI.
    *
    * The cost is one `/get-session` on boot for a visitor who has never signed in.
    * That is the honest price of being cookie-first: whether a session exists is a
