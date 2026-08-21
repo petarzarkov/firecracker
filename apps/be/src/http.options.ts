@@ -7,6 +7,7 @@ import {
   type Middleware,
 } from '@dunx/http';
 import type { Ctor } from '@dunx/core';
+import { GAME_EVENTS } from '@firecracker/contracts';
 import { HEALTH_ROUTES } from './constants.js';
 import { SpaFallback } from './client/client.module.js';
 import type { AppConfig } from './config/env.validation.js';
@@ -38,6 +39,25 @@ export class AppHttpOptions {
         ignore: AppHttpOptions.#probePaths(config),
       },
       websocket: { idleTimeout: 60 },
+      /**
+       * The socket's request log. `SocketLoggingMiddleware` wraps every dispatched
+       * handler the way `RequestLoggingMiddleware` wraps a route, so the frame and
+       * what it answered are one entry rather than two to correlate - and it carries
+       * `connectionId`, which is the only thing that joins a frame to the connect and
+       * the disconnect around it.
+       *
+       * Everything left at its default is left there deliberately. `debug` for a
+       * frame and for connect/disconnect, because a socket is traffic and CLAUDE.md's
+       * frequency contract puts traffic below `info`. **Payloads off**, because a
+       * chat body, a DM and a bet amount all cross this socket and `LOG_MASK_FIELDS`
+       * masks by field *name* - it cannot save a payload dumped wholesale.
+       *
+       * `gameTick` is the one event that must never reach the log. Nothing routes it
+       * today, so a client that sent one would fall through to the unclaimed-frame
+       * entry - and the tick is on a 100 ms clock, which is 864,000 lines a day per
+       * socket if that ever became true.
+       */
+      socketLogging: { events: { [GAME_EVENTS.TICK]: false } },
       /**
        * Multi-node websocket fan-out - what `@socket.io/redis-adapter` was for.
        * Always configured, never conditional: with no Redis it degrades to the

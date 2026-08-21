@@ -329,12 +329,14 @@ export class GameGateway {
     return { delivered: 1 };
   }
 
+  /**
+   * No log line here. `SocketLoggingMiddleware` wraps `@OnClose` even for a gateway
+   * that declares none, and its entry carries the `connectionId` and the connection's
+   * duration - which this one could not - so a second one would be the same event
+   * written twice.
+   */
   @OnClose()
-  closed(socket: Socket<GameSocketContext>, code: number): void {
-    this.logger.debug('socket closed', {
-      userId: socket.data.context.player?.userId ?? null,
-      code,
-    });
+  closed(): void {
     // After the close, so the count no longer includes this socket.
     this.#broadcastUserCount();
   }
