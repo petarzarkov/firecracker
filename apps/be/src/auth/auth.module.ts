@@ -28,12 +28,6 @@ import { CurrentUser } from './services/current-user.service.js';
  * matches `/api/auth`, so the two are different strings for one URL and the
  * route table is built before any factory has run.
  *
- * The *configuration* is named, not the configured module. `AuthModule.forRootAsync`
- * is called once, inline, where the decorator imports it - dunx 2.2.0 resolves an
- * `exports` entry naming a module class to the configuration of that class this
- * module imports, so re-exporting it no longer needs the object in a variable two
- * places can reach.
- *
  * The return is annotated `BetterAuthOptions` rather than inferred: detached from
  * the call, nothing gives `sendResetPassword`'s `{ user, url }` a contextual type,
  * and inferring it means `any`.
@@ -129,23 +123,17 @@ const options = {
 /**
  * Named for the feature rather than the package, so `AuthModule` still means
  * `@dunx/auth`'s. **The better-auth root and nothing else** - the profile routes and
- * the BetterTTV avatar proxy that used to ride along are in `ProfileModule` now,
- * because neither is authentication and both made this file a dependency of anything
- * that wanted one 30-line service.
+ * the avatar proxy are `ProfileModule`'s, because neither is authentication.
  *
- * **A decorated class rather than a `forRoot()` that took no arguments.** Under
- * module scoping the identity of a module reference is what a scope is keyed on, and
- * `forRoot()` returns a new object per call - so `UsersModule` importing
- * `AccountsModule.forRoot()` would have built a *second* better-auth, against a
- * second session store. A class is one reference however many modules import it,
- * which is the only shape that composes.
+ * **A decorated class rather than a `forRoot()` that takes no arguments.** A scope is
+ * keyed on the module reference and `forRoot()` returns a new object per call, so
+ * `UsersModule` importing `AccountsModule.forRoot()` would build a *second*
+ * better-auth against a second session store.
  *
- * **`global: true`**, which is what the paragraph above was always arguing for. This
- * is a one-per-process root like `DatabaseModule` and `QueuesModule`, and every
- * feature that wanted `CurrentUser` - users, files, the game - was hand-threading
- * `imports: [AccountsModule]` to reach it, importing a 90-line better-auth
- * configuration as a side effect. There is one of these per process by construction;
- * making three features name it bought no boundary.
+ * **`global: true`**, because this is a one-per-process root like `DatabaseModule`.
+ * There is one by construction, so making every feature that wants `CurrentUser` name
+ * it buys no boundary and imports a 90-line better-auth configuration to get one
+ * service.
  */
 @Module({
   global: true,
@@ -156,12 +144,10 @@ const options = {
    * configuration on the line above - so a consumer sees `Auth`, `AuthContext` and
    * `SessionGuard` without naming any of them, and because this module is global,
    * the export set is what becomes globally visible. `CurrentUser` is this module's
-   * own read of that context and is what every feature actually injects.
-   *
-   * Naming the class rather than the object is what removed the hoisted `const`
-   * this file used to need: a scope is keyed on the reference `forRootAsync`
-   * returned, so before 2.2.0 a second call here named a module that was not in the
-   * graph, and the only way to say "the one I imported" was to hold onto it.
+   * own read of that context and is what every feature actually injects. Naming the
+   * class rather than holding the `forRootAsync` return in a `const` only works
+   * because of that resolution - a scope is keyed on the reference it returned, so a
+   * second call here would name a module that is not in the graph.
    *
    * `AuthAdminSeeder` is not exported. It runs once at boot and has no caller.
    */

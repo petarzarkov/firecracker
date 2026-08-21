@@ -8,20 +8,14 @@ import { users, type UserRow } from '../../users/schema/user.schema.js';
  * Here rather than through `UsersRepository`, because `UsersModule` exports
  * nothing - deliberately, so a feature cannot reach into another feature's writes.
  * This is read-only over one column set and creates no such path.
- *
- * It exists because `PlayerChatService` used to ask `GameBetRepository` for a
- * display name, which is a chat service reaching into the crash game's bet table
- * for a string. That was the one genuinely wrong edge in the old graph.
  */
 export class PlayerDirectory extends BaseRepository<typeof users, UserRow> {
   /**
    * The rule, declared once for the whole app.
    *
-   * The email local-part is the fallback the NestJS gateway used inline. It is a
-   * `static` so `GameBetRepository`'s lobby join can apply it to rows it has
-   * already read without a second query - if the two ever disagreed, one player
-   * would have two names depending on whether you were looking at the bet list or
-   * a message header.
+   * A `static` so `GameBetRepository`'s lobby join can apply it to rows it has already
+   * read without a second query - if the two ever disagreed, one player would have two
+   * names depending on whether you were looking at the bet list or a message header.
    */
   static displayName(user: Pick<UserRow, 'name' | 'email' | 'id'>): string {
     return user.name || user.email.split('@')[0] || user.id;

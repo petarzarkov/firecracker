@@ -17,10 +17,8 @@ import { FilesService } from './services/files.service.js';
  * configured. Nothing here knows which: it injects `FilesService`, which injects
  * the abstract `Storage`, so a directory and a bucket are the same code path.
  *
- * The NestJS template guarded uploads with a `MultipartFormDataGuard` because the
- * interceptor would otherwise read a JSON body as an empty file list. dunx parses
- * by content type and answers 415 itself when the declared body cannot be parsed,
- * so there is nothing to guard.
+ * Uploads need no guard of their own: dunx parses by content type and answers 415
+ * itself when the declared body cannot be parsed.
  */
 @ApiDoc({
   tags: ['files'],

@@ -33,8 +33,6 @@ export interface OpenAICompatibleOptions {
  * propagation on top of `fetch`. So there is no SDK here and no new dependency:
  * one HTTP shape covers every provider that speaks it.
  *
- * ## Why `json_object` and not `json_schema`
- *
  * Structured output asks for `response_format: { type: 'json_object' }` rather
  * than the strict `json_schema` mode, which most Groq models reject outright.
  * `json_object` guarantees syntactically valid JSON but says nothing about field
@@ -47,14 +45,9 @@ export abstract class OpenAICompatibleService extends BaseProviderService {
    *
    * A named client is bound to a `Token`, and a token has no type name for
    * `@dunx/transform` to record - so it cannot be a constructor parameter. That is
-   * the documented shape, and this app needs it: `NotificationsModule` already
-   * binds an unnamed `HttpService` for the email webhook, and two modules binding
-   * the same class is a duplicate rather than two clients.
-   *
-   * It also fixed a boot failure. With the client nested inside `AIModule` as an
-   * unnamed binding, resolving `AIService` from `GameModule` - where the bots live -
-   * failed with `Cannot resolve HttpService in module "GameModule"`, because the
-   * dependency was invisible from the requesting scope.
+   * the documented shape, and this app needs it: `NotificationsModule` already binds
+   * an unnamed `HttpService` for the email webhook, and two modules binding the same
+   * class is a duplicate rather than two clients.
    */
   protected readonly http = inject(httpClient(AI_HTTP_CLIENT));
 

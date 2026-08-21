@@ -56,11 +56,9 @@ export class AuthOptions {
         cookieCache: { enabled: true, maxAge: 300 },
       },
       /**
-       * The three providers the NestJS version had as passport strategies. Each was
-       * a `Strategy` subclass, a `.forRoot()` branch and a callback controller
-       * route; here a provider is two environment variables, and better-auth owns
-       * the callback. A provider with only one half of its credentials is absent
-       * rather than half-configured - see `EnvConfig` in `env.validation.ts`.
+       * A provider is two environment variables and better-auth owns the callback.
+       * One with only half its credentials is absent rather than half-configured -
+       * see `EnvConfig` in `env.validation.ts`.
        */
       socialProviders: {
         ...(auth.google === undefined ? {} : { google: auth.google }),
@@ -73,9 +71,6 @@ export class AuthOptions {
         admin(),
         /**
          * "Try Demo" - a real user row with no credential behind it.
-         *
-         * The NestJS version had a hand-written `POST /api/auth/demo` that minted a
-         * guest and signed a JWT for it. This is that, owned by the library.
          *
          * It is not a nicety for a crash game. A demo wallet is per-user, so
          * `wallet.user_id` needs a row to point at - "play without signing up" is

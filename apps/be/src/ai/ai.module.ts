@@ -60,9 +60,8 @@ import { OpenRouterService } from './services/openrouter.service.js';
    * which reach the named client. Exporting only `AIService` left that
    * invisible from the requesting scope and boot failed naming it.
    *
-   * Naming the class works because dunx 2.2.0 resolves such an entry to the
-   * configuration of that class this module imports - the one above, with its
-   * `AI_HTTP_CLIENT` token. It is what retired the hoisted `const`.
+   * Naming the class resolves to the configuration of that class this module imports -
+   * the one above, with its `AI_HTTP_CLIENT` token.
    */
   exports: [AIService, HttpModule],
 })

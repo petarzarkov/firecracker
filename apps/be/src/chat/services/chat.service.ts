@@ -9,11 +9,9 @@ import {
 } from '../../notifications/events/events.js';
 
 /**
- * The key the NestJS version used, kept deliberately.
- *
- * An existing deployment's scrollback lives at this key right now. Renaming it
- * would silently empty every lobby on deploy, which is indistinguishable from the
- * feature being broken.
+ * Deliberately unchanged. An existing deployment's scrollback lives at this key right
+ * now, and renaming it would silently empty every lobby on deploy - which is
+ * indistinguishable from the feature being broken.
  */
 const HISTORY_KEY = 'chat:global:history';
 
@@ -30,22 +28,14 @@ export type { ChatLine };
 /**
  * The lobby's chat scrollback, in Redis.
  *
- * A capped list - `rpush` then `ltrim` to the last {@link CHAT_HISTORY_MAX} - which
- * is what the NestJS version did and the right shape for this: the newest N of a
- * write-heavy, read-once-per-connection stream, with the cap enforced by the data
- * structure rather than by a periodic sweep.
+ * A capped list - `rpush` then `ltrim` to the last {@link CHAT_HISTORY_MAX} - which is
+ * the right shape for the newest N of a write-heavy, read-once-per-connection stream:
+ * the cap is enforced by the data structure rather than by a periodic sweep.
  *
- * ## Not the database, and that is the point
- *
- * An earlier pass at this migration put chat in a SQLite table. That was wrong on
- * its own terms, never mind the churn: the game's SQLite file is opened by two
- * processes and carries the bet path, so adding a high-frequency, low-value write
- * to it puts lobby chatter in contention with settling money. Redis is already
- * here, it already holds the round's client seeds and auto-cashouts, and a capped
- * list is one command with no migration behind it.
- *
- * Losing the scrollback if Redis is flushed is the accepted trade. Chat is not a
- * record; a round is, and that is what the database holds.
+ * **Not SQLite.** That file is opened by two processes and carries the bet path, so a
+ * high-frequency, low-value write puts lobby chatter in contention with settling
+ * money. Losing the scrollback if Redis is flushed is the accepted trade: chat is not
+ * a record, a round is, and that is what the database holds.
  */
 export class ChatService {
   constructor(
@@ -58,19 +48,15 @@ export class ChatService {
    * Say one line in the lobby: broadcast it, then keep it.
    *
    * **Broadcast first.** Everyone watching has the line, and a failed write then
-   * costs the scrollback rather than the message. It was two statements and a
-   * hand-built `ChatLine` in `GameGateway.#globalChat` and again in
-   * `GameBotsService.#react`, with a comment above the first claiming the opposite
-   * order to the one the code used.
+   * costs the scrollback rather than the message.
    */
   say(author: Pick<ChatLine, 'username' | 'picture'>, message: string): void {
     const line: ChatLine = {
       username: author.username,
       message,
       timestamp: new Date().toISOString(),
-      // The client renders this as the avatar and falls back to an initial. The
-      // NestJS version sent it and this migration dropped it, so every line
-      // showed a letter where a face had been.
+      // The client renders this as the avatar and falls back to an initial. Dropping
+      // it once already showed a letter where every face had been.
       picture: author.picture,
     };
 

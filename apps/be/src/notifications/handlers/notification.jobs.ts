@@ -21,11 +21,6 @@ import { EmailService } from '../services/email.service.js';
  * no `@Processor`, no queue token, no registry. `WorkerFactory` finds it by walking
  * the prototypes of the classes already in `providers`, which is the same
  * marker-plus-scan the route and gateway discovery use.
- *
- * The NestJS template had to add `@JobHandler` itself on top of `@nestjs/bullmq`,
- * plus a `JobDispatcher` that walked the `DiscoveryService` and a forked
- * `job.processor.ts` to give the worker a DI context. All of that is
- * `WorkerFactory.create(WorkerModule)` here.
  */
 export class NotificationJobs {
   constructor(

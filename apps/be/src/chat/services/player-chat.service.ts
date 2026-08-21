@@ -14,18 +14,9 @@ import { PlayerDirectory } from '../repos/player-directory.repository.js';
 const ROOM_TTL_SECONDS = 24 * 60 * 60;
 
 /**
- * One-to-one chat between two players.
- *
- * ## It left the game module, and that is the point
- *
- * A DM is not a round. This lived in `game/services/` and injected
- * `GameBetRepository` for one thing - a display name - which is a chat service
- * reading the crash game's bet table for a string. `PlayerDirectory` replaced that
- * edge, and the service is now in the feature it belongs to. The socket is still
- * `GameGateway`'s, because dunx mounts one gateway per path and the app has one
- * connection; that is a transport fact, not an ownership one.
- *
- * ## The room id is derived, not allocated
+ * One-to-one chat between two players. The socket is still `GameGateway`'s, because
+ * dunx mounts one gateway per path and the app has one connection - a transport fact
+ * rather than an ownership one.
  *
  * `roomId` is a hash of the two user ids **sorted**, so Ada messaging Grace and
  * Grace messaging Ada produce the same room without either of them having to
@@ -35,12 +26,10 @@ const ROOM_TTL_SECONDS = 24 * 60 * 60;
  * Sorted, specifically: unsorted would give the pair two rooms depending on who
  * spoke first, and they would each be talking into a room the other was not in.
  *
- * ## Membership lives in Redis
- *
- * Not in the socket, and not in a JavaScript map. A player closes a tab and comes
- * back; a web process restarts; eventually there is more than one node. All three
- * are the same requirement - the room outlives the connection - and Redis is
- * already here for the queue and the relay.
+ * Membership lives in **Redis**, not on the socket and not in a JavaScript map. A
+ * player closes a tab and comes back, a web process restarts, eventually there is
+ * more than one node - all three are the same requirement, that the room outlives the
+ * connection.
  *
  * Messages themselves are **not** stored. This is a lobby side-channel, not a
  * messaging product: history lives in the open tab and nowhere else, which is also

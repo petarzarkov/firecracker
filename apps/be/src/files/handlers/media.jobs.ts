@@ -22,10 +22,8 @@ export interface ThumbnailResult {
  * re-encode it as WebP and write it back beside the source.
  *
  * It injects the very same `ThumbnailsService` and `Storage` the HTTP routes use -
- * one wiring, two entrypoints - which is the point of a job handler being an
- * ordinary provider. The NestJS template's equivalent ran in a forked
- * `job.processor.ts` that bootstrapped a second `JobModule` by hand, because a Nest
- * worker has no container of its own.
+ * one wiring, two entrypoints - which is the point of a job handler being an ordinary
+ * provider.
  */
 export class MediaJobs {
   constructor(

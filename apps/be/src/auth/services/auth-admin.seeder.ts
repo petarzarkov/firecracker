@@ -11,10 +11,8 @@ import { UserRole, users } from '../../users/schema/user.schema.js';
  * inserting a row.
  *
  * A row inserted straight into `user` has no `account` row and therefore no
- * password hash, so it can never sign in - which is exactly what the drizzle
- * seeder used to produce, and why the seeder no longer touches users. Going
- * through `api.signUpEmail` is what makes the credential real, and it is also the
- * only way the hash comes from `bunPassword`.
+ * password hash, so it can never sign in. Going through `api.signUpEmail` is what
+ * makes the credential real, and the only way the hash comes from `bunPassword`.
  *
  * `onInit`, so it runs after the migrations and before `listen()` binds. Refused
  * outright in production: the fallback password is a documented default, and a
