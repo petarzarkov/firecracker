@@ -271,13 +271,18 @@ mergeable, CI green.
 - Four flagged dunx defects unfixed by decision: no `x-request-id` on failures, the
   `OPTIONS` method-miss running the global chain, silent `override` of an unbound
   class token, `'trust proxy'`.
-- The files module is still unreachable, so `infra/files`, `infra/images` and
-  `MediaJobs` exist for nothing. Verdict was "wire it to avatar upload".
+- ~~The files module is unreachable~~ **Done.** A player uploads an avatar from the
+  user menu; it becomes `users.image` and appears everywhere the app already reads it,
+  including every chat line. `FilesFeatureModule`, `infra/files`, `infra/images` and
+  the sandboxed `media` queue have their first real caller. Ownership is checked
+  server-side on the file row, the public read gates on the _reference_ rather than
+  the key prefix - an upload nobody wears is not public - and a replaced avatar's
+  object, thumbnail and row are deleted rather than orphaned.
 - `QueuesController` kept deliberately until `@dunx/dashboard` is a dependency.
 - Multi-replica is a design document by decision; SQLite on local disk is the wall.
 - **The two "flakes" were not flakes.** Sixty runs in an isolated `git worktree` at
   HEAD - 40 of the named test, 12 full unit suites, 8 e2e suites - produced zero
-  failures. Both original sightings came from an agent running tests while a *second*
+  failures. Both original sightings came from an agent running tests while a _second_
   agent was mid-edit in the same working tree, and one of them said so at the time:
   "the other agent is live in this tree and transiently broke `DatabaseModule.forRoot`
   mid-session". A test run racing a concurrent edit is not flakiness. The lesson is
