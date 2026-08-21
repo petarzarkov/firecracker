@@ -6,12 +6,13 @@ import {
   type HttpOptions,
   type Middleware,
 } from '@dunx/http';
-import type { Ctor } from '@dunx/core';
+import { LogLevel, type Ctor } from '@dunx/core';
 import { GAME_EVENTS } from '@firecracker/contracts';
 import { HEALTH_ROUTES } from './constants.js';
 import { SpaFallback } from './client/client.module.js';
 import type { AppConfig } from './config/env.validation.js';
 import { ErrorMapper } from './core/errors/error-mapper.js';
+import { SocketErrorReporter } from './core/errors/socket-error.reporter.js';
 
 /**
  * The `HttpOptions`, in one place, because they go to `HttpFactory.create` **and** to
@@ -56,8 +57,22 @@ export class AppHttpOptions {
        * today, so a client that sent one would fall through to the unclaimed-frame
        * entry - and the tick is on a 100 ms clock, which is 864,000 lines a day per
        * socket if that ever became true.
+       *
+       * `errorLevel` is the one default overridden. A failed frame is still recorded
+       * here, at the frame's own level, with the event on it - but the `error` entry
+       * is `SocketErrorReporter`'s, so a single failure is not two lines an operator
+       * has to notice are the same one.
        */
-      socketLogging: { events: { [GAME_EVENTS.TICK]: false } },
+      socketLogging: {
+        events: { [GAME_EVENTS.TICK]: false },
+        errorLevel: LogLevel.DEBUG,
+      },
+      /**
+       * Inside the logging middleware, which dunx puts outermost. It is where a
+       * socket exception becomes an entry, and the reason there is no
+       * `websocket.onError` beside it - see `SocketErrorReporter`.
+       */
+      socketMiddleware: [SocketErrorReporter],
       /**
        * Multi-node websocket fan-out - what `@socket.io/redis-adapter` was for.
        * Always configured, never conditional: with no Redis it degrades to the
