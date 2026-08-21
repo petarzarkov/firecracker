@@ -1,6 +1,6 @@
 import { Box, Image, SimpleGrid, Text } from '@chakra-ui/react';
 import type { TrendingAvatars } from '@firecracker/contracts';
-import { useState } from 'react';
+import { type ChangeEvent, useRef, useState } from 'react';
 import { apiFetch } from '@/systems/network/api';
 import { Button } from './Button';
 import { InputField } from './InputField';
@@ -17,14 +17,27 @@ export const AvatarPicker = ({
   customUrl,
   onSelect,
   onCustomUrlChange,
+  onUpload,
+  defaultOpen = false,
 }: {
   currentPicture: string;
   customUrl: string;
   onSelect: (url: string) => void;
   onCustomUrlChange: (val: string) => void;
+  /**
+   * Given a file, make it the avatar. **Absent on the sign-up form**, and that is
+   * not an oversight: an upload belongs to an account, and there is no account yet
+   * when this picker is on the register screen - the route would answer 401.
+   */
+  onUpload?: (file: File) => Promise<void>;
+  /** The panel starts open where the picker *is* the screen, as in the dialog. */
+  defaultOpen?: boolean;
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(defaultOpen);
   const [avatars, setAvatars] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const fileInput = useRef<HTMLInputElement>(null);
 
   /**
    * Fetched on first open, from `GET /api/profile/avatars/trending`.
@@ -45,6 +58,24 @@ export const AvatarPicker = ({
       setAvatars(trending.length > 0 ? [...trending] : [...AVATARS]);
     } catch {
       setAvatars([...AVATARS]);
+    }
+  };
+
+  const handleFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    // Cleared so that picking the same file again is still a change event, which
+    // is what a failed upload leaves a user wanting to do.
+    event.target.value = '';
+    if (file === undefined || onUpload === undefined) return;
+
+    setUploading(true);
+    setUploadError('');
+    try {
+      await onUpload(file);
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : 'Upload failed');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -91,6 +122,36 @@ export const AvatarPicker = ({
             border: '1px solid rgba(255,107,0,0.15)',
           }}
         >
+          {onUpload !== undefined && (
+            <Box mb="4">
+              <input
+                ref={fileInput}
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={handleFile}
+              />
+              <Button
+                onClick={() => fileInput.current?.click()}
+                loading={uploading}
+                variant="glass"
+                width="full"
+                color="orange.300"
+              >
+                Upload Your Own
+              </Button>
+              {uploadError && (
+                <Text
+                  color="red.300"
+                  fontSize="xs"
+                  mt="2"
+                  fontFamily="monospace"
+                >
+                  {uploadError}
+                </Text>
+              )}
+            </Box>
+          )}
           <SimpleGrid columns={5} gap={2} mb="4">
             {avatars.map((url) => (
               <Box
