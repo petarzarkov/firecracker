@@ -1,8 +1,7 @@
 import { z } from 'zod';
 
 /**
- * SQLite only. The Postgres option went away with the migration off TypeORM: the
- * data layer here is synchronous (`bun:sqlite`, `SyncDatabase`), and that is not a
+ * SQLite only, and synchronous (`bun:sqlite`, `SyncDatabase`). That is not a
  * limitation being worked around - it is what makes a bet atomic without a lock
  * service. See `GameBetService` for why.
  */

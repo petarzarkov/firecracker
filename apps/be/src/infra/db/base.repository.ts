@@ -21,10 +21,10 @@ const many = <TRow>(value: unknown): TRow[] => value as TRow[];
 /**
  * Reads, and the binding to a transaction handle.
  *
- * Synchronous, except the paginated read. That is not tidiness deferred: the bet
- * path's read-check-write is atomic *because* none of these can yield (see
- * `GameBetService`), so a method here becoming `async` would silently remove the
- * guarantee that replaced `pg_try_advisory_xact_lock`.
+ * Synchronous, without exception. That is not tidiness deferred: the bet path's
+ * read-check-write is atomic *because* none of these can yield (see
+ * `GameBetService`), so a method here becoming `async` would silently remove the only
+ * thing standing in for a lock.
  */
 export abstract class BaseRepository<
   TTable extends Identified,
@@ -78,8 +78,7 @@ export abstract class BaseRepository<
    * first of `updatedAt`, `createdAt`, `id` the table has - so a table with
    * `updatedAt` would silently sort by last modification.
    *
-   * Synchronous, like every other read here. `paginate` used to be async because it
-   * also serves `Bun.SQL`; since @dunx/infra 2.2.0 its return type follows the
+   * Synchronous, like every other read here: `paginate`'s return type follows the
    * driver, so a `bun:sqlite` handle gets a `Page` rather than a promise for one.
    */
   protected page(
@@ -122,8 +121,8 @@ export abstract class CrudRepository<
    * `undefined`, and a patch DTO produces the latter - so the value type has to
    * admit it.
    *
-   * No `updatedAt` in the set object, unlike the four copies this replaces. Every
-   * `Columns.updatedAt()` carries `$onUpdate`, and drizzle's `buildUpdateSet`
+   * No `updatedAt` in the set object. Every `Columns.updatedAt()` carries
+   * `$onUpdate`, and drizzle's `buildUpdateSet`
    * includes any column with an `onUpdateFn` whether or not the caller passed it.
    * `base.repository.test.ts` asserts that, because it is the only thing standing
    * between this method and a table whose `updated_at` silently stops moving.

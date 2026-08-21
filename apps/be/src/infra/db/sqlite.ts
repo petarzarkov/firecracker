@@ -15,10 +15,8 @@ export interface SqliteInit {
 /**
  * The pragmas, in the order that matters.
  *
- * This app runs **two processes** against one database file - the serving process
- * and a bullmq sandbox child - which is the same shape the Postgres version had,
- * minus the server. Three of these four are what make that safe, and they replace
- * what `pg_try_advisory_xact_lock` was doing:
+ * This app runs **two processes** against one database file - the serving process and
+ * a bullmq sandbox child. Three of these four are what make that safe:
  *
  *  - **`busy_timeout` is first, and the order is not cosmetic.** SQLite allows a
  *    single writer, and without a timeout the loser of a race gets `SQLITE_BUSY`

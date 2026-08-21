@@ -15,11 +15,10 @@ import { AppConfigService } from '../config/app.config.service.js';
 /**
  * Serves the built client, and answers a deep link with `index.html`.
  *
- * This is what `ServeStaticModule` did in the NestJS version. `@dunx/http`'s
- * `StaticModule` covers the file serving; what it deliberately does not do is the
- * SPA rewrite, on the reasoning that a middleware which owns "what a 404 means"
- * for paths it did not mount is a middleware that will eventually swallow a real
- * one. So the rewrite is here, in the app, where the exclusions are known.
+ * `@dunx/http`'s `StaticModule` covers the file serving; what it deliberately does
+ * not do is the SPA rewrite, on the reasoning that a middleware which owns "what a
+ * 404 means" for paths it did not mount is a middleware that will eventually swallow
+ * a real one. So the rewrite is here, in the app, where the exclusions are known.
  */
 export class SpaFallback implements Middleware {
   readonly #index: string;

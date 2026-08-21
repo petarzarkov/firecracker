@@ -1,10 +1,8 @@
 /**
  * Types the config tree is built from, and nothing that restates its shape.
  *
- * `AppConfig` itself is derived from `validateConfig` in `env.validation.ts`. It
- * used to be a hand-written 110-line interface listing every field the function
- * already returns, which is two descriptions of one thing and the annotation was
- * what forced them apart.
+ * `AppConfig` itself is derived from `validateConfig` in `env.validation.ts` rather
+ * than hand-written beside it, because two descriptions of one shape drift.
  */
 export interface OAuthCredentials {
   readonly clientId: string;

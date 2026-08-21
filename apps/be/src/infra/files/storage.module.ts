@@ -11,10 +11,8 @@ import { AppConfigService } from '../../config/app.config.service.js';
 import { StorageDriver } from '../../config/dto/storage-vars.dto.js';
 
 /**
- * The backend, chosen once. Named separately from the decorator below only because
- * it is thirty lines: the module it configures is imported and re-exported by
- * class, which is what dunx 2.2.0 resolves for an `exports` entry and what retired
- * the `const` holding a configured `FilesModule`.
+ * The backend, chosen once. A `const` only because it is thirty lines; the module it
+ * configures is imported and re-exported by class.
  */
 const storageOptions = async (
   config: AppConfigService,

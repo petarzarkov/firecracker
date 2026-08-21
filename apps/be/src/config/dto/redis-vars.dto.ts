@@ -5,9 +5,9 @@ import { z } from 'zod';
  * degraded, the throttler stops throttling, the queue answers 503 and the
  * websocket relay fans out locally - the app still boots and still exits 0.
  *
- * That is why there is no `REDIS_HOST`/`REDIS_PORT`/`REDIS_DB` triple as in the
- * NestJS template: `Bun.RedisClient` takes a URL, and one absent URL is a much
- * clearer "there is no Redis" than four fields with working defaults.
+ * There is no `REDIS_HOST`/`REDIS_PORT`/`REDIS_DB` triple: `Bun.RedisClient` takes a
+ * URL, and one absent URL is a much clearer "there is no Redis" than four fields with
+ * working defaults.
  */
 export const redisVarsSchema = z.object({
   REDIS_URL: z.string().optional(),
@@ -36,8 +36,8 @@ export const redisVarsSchema = z.object({
   /**
    * Whether this process consumes its queues. **On, and there is one process.**
    *
-   * `WORKER_MODE=separate` and `src/worker.ts` are gone: isolation is a sandboxed
-   * child per queue now, which is per handler and needs no second entrypoint.
+   * There is no `WORKER_MODE`: isolation is a sandboxed child per queue, which is per
+   * handler and needs no second entrypoint.
    *
    * `false` is for the integration suites, which build the engine too - a consuming
    * test server would start the round loop underneath their assertions. Not a

@@ -62,10 +62,8 @@ export class DatabaseBootstrap {
  * and the health probe all read it - so making each of them import a reference they
  * cannot construct for themselves would be ceremony with no boundary behind it.
  *
- * **A decorated class rather than a `forRoot()` that took no arguments.** A scope is
- * keyed on the module reference and `forRoot()` returned a new object per call, so a
- * second caller was a second scope with a second SQLite connection. A class is one
- * reference however many modules name it, which is the only shape that dedupes.
+ * **Decorated rather than configured**, because a `forRoot()` returning a new object
+ * per call means a second caller gets a second scope and a second SQLite connection.
  *
  * **The pragmas are the concurrency design**, and they live in `sqlite.ts` with the
  * note that says why their order is not cosmetic - because the two scripts open the
@@ -86,11 +84,10 @@ export class DatabaseBootstrap {
     }),
   ],
   providers: [DatabaseBootstrap],
-  // `DbModule`, the class: dunx 2.2.0 resolves an exported module reference to the
-  // configuration imported beside it, so re-exporting hands on whatever that module
-  // exports - `DbConnection`, `DbOptions`, the drizzle handle - without restating a
-  // list that is not this module's own. It is what retired the hoisted `const` this
-  // file kept so one object could appear in both lists.
+  // `DbModule`, the class: an exported module reference resolves to the configuration
+  // imported beside it, so re-exporting hands on whatever that module exports -
+  // `DbConnection`, `DbOptions`, the drizzle handle - without restating a list that is
+  // not this module's own.
   exports: [DbModule, DatabaseBootstrap],
 })
 export class DatabaseModule {}

@@ -17,13 +17,12 @@ export interface ErrorBody {
 }
 
 /**
- * dunx's answer to a stack of `@Catch()` exception filters: one function passed to
- * `HttpFactory.create`. Anything it does not recognise falls through to
- * `defaultErrorMapper`, which never leaks an unexpected error's message.
+ * One function passed to `HttpFactory.create`, in place of a stack of exception
+ * filters. Anything it does not recognise falls through to `defaultErrorMapper`,
+ * which never leaks an unexpected error's message.
  *
- * The envelope matches the NestJS template's: `{ error, message, status }`, with
- * `issues` added when a schema rejected the input. Note `status`, not `statusCode`.
- *
+ * The envelope is `{ error, message, status }`, with `issues` added when a schema
+ * rejected the input. Note `status`, not `statusCode`.
  */
 export class ErrorMapper {
   static readonly #STATUS_NAME = new Map<number, string>(
@@ -100,7 +99,7 @@ export class ErrorMapper {
     return ErrorMapper.#STATUS_NAME.get(status) ?? 'INTERNAL_SERVER_ERROR';
   }
 
-  /** `bun:sqlite` constraint codes, mapped the way the NestJS filter did. */
+  /** `bun:sqlite` constraint codes, as the status a client can act on. */
   static #fromSqlite(error: SQLiteError): ErrorBody {
     const nameOf = ErrorMapper.nameOf;
     switch (error.code) {

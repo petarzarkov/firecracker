@@ -74,15 +74,12 @@ const health = HealthModule.forRootAsync({
 /**
  * Liveness, readiness and build info.
  *
- * This replaced a hand-rolled Terminus envelope - four `#check*` methods, three status
- * buckets and an `at(status)` partitioner - with `@dunx/http`'s, which is better in two
- * ways this app was getting wrong: a check that times out is `unknown` rather than
- * `down`, and the checks run concurrently and bounded, where the old `check()` awaited
- * the cache then the queue unbounded and so hung on a Redis that went quiet instead of
- * failing.
+ * `@dunx/http`'s probes, which get two things right that a hand-rolled envelope
+ * mostly does not: a check that times out is `unknown` rather than `down`, and the
+ * checks run concurrently and bounded rather than awaiting one after another and
+ * hanging on a Redis that went quiet instead of failing.
  *
- * `critical: false` carries what `degraded` used to. Only the database can fail
- * readiness.
+ * `critical: false` is the `degraded` bucket. Only the database can fail readiness.
  *
  * `Readiness` implements `OnBeforeShutdown`, which runs while the server is still
  * accepting - an `onShutdown` hook runs after `server.stop()`, so a probe answering

@@ -74,7 +74,7 @@ export class AppHttpOptions {
        */
       socketMiddleware: [SocketErrorReporter],
       /**
-       * Multi-node websocket fan-out - what `@socket.io/redis-adapter` was for.
+       * Multi-node websocket fan-out.
        * Always configured, never conditional: with no Redis it degrades to the
        * single-process behaviour and the app still boots. It cannot read config off
        * the container for the same reason the port cannot.

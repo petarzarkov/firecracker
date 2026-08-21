@@ -17,14 +17,12 @@ import { AppConfigService } from '../../config/app.config.service.js';
  * probe - and decorated rather than configured for the same reason too, since a
  * second `forRoot()` call was a second scope with a second client.
  *
- * `exports: [RedisModule]` names the class, which dunx 2.2.0 resolves to the
- * configuration imported beside it. Before that it had to be a hoisted `const`, so
- * that one object could appear in both lists.
+ * `exports: [RedisModule]` names the class, which resolves to the configuration
+ * imported beside it.
  *
- * `ThrottleGuard` used to live here and now does not. It is app-level middleware -
- * `httpOptions.middleware` lists it - so it belongs to the module that lists it, and
- * it also needs the caller, which would have made this infra module import the auth
- * feature that imports it back. `AppModule` configures `ThrottleModule` instead.
+ * `ThrottleGuard` is `AppModule`'s and not this module's: it is app-level middleware
+ * and it needs the caller, so binding it here would make an infra module import the
+ * auth feature that imports it back.
  */
 @Module({
   global: true,

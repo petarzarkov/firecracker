@@ -94,21 +94,14 @@ class Foundation {
  * The application. **One process**: it serves HTTP, holds the clock, owns the sockets
  * and consumes its own queues.
  *
- * `src/worker.ts` and `WORKER_MODE` are gone, replaced by
- * `QueueModule.forRoot({ consume: true })` - the container stops the workers at
+ * There is no entrypoint that starts the consumer, because an entrypoint cannot
+ * express the ordering: `QueueModule.forRoot({ consume: true })` stops the workers at
  * `onShutdown`, which runs in reverse construction order and therefore before the
- * connections the handlers use. Isolation is per handler now: see
- * `src/jobs.processor.ts`.
+ * connections the handlers use. Isolation is per handler - see `src/jobs.processor.ts`.
  *
  * **Undecorated, with a static factory**, because every option here varies: `source`
- * and `logLevel` per suite, and `CLIENT_DIST` decides whether `ClientModule` is in
- * the graph at all. A `@Module` on top would have nothing to add.
- *
- * It used to be that it *could not* also carry `@Module`: `resolveRef` concatenated
- * decorator metadata with a `DynamicModule`'s options, so declaring both registered
- * every import twice. dunx 2.2.0 unions the two instead - a provider's token wins
- * once and the configured binding replaces the declared one - so the two compose and
- * a decorator is where a default belongs. Nothing here has a default to state.
+ * and `logLevel` per suite, and `CLIENT_DIST` decides whether `ClientModule` is in the
+ * graph at all. A `@Module` on top would compose, but it has no default to state.
  */
 export class AppModule {
   static forRoot(options: AppModuleOptions = {}): DynamicModule {
@@ -140,10 +133,9 @@ export class AppModule {
   }
 
   /**
-   * `@dunx/http`'s rate limit, replacing a hand-rolled decorator and guard that
-   * did the same thing for 119 lines. Registered here rather than in
-   * `Foundation.for()`: `ClientAddress` is an HTTP binding and a job child has no
-   * server, and nothing in a child answers a request to limit.
+   * Registered here rather than in `Foundation.for()`: `ClientAddress` is an HTTP
+   * binding, a job child has no server, and nothing in a child answers a request to
+   * limit.
    *
    * `store` is explicit because the default is `MemoryThrottleStore`, which
    * **counts** when Redis is unreachable rather than standing aside. Only

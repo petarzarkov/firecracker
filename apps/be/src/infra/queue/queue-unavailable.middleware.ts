@@ -18,9 +18,7 @@ import type { BunRequest } from 'bun';
  * a 503 rather than a 500, because "the queue is not reachable" is the only thing it
  * can mean on these routes.
  *
- * This used to be a private `degrades()` helper wrapped around all five route
- * bodies, which is what a per-controller `@Catch` filter is for elsewhere. It is
- * listed in `@Module({ middleware })` instead, so it covers exactly the routes
+ * Listed in `@Module({ middleware })`, so it covers exactly the routes
  * `QueuesController` declares and nothing the module imports - and an `HttpError`
  * rethrown here still travels out to the app-wide mapper, which is the route →
  * controller → global cascade with no second concept behind it.
