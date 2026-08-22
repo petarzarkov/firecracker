@@ -5,13 +5,11 @@ import type { Scale } from '../scale.js';
 /**
  * The gridlines and their labels.
  *
- * ## Both, here, together
- *
- * The labels used to be DOM nodes over the canvas, positioned by percentage
- * against a hardcoded reference height while the lines were drawn against the
- * chart's real one. On a 652px chart the `1x` label sat 43px below its own line.
- * Two things describing one axis is what caused it, so there is now one thing:
- * both read {@link Scale}, on the same frame, from the same `y`.
+ * **Both, here, together.** Labels as DOM nodes positioned against a hardcoded
+ * reference height, while the lines were drawn against the chart's real one, put the
+ * `1x` label 43px below its own line on a 652px chart. Two things describing one axis
+ * is what caused it, so there is one: both read {@link Scale}, on the same frame,
+ * from the same `y`.
  *
  * It also has to redraw as the axis rescales - a round climbing past its ceiling
  * grows new gridlines - so redrawing was never optional and the DOM half could

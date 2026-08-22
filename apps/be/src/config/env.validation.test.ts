@@ -44,10 +44,8 @@ describe('validateConfig', () => {
   });
 
   /**
-   * Replaced the Postgres cross-field rule, which went away with the driver. The
-   * game's tunables have rules of their own now, and this is the one that would
-   * actually cost money: a cleanup threshold inside a normal round length refunds
-   * live bets out from under the players holding them.
+   * The one cross-field rule that costs money: a cleanup threshold inside a normal
+   * round length refunds live bets out from under the players holding them.
    */
   test('the cleanup threshold cannot fall inside a normal round', () => {
     expect(() =>

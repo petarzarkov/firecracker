@@ -1,26 +1,21 @@
 /**
  * A socket.io-shaped client over a plain WebSocket.
  *
- * ## Why this exists
+ * The server's gateways are native `Bun.serve` WebSockets and the wire is one JSON
+ * object, `{ event, data }`. This provides `emit` and `on` over that envelope, so
+ * `useGameSocket`, `BetPanel`, `GlobalChat` and the rest never had to change.
  *
- * The server moved from socket.io to `@dunx/http`, whose gateways are native
- * `Bun.serve` WebSockets. dunx cannot speak the socket.io protocol and never will -
- * that protocol is a framing layer, a handshake, an ack scheme and a transport
- * negotiation, and Bun's WebSocket is none of it.
- *
- * What the wire actually needs is small: one JSON object, `{ event, data }`. So
- * rather than rewrite every component that calls `socket.emit('placeBet', …)` and
- * `socket.on('gameTick', …)`, this file provides those two methods over that
- * envelope. `useGameSocket`, `BetPanel`, `GlobalChat` and the rest are unchanged.
- *
- * ## What it deliberately does not reimplement
- *
- * socket.io has acks, rooms addressed from the client, binary attachments,
- * multiplexed namespaces and long-polling fallback. None of them were used by this
- * app, and each one reimplemented here would be a bug waiting to happen. Rooms are
- * server-side (Bun topics), replies come back as ordinary events, and there is no
+ * It deliberately reimplements none of the rest of socket.io - acks, client-addressed
+ * rooms, binary attachments, multiplexed namespaces, long-polling fallback. Rooms are
+ * server-side Bun topics, replies come back as ordinary events, and there is no
  * fallback transport because Bun requires a real WebSocket anyway.
  */
+
+import type {
+  ClientPayloads,
+  GAME_CLIENT_EVENTS,
+  ServerPayloads,
+} from '@firecracker/contracts';
 
 /**
  * How a listener is held once its parameter type is erased.
@@ -32,6 +27,23 @@
  */
 type StoredListener = (data: unknown) => void;
 
+/**
+ * The events this shim raises itself, and what each hands its listener.
+ *
+ * They are not wire events - no frame carries these names - which is why they are
+ * declared here and not in `@firecracker/contracts`, and why `connect_error` keeps
+ * carrying an `Error` that callers read `.message` off.
+ */
+interface LocalPayloads {
+  readonly connect: undefined;
+  readonly disconnect: string;
+  readonly connect_error: Error;
+  readonly error: unknown;
+}
+
+/** Everything a listener on this socket can be registered for. */
+type Incoming = ServerPayloads & LocalPayloads;
+
 export interface SocketOptions {
   /** Sent as `?token=`, which the gateway promotes to an `Authorization` header. */
   readonly token?: string | undefined;
@@ -42,19 +54,6 @@ export interface SocketOptions {
   readonly reconnectionDelay?: number;
   readonly reconnectionDelayMax?: number;
 }
-
-/**
- * The events this shim raises itself rather than receiving from the server. Named
- * so a listener for one of them is never confused with a wire event of the same
- * name - and so `connect_error` keeps carrying an `Error`, which callers read
- * `.message` off.
- */
-const LOCAL_EVENTS = new Set([
-  'connect',
-  'disconnect',
-  'connect_error',
-  'error',
-]);
 
 /** The `socket.io` manager surface, reduced to the one event this app used. */
 class Manager {
@@ -122,7 +121,17 @@ export class Socket {
     return this.connected ? 'ws' : undefined;
   }
 
-  on<T = unknown>(event: string, listener: (data: T) => void): this {
+  /**
+   * Listen for one event, with the payload named by that event.
+   *
+   * The name decides the type, from `@firecracker/contracts`, so a handler that
+   * reads a field the server does not send stops compiling - which is what three
+   * shipped `userId` bugs and one chat-panel crash needed and did not have.
+   */
+  on<E extends keyof Incoming>(
+    event: E,
+    listener: (data: Incoming[E]) => void,
+  ): this {
     let set = this.#listeners.get(event);
     if (set === undefined) {
       set = new Set();
@@ -132,7 +141,10 @@ export class Socket {
     return this;
   }
 
-  off<T = unknown>(event: string, listener?: (data: T) => void): this {
+  off<E extends keyof Incoming>(
+    event: E,
+    listener?: (data: Incoming[E]) => void,
+  ): this {
     if (listener === undefined) this.#listeners.delete(event);
     else this.#listeners.get(event)?.delete(listener as StoredListener);
     return this;
@@ -141,9 +153,16 @@ export class Socket {
   /**
    * `{"event":name,"data":payload}` - the envelope `@OnMessage(name)` decodes.
    *
+   * The body is checked against the name, against the same `ClientPayloads` map the
+   * server's parsers return, so the two halves cannot drift.
+   *
    * `data` is omitted entirely when undefined so that `emit('cashOut')` sends
-   * `{"event":"cashOut"}`, which is what a handler taking no payload expects.
+   * `{"event":"cashOut"}`, which is what a handler taking no payload expects - and
+   * why `cashOut` has an overload of its own. Which wallet is decided by the bet
+   * row, not by the client.
    */
+  emit(event: typeof GAME_CLIENT_EVENTS.CASH_OUT): this;
+  emit<E extends keyof ClientPayloads>(event: E, data: ClientPayloads[E]): this;
   emit(event: string, data?: unknown): this {
     const frame = JSON.stringify(
       data === undefined ? { event } : { event, data },
@@ -242,7 +261,6 @@ export class Socket {
 
   #dispatch(event: string, data: unknown): void {
     for (const listener of this.#listeners.get(event) ?? []) listener(data);
-    if (!LOCAL_EVENTS.has(event)) return;
   }
 }
 

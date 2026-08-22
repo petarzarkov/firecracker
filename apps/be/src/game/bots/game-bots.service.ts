@@ -5,11 +5,10 @@ import { AIService } from '../../ai/services/ai.service.js';
 import { ChatService } from '../../chat/services/chat.service.js';
 import { AppConfigService } from '../../config/app.config.service.js';
 import { EventsPublisher } from '../../notifications/events/events.publisher.js';
-import { EVENTS, TOPICS } from '../../notifications/events/events.js';
 import { CrashEngineService } from '../engine/crash-engine.service.js';
-import { GAME_EVENTS, GAME_TOPIC, GameEvents } from '../game.events.js';
+import { GAME_EVENTS, GAME_TOPIC, publishGame } from '../game.events.js';
 import { GameMath } from '../game.math.js';
-import { GameRoundStatus } from '../schema/game-round.schema.js';
+import { GameRoundStatus } from '../rounds/game-round.schema.js';
 
 /**
  * How often the watcher looks for a phase change. A literal, because `@Interval` is a
@@ -67,8 +66,6 @@ interface Bot {
 /**
  * Simulated players, so an empty lobby does not look broken.
  *
- * ## These are cosmetic and that is enforced, not just intended
- *
  * A bot **never** touches the database, a wallet, the ledger or the client-seed
  * pool. This class has no repository and no `GameBetService` in its constructor,
  * which is the enforcement: it publishes `betPlaced` and `betCashedOut` frames and
@@ -79,10 +76,9 @@ interface Bot {
  * house deciding some of the players' seeds is exactly the thing provable fairness
  * exists to rule out. Bots stay outside the fairness boundary entirely.
  *
- * They are also invisible to every read path: `game/state`, `my-bets`, the round
- * history and the lobby list on connect all come from `game_bet`, which has no bot
- * rows in it. A player who joins mid-round sees only the real bets - which is a
- * real inconsistency with the live feed, and the honest cost of not writing rows.
+ * The cost is that every read path comes from `game_bet` and has no bot rows in it,
+ * so a player joining mid-round sees only the real bets. That inconsistency with the
+ * live feed is what not writing rows buys.
  *
  * Off unless `GAME_BOTS_ENABLED=true`.
  */
@@ -102,9 +98,8 @@ export class GameBotsService implements OnInit {
   ) {}
 
   /**
-   * All that is left of a `setInterval`/`clearInterval` pair and an `onShutdown`.
-   * `GAME_BOTS_ENABLED` cannot move into the decorator's own `enabled` option, because
-   * a decorator argument is evaluated before the validated config exists.
+   * `GAME_BOTS_ENABLED` cannot move into `@Interval`'s own `enabled` option, because a
+   * decorator argument is evaluated before the validated config exists.
    */
   onInit(): void {
     const { bots } = this.config.get('game');
@@ -174,7 +169,7 @@ export class GameBotsService implements OnInit {
     }
 
     for (const bot of this.#bots) {
-      GameEvents.publish(this.events, GAME_TOPIC, GAME_EVENTS.BET_PLACED, {
+      publishGame(this.events, GAME_TOPIC, GAME_EVENTS.BET_PLACED, {
         userId: bot.userId,
         username: bot.username,
         betAmountCents: bot.betAmountCents,
@@ -217,14 +212,10 @@ export class GameBotsService implements OnInit {
         if (text === null) return;
         // Trimmed hard: a model that ignores the word limit must not be able to
         // paste an essay into a lobby.
-        const line = {
-          username: speaker.username,
-          message: text.slice(0, 140),
-          timestamp: new Date().toISOString(),
-          picture: null,
-        };
-        this.events.publish(TOPICS.CHAT, EVENTS.MESSAGE, line);
-        this.chat.record(line);
+        this.chat.say(
+          { username: speaker.username, picture: null },
+          text.slice(0, 140),
+        );
       })
       .catch((error: unknown) =>
         this.logger.debug('bot chatter failed', {
@@ -242,7 +233,7 @@ export class GameBotsService implements OnInit {
       if (bot.cashedOut || bot.targetX100 > multiplierX100) continue;
       bot.cashedOut = true;
 
-      GameEvents.publish(this.events, GAME_TOPIC, GAME_EVENTS.BET_CASHED_OUT, {
+      publishGame(this.events, GAME_TOPIC, GAME_EVENTS.BET_CASHED_OUT, {
         userId: bot.userId,
         username: bot.username,
         multiplier: GameMath.toMultiplier(bot.targetX100),

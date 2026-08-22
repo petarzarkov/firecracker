@@ -100,9 +100,8 @@ export class QueuesModule {
         ? {}
         : {
             controllers: [QueuesController],
-            // Module-scoped, covering exactly the routes `QueuesController` declares.
-            // It replaced a private `degrades()` helper wrapped around all five route
-            // bodies - the one thing `HttpOptions.middleware` could not express.
+            // Module-scoped, covering exactly the routes `QueuesController` declares -
+            // the one thing `HttpOptions.middleware` cannot express.
             middleware: [QueueUnavailableMiddleware],
           }),
     };

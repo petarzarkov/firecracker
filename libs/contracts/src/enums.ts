@@ -48,19 +48,6 @@ export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 
 export const USER_ROLES = [UserRole.ADMIN, UserRole.USER] as const;
 
-export const InviteStatus = Object.freeze({
-  PENDING: 'pending',
-  ACCEPTED: 'accepted',
-  EXPIRED: 'expired',
-} as const);
-export type InviteStatus = (typeof InviteStatus)[keyof typeof InviteStatus];
-
-export const INVITE_STATUSES = [
-  InviteStatus.PENDING,
-  InviteStatus.ACCEPTED,
-  InviteStatus.EXPIRED,
-] as const;
-
 export const WalletTransactionType = Object.freeze({
   DEPOSIT: 'deposit',
   WITHDRAWAL: 'withdrawal',

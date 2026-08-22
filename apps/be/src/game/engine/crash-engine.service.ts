@@ -9,63 +9,30 @@ import {
   GAME_JOBS,
   GAME_QUEUE,
   GAME_TOPIC,
-  GameEvents,
+  publishGame,
 } from '../game.events.js';
 import { GameMath } from '../game.math.js';
-import { GameRoundStatus } from '../schema/game-round.schema.js';
-import { GameRoundRepository } from '../repos/game-round.repository.js';
-
-/** Where the worker tells the web process what the round just became. */
-export const GAME_ENGINE_CHANNEL = 'game:engine:commands';
-
-/**
- * What a worker publishes on {@link GAME_ENGINE_CHANNEL}.
- *
- * The worker owns the database transitions and the web process owns the clock, so
- * this is the only thing crossing between them. Note `crashPointX100`: the command
- * carries hundredths like everything else, so the engine's comparison never leaves
- * integer space.
- */
-export type EngineCommand =
-  | { action: 'waiting'; roundId: string }
-  | {
-      action: 'start';
-      roundId: string;
-      crashPointX100: number;
-      startedAt: string;
-    }
-  | { action: 'crash' };
-
-/** A cash-out the engine triggers on the player's behalf when the curve reaches it. */
-export interface AutoCashOut {
-  readonly userId: string;
-  readonly username: string;
-  readonly autoCashOutAtX100: number;
-  readonly isDemo: boolean;
-}
+import { GameRoundStatus } from '../rounds/game-round.schema.js';
+import { GameRoundRepository } from '../rounds/game-round.repository.js';
+import { GAME_ENGINE_CHANNEL, type EngineCommand } from './engine.commands.js';
 
 /**
  * The clock. It holds the current round in memory, ticks the multiplier, and
  * decides the moment of the crash.
  *
- * ## One process, and why
- *
- * The tick loop must run in **exactly one** process. Two would each publish their
- * own crash job and each broadcast their own ticks, so a client would see the
- * multiplier stutter between two timelines. `GameModule.forRoot({ engine: false })`
- * is what keeps it out of the worker, and it is also why the `app` service in
- * docker-compose.prod.yml cannot be scaled to two replicas as it stands.
+ * The tick loop must run in **exactly one** process, or a client sees the multiplier
+ * stutter between two timelines. `EngineModule` is decorated and carries no static
+ * factory for exactly that reason: dunx dedupes a decorated module by reference, so
+ * however many modules import it there is one scope and one engine, where a
+ * `forRoot()` would hand each importer its own.
  *
  * The database is the truth and this is a cache of it: everything here is
  * recoverable from `game_round` at boot, which is what `#recover` does.
  *
- * ## The tick emitter is gone
- *
- * The NestJS version had `registerTickEmitter()` and `registerAutoCashOutHandler()`
- * - two callbacks the gateway installed on `onModuleInit` to break a circular
- * module import between engine and gateway. dunx records dependencies as a thunk
- * evaluated at resolution, so a cycle resolves on its own and neither callback is
- * needed: this class injects `EventsPublisher` and publishes ticks itself.
+ * {@link CrashEngineService.registerAutoCashOutHandler} is a callback rather than an
+ * injection because injecting `AutoCashOutService` would give the clock a path to
+ * `GameBetService` and through it to the wallet. This class's only game dependency
+ * is `GameRoundRepository`, and the callback is what keeps it that way.
  */
 export class CrashEngineService implements OnInit, OnShutdown {
   // In-memory state. The database is canonical; this is the clock's copy.
@@ -77,7 +44,7 @@ export class CrashEngineService implements OnInit, OnShutdown {
   /** Whether {@link CrashEngineService.TICK} is currently armed. */
   #ticking = false;
 
-  /** Set by the gateway, which owns the Redis hash the auto-cashouts live in. */
+  /** Set from outside, by whoever owns the Redis hash the auto-cashouts live in. */
   #autoCashOut: ((roundId: string, multiplierX100: number) => void) | null =
     null;
 
@@ -102,8 +69,6 @@ export class CrashEngineService implements OnInit, OnShutdown {
   onShutdown(): void {
     this.#clear();
   }
-
-  // What the gateway and the controller read
 
   get roundId(): string | null {
     return this.#roundId;
@@ -157,8 +122,6 @@ export class CrashEngineService implements OnInit, OnShutdown {
     this.#autoCashOut = fn;
   }
 
-  // Transitions, driven by the worker over pub/sub
-
   setWaiting(roundId: string): void {
     this.#clear();
     this.#roundId = roundId;
@@ -184,7 +147,7 @@ export class CrashEngineService implements OnInit, OnShutdown {
       () => this.#onTick(),
     );
     this.#ticking = true;
-    this.logger.info('engine ticking', { roundId, crashPointX100 });
+    this.logger.debug('engine ticking', { roundId, crashPointX100 });
   }
 
   setCrashed(): void {
@@ -257,7 +220,7 @@ export class CrashEngineService implements OnInit, OnShutdown {
   /**
    * `RedisConnection.subscribe` opens its own second connection - a client in
    * subscriber mode refuses every data command - so this needs no separate
-   * client of its own. The NestJS version managed that connection by hand.
+   * client of its own.
    */
   async #listenForCommands(): Promise<void> {
     try {
@@ -308,7 +271,7 @@ export class CrashEngineService implements OnInit, OnShutdown {
       const roundId = this.#roundId;
       if (roundId === null) return;
 
-      this.logger.info('crash point reached', {
+      this.logger.debug('crash point reached', {
         roundId,
         crashPointX100: this.#crashPointX100,
       });
@@ -326,7 +289,7 @@ export class CrashEngineService implements OnInit, OnShutdown {
     if (this.#roundId !== null)
       this.#autoCashOut?.(this.#roundId, multiplierX100);
 
-    GameEvents.publish(this.events, GAME_TOPIC, GAME_EVENTS.TICK, {
+    publishGame(this.events, GAME_TOPIC, GAME_EVENTS.TICK, {
       multiplier: GameMath.toMultiplier(multiplierX100),
       elapsed,
     });

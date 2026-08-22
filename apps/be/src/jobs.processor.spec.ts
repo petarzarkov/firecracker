@@ -1,9 +1,10 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 import { AppFactory } from '@dunx/core';
 import { JobPublisher } from '@dunx/infra/queue';
 import { JobsModule } from './app.module.js';
 import { AppConfigService } from './config/app.config.service.js';
 import { EnvConfig } from './config/env.validation.js';
+import { dropTestNamespaces, testNamespace } from './test-support/namespace.js';
 
 /**
  * The graph a bullmq-forked child boots, against an environment that supplies nothing.
@@ -29,7 +30,16 @@ describe('the sandboxed job child', () => {
       JobsModule.forRoot({
         // What `jobs.processor.ts` supplies, over an environment that has nothing.
         // `Bun.env` is deliberately not spread in: this is the CI case.
-        source: { API_PORT: '0', SQLITE_DB_PATH: ':memory:' },
+        //
+        // The namespace is the one exception, and it is not what this test is about:
+        // building `JobsModule` opens its queues, and on the default prefix that
+        // writes `meta` and `stalled-check` keys into the namespace a running
+        // application is using.
+        source: {
+          API_PORT: '0',
+          SQLITE_DB_PATH: ':memory:',
+          ...testNamespace(),
+        },
         logLevel: 'fatal',
       }),
     );
@@ -45,4 +55,11 @@ describe('the sandboxed job child', () => {
       await app.shutdown();
     }
   });
+});
+
+// Registered last, so it runs after the server has closed. Isolating the suites
+// stopped them writing into the application's namespace; this stops them leaving
+// their own behind, since bullmq's `meta` keys carry no TTL.
+afterAll(async () => {
+  await dropTestNamespaces();
 });

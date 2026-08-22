@@ -80,7 +80,6 @@ export class EnvConfig {
       redis: {
         url: vars.REDIS_URL,
         connectTimeoutMs: vars.REDIS_CONNECT_TIMEOUT_MS,
-        cacheTtlSeconds: vars.CACHE_TTL_SECONDS,
       },
       throttle: {
         prefix: vars.THROTTLE_PREFIX,

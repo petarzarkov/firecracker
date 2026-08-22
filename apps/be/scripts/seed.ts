@@ -1,18 +1,15 @@
-import { mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { runSeeds, SyncSqliteOptions } from '@dunx/infra/db';
+import { join } from 'node:path';
+import { runSeeds } from '@dunx/infra/db';
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator';
 import { MIGRATIONS_FOLDER } from '../src/infra/db/database.module.js';
-import * as schema from '../src/infra/db/schema.js';
+import { openSqliteSync } from '../src/infra/db/sqlite.js';
 
 const filename = Bun.env['SQLITE_DB_PATH'] ?? './data/app.db';
-if (filename !== ':memory:') mkdirSync(dirname(filename), { recursive: true });
 
-const connection = new SyncSqliteOptions({
-  schema,
-  filename,
-  pragmas: ['journal_mode = WAL', 'foreign_keys = ON'],
-}).openSync();
+// The app's own pragmas, in the app's own order: a seed run against a database the
+// app has open is a writer racing a writer, and `busy_timeout` is what makes the
+// loser wait rather than fail.
+const connection = openSqliteSync({ filename });
 
 migrate(connection.db, { migrationsFolder: MIGRATIONS_FOLDER });
 

@@ -18,6 +18,24 @@ describe('ErrorMapper', () => {
     });
   });
 
+  /**
+   * `ThrottleGuard` throws its 429 with `Retry-After` and `RateLimit-*` on the
+   * error, because a status is not the whole answer. dunx's own `errorMapper`
+   * copies them; replacing the mapper means copying them here, and forgetting to
+   * is silent - the body is right and the client has nothing to wait on.
+   */
+  test('an HttpError carries its headers onto the response', () => {
+    const response = ErrorMapper.toResponseBody(
+      new HttpError(429, 'Rate limit exceeded', {
+        headers: { 'retry-after': '42', 'ratelimit-remaining': '0' },
+      }),
+      req,
+    );
+    expect(response.status).toBe(429);
+    expect(response.headers.get('retry-after')).toBe('42');
+    expect(response.headers.get('ratelimit-remaining')).toBe('0');
+  });
+
   test('a ValidationError carries its issues through', async () => {
     const error = new ValidationError('body', [
       { message: 'Invalid email address', path: 'email' },

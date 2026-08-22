@@ -7,6 +7,10 @@ import { AppHttpOptions } from '../http.options.js';
 import { TestSession } from '../test-support/session.js';
 import type { Page } from '@dunx/infra/pagination';
 import type { SanitizedUser } from './dto/user.dto.js';
+import {
+  dropTestNamespaces,
+  testNamespace,
+} from '../test-support/namespace.js';
 
 /**
  * The whole graph behind a real `Bun.serve` on port 0, against a real in-memory
@@ -32,7 +36,7 @@ const source = {
   // The throttler is exercised in its own suite; a shared window here would make
   // every other assertion depend on how many ran before it.
   THROTTLE_LIMIT: '10000',
-  THROTTLE_PREFIX: `test-${crypto.randomUUID()}`,
+  ...testNamespace(),
   SEED_ADMIN_EMAIL: 'admin@local.dev',
   SEED_ADMIN_PASSWORD: 'admin-password',
 };
@@ -149,12 +153,13 @@ describe('SessionGuard', () => {
     expect(response.headers.get('set-auth-token')).toBeNull();
   });
 
+  /** Any `@Public()` route does: the guard reads the metadata, not the path. */
   test('@Public() on a route skips the session lookup entirely', async () => {
-    const { status, body } = await server.json<{ caller: string | null }>(
-      'api/profile/anonymous',
+    const { status, body } = await server.json<{ name: string }>(
+      'api/service/config',
     );
     expect(status).toBe(200);
-    expect(body.caller).toBeNull();
+    expect(body.name).toBeDefined();
   });
 
   test('a user role cannot reach an admin-only route', async () => {
@@ -383,15 +388,10 @@ describe('routing', () => {
    * metadata, so there was no `@Public()` for the guard to read: an anonymous
    * request for a path that did not exist was answered 401 rather than 404.
    *
-   * The note used to say this was "arguably better, since it stops an anonymous
-   * caller probing which paths exist", and that there was "no way to keep the
-   * logging without also authenticating the miss". The second half was wrong -
-   * `HttpOptions.notFound: 'public'` reports the miss as `@Public()` and keeps the
-   * log line and the request id - and the first half does not hold for this app,
-   * whose route table is published at `/api/docs`. It also charged a better-auth
-   * session lookup to every unmatched request.
-   *
-   * See http.options.ts. A miss is a 404 here, as it is in NestJS.
+   * `HttpOptions.notFound: 'public'` reports the miss as `@Public()`, which keeps the
+   * log line and the request id without charging a better-auth session lookup to every
+   * unmatched request. Refusing the miss instead would only hide a route table this
+   * app publishes at `/api/docs` anyway. See http.options.ts.
    */
   test('an anonymous request for a missing path is a 404', async () => {
     const { status, body } = await server.json<{ error: string }>(
@@ -400,4 +400,11 @@ describe('routing', () => {
     expect(status).toBe(404);
     expect(body.error).toBe('NOT_FOUND');
   });
+});
+
+// Registered last, so it runs after the server has closed. Isolating the suites
+// stopped them writing into the application's namespace; this stops them leaving
+// their own behind, since bullmq's `meta` keys carry no TTL.
+afterAll(async () => {
+  await dropTestNamespaces();
 });

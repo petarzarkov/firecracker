@@ -14,7 +14,6 @@ import { Button } from '../ui/Button';
 import { GradientDivider } from '../ui/GradientDivider';
 import { InputField } from '../ui/InputField';
 
-// --- Types ---
 type FormMode = 'login' | 'register' | 'requestReset' | 'resetPassword';
 
 interface FormData {
@@ -37,7 +36,6 @@ const INITIAL_STATE: FormData = {
   customPictureUrl: '',
 };
 
-// --- Config ---
 const MODE_CONFIG: Record<
   FormMode,
   { title: string; submitLabel: string; loadingLabel: string }
@@ -63,8 +61,6 @@ const MODE_CONFIG: Record<
     loadingLabel: 'Resetting password...',
   },
 };
-
-// --- Sub-Components ---
 
 const SocialButtons = ({
   isLoading,
@@ -124,8 +120,6 @@ const SocialButtons = ({
   </>
 );
 
-// --- Main Component ---
-
 export function LoginForm() {
   const [mode, setMode] = useState<FormMode>('login');
   const [formData, setFormData] = useState<FormData>(INITIAL_STATE);
@@ -147,7 +141,7 @@ export function LoginForm() {
     setStatus({ isLoading: true, error: '', success: '' });
     try {
       // A real user row with a demo wallet and no credential - better-auth's
-      // `anonymous()` plugin. The old `/api/auth/demo` did the same by hand.
+      // `anonymous()` plugin.
       const { token, user } = await authApi.signInAnonymous();
       setAuth(token, user);
       setIsDemoMode(true);

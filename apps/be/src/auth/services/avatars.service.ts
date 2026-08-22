@@ -9,7 +9,7 @@ interface BttvEmote {
 
 const TRENDING_URL = 'https://api.betterttv.net/3/emotes/shared/trending';
 
-/** The one the NestJS version fell back to when the API was unreachable. */
+/** Shown when BTTV is unreachable, so the picker is never empty. */
 const FALLBACK = [
   'https://cdn.betterttv.net/emote/5ada077451d4120ea3918426/3x',
 ];

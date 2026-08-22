@@ -103,7 +103,7 @@ describe('websocket gateway against a live server', () => {
     socket.close();
   });
 
-  test('a chat message is echoed to the sender and broadcast to the room', async () => {
+  test('a chat message is acknowledged to the sender and broadcast to the room', async () => {
     const { origin, adminToken } = getTestContext();
     const listener = await open(origin, adminToken);
     await frame(listener, 'connected');
@@ -111,14 +111,49 @@ describe('websocket gateway against a live server', () => {
     await frame(sender, 'connected');
 
     const heard = frame(listener, 'message');
-    const echoed = frame(sender, 'chatMessage');
+    const acked = frame(sender, 'chatAck');
     sender.send(JSON.stringify({ event: 'chatMessage', data: 'e2e hello' }));
 
-    expect((await echoed).data).toEqual({ delivered: 1 });
+    expect((await acked).data).toEqual({ delivered: 1 });
     expect((await heard).data).toMatchObject({ message: 'e2e hello' });
 
     listener.close();
     sender.close();
+  });
+
+  /**
+   * The ack must not carry the name the client just sent, which is what it did:
+   * dunx answers `@OnMessage('x')` with the return value under `x`, so a refusal
+   * went out as a `chatMessage` frame and no client listens for one of those. A
+   * spectator saw the input clear and nothing else.
+   *
+   * Anonymous on purpose - the refusal is the case that had no way of being heard.
+   */
+  test('a spectator is told why the lobby refused their line', async () => {
+    const { origin } = getTestContext();
+    const socket = await open(origin);
+    await frame(socket, 'gameRoundState');
+
+    // Every frame this socket receives, rather than waiting on one name: the
+    // assertion is partly about a name that must *not* arrive.
+    const seen: Frame[] = [];
+    socket.addEventListener('message', (message: MessageEvent) => {
+      seen.push(JSON.parse(String(message.data)) as Frame);
+    });
+
+    socket.send(JSON.stringify({ event: 'chatMessage', data: 'let me in' }));
+    await Bun.sleep(250);
+
+    const names = seen.map((received) => received.event);
+    expect(names).toContain('chatAck');
+    expect(names).not.toContain('chatMessage');
+    expect(seen.find((received) => received.event === 'chatAck')?.data).toEqual(
+      {
+        error: 'Login required to chat',
+      },
+    );
+
+    socket.close();
   });
 
   /**

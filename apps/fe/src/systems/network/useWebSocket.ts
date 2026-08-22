@@ -1,7 +1,10 @@
 import {
+  type ChatAckPayload,
   type ChatLine,
   GAME_CLIENT_EVENTS,
   type ConnectedPayload,
+  NotificationKind,
+  type NotificationPayload,
   PLAYER_CHAT_EVENTS,
   type PlayerChatMessagePayload,
   type PlayerChatRoom,
@@ -10,6 +13,7 @@ import {
 } from '@firecracker/contracts';
 import { useEffect, useState } from 'react';
 import { io, type Socket } from './socket';
+import { useNotify } from '@/hooks/useNotify';
 import { useAuthStore } from '@/store/authStore';
 import { useChatStore } from '@/store/chatStore';
 
@@ -51,6 +55,7 @@ export function useWebSocket() {
   const setConnectedPlayers = useChatStore(
     (state) => state.setConnectedPlayers,
   );
+  const { notify } = useNotify();
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: we need to update the user when the socket is connected
   useEffect(() => {
@@ -198,7 +203,7 @@ export function useWebSocket() {
        * it did before this handler existed, which read as the feature being
        * broken rather than reset. See `ChatService` on the server.
        */
-      newSocket.on(SOCKET_EVENTS.CHAT_HISTORY, (lines: ChatLine[]) => {
+      newSocket.on(SOCKET_EVENTS.CHAT_HISTORY, (lines: readonly ChatLine[]) => {
         setGlobalChatMessages(
           (lines ?? []).map((line) => ({
             senderId: line.username,
@@ -226,6 +231,32 @@ export function useWebSocket() {
         setConnectedPlayers(count);
       });
 
+      /**
+       * The answer to a line this client sent. Only the refusals are worth showing:
+       * the line itself arrives back through `message` like everyone else's, so a
+       * toast on success would be a second copy of what the panel already renders.
+       */
+      newSocket.on(SOCKET_EVENTS.CHAT_ACK, (ack: ChatAckPayload) => {
+        if (ack.error !== undefined)
+          notify('Message not sent', ack.error, 'error');
+      });
+
+      /**
+       * Notices published by the worker process - a sign-up, a suspension - onto
+       * this user's own topic and, for an administrator, the admin room.
+       *
+       * The text arrives written: the server knows which job produced it, and a
+       * browser reading a job name off the wire is a browser coupled to the queue.
+       * `kind` only decides how the toast looks.
+       */
+      newSocket.on(SOCKET_EVENTS.NOTIFICATION, (data: NotificationPayload) => {
+        notify(
+          data.title,
+          data.message,
+          data.kind === NotificationKind.USER_BANNED ? 'error' : 'success',
+        );
+      });
+
       // Expose socket to context — this setState triggers re-render so
       // SocketContext.Provider propagates the value to all consumers.
       setSocket(newSocket);
@@ -244,6 +275,8 @@ export function useWebSocket() {
         activeSocket.off(SOCKET_EVENTS.CHAT_HISTORY);
         activeSocket.off(SOCKET_EVENTS.MESSAGE);
         activeSocket.off(SOCKET_EVENTS.USER_COUNT);
+        activeSocket.off(SOCKET_EVENTS.CHAT_ACK);
+        activeSocket.off(SOCKET_EVENTS.NOTIFICATION);
         activeSocket.io.off('reconnect_failed');
         activeSocket.disconnect();
         setSocket(null);
@@ -269,6 +302,7 @@ export function useWebSocket() {
     addGlobalChatMessage,
     setGlobalChatMessages,
     setConnectedPlayers,
+    notify,
   ]);
 
   return socket;

@@ -33,8 +33,7 @@ export class SocketPublisher extends EventsPublisher {
   }
 
   /**
-   * **Never throws**, which is the same rule `RelayPublisher` below already had and
-   * this one did not.
+   * **Never throws**, the same rule `RelayPublisher` below keeps.
    *
    * A frame is best-effort; a database transition is not. `PubSub.publishEvent`
    * throws once the server has stopped, and a job handler that publishes *after*
@@ -64,9 +63,7 @@ export class SocketPublisher extends EventsPublisher {
  *
  * `encodeRelay` and `encode` are `@dunx/http`'s own wire formats, exported - so a
  * process with no server can put a frame on the channel a process with one is
- * already listening to, and neither has to know about the other. The NestJS template
- * needed `@socket.io/redis-emitter`, a second package alongside the adapter, to do
- * this.
+ * already listening to, and neither has to know about the other.
  *
  * The origin is this process's own id, which is what stops a node that also runs a
  * worker from fanning out its own frame twice.

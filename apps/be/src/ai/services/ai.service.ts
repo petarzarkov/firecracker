@@ -1,16 +1,11 @@
 import type { ZodType } from 'zod';
-import { AI_PROVIDERS, type AIProvider } from '../ai.provider.js';
+import type { AIProvider } from '../ai.provider.js';
 import { AIProviderService } from './ai-provider.service.js';
 
 export interface AIAnswer {
   readonly provider: AIProvider;
   readonly model: string;
   readonly text: string;
-}
-
-export interface ProviderModels {
-  readonly provider: AIProvider;
-  readonly models: readonly string[];
 }
 
 /**
@@ -76,16 +71,5 @@ export class AIService {
     } catch {
       return null;
     }
-  }
-
-  /** Every provider that answered, skipping the ones that are not configured. */
-  async listAllModels(): Promise<readonly ProviderModels[]> {
-    const listings = await Promise.all(
-      AI_PROVIDERS.map(async (provider) => ({
-        provider,
-        models: await this.providers.listModels(provider),
-      })),
-    );
-    return listings.filter((listing) => listing.models.length > 0);
   }
 }

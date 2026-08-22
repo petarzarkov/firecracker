@@ -1,13 +1,10 @@
 import { z } from 'zod';
 
 /**
- * The crash game's tunables. These were `GAME` in `src/constants.ts` - a frozen
- * literal - and they are environment variables here because every one of them is a
- * number an operator wants to change without a deploy: the betting window, how fast
- * the multiplier climbs, and what a demo wallet starts with.
- *
- * The defaults are the constants the NestJS version shipped with, so an unset
- * environment plays exactly the same game.
+ * The crash game's tunables. Environment variables rather than a frozen literal
+ * because every one of them is a number an operator wants to change without a
+ * deploy: the betting window, how fast the multiplier climbs, and what a demo wallet
+ * starts with.
  */
 export const gameVarsSchema = z.object({
   /** Duration of the betting window before each rocket launches. */

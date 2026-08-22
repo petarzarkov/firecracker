@@ -49,8 +49,13 @@ export class FilesService {
     return { data: page.data.map(FilesService.#present), meta: page.meta };
   }
 
+  /** The row, or `undefined`. {@link row} is the same read with a 404 instead. */
+  find(id: string): FileRow | undefined {
+    return this.repo.findById(id);
+  }
+
   row(id: string): FileRow {
-    const row = this.repo.findById(id);
+    const row = this.find(id);
     if (row === undefined) {
       throw new HttpError(HttpStatusCode.NOT_FOUND, `No file with id ${id}`);
     }
@@ -105,7 +110,7 @@ export class FilesService {
     // An unreachable queue is not a failed upload, so the enqueue degrades.
     if (dimensions !== undefined) await this.enqueueThumbnail(row);
 
-    this.logger.info('file uploaded', {
+    this.logger.debug('file uploaded', {
       fileId: row.id,
       key,
       size: row.size,
@@ -114,9 +119,22 @@ export class FilesService {
     return FilesService.#present(row);
   }
 
+  /**
+   * The bytes behind a **key**, for a caller that has already decided who may read
+   * them and what to call them. The avatar route is that caller: it serves the
+   * thumbnail the row points at, which is a key and not a file id.
+   */
+  async stream(key: string): Promise<ReadableStream<Uint8Array>> {
+    try {
+      return await this.storage.readStream(key);
+    } catch (error) {
+      throw this.storageError(error, `Could not read "${key}"`);
+    }
+  }
+
   async download(id: string): Promise<Response> {
     const row = this.row(id);
-    const stream = await this.read(row.key);
+    const stream = await this.stream(row.key);
     return new Response(stream, {
       headers: {
         'content-type': row.mimeType,
@@ -178,14 +196,6 @@ export class FilesService {
       await this.storage.write(key, bytes);
     } catch (error) {
       throw this.storageError(error, `Could not store "${key}"`);
-    }
-  }
-
-  private async read(key: string): Promise<ReadableStream<Uint8Array>> {
-    try {
-      return await this.storage.readStream(key);
-    } catch (error) {
-      throw this.storageError(error, `Could not read "${key}"`);
     }
   }
 

@@ -11,6 +11,8 @@ export const SOCKET_EVENTS = Object.freeze({
   /** The chat scrollback, sent once per connection. */
   CHAT_HISTORY: 'chatHistory',
   USER_COUNT: 'userCount',
+  /** The answer to one `chatMessage`. See {@link ChatAckPayload}. */
+  CHAT_ACK: 'chatAck',
 } as const);
 
 /** What a client sends. */
@@ -59,6 +61,23 @@ export interface ChatLine {
   readonly picture: string | null;
 }
 
+/**
+ * What became of one `chatMessage`.
+ *
+ * A separate name from the message that asked for it, and that is the whole reason
+ * this exists: dunx answers `@OnMessage('x')` with the handler's return value under
+ * the name `x`, so the gateway's rejections went out as `chatMessage` frames and no
+ * client has ever registered a listener for one. "Login required to chat" and the
+ * 1000-character refusal both reached the browser and were dropped there - the
+ * input cleared and nothing happened.
+ */
+export interface ChatAckPayload {
+  /** Present when the line went out. */
+  readonly delivered?: number;
+  /** Present instead when it did not, written to be shown to the sender. */
+  readonly error?: string;
+}
+
 export interface PlayerChatRoom {
   readonly roomId: string;
   readonly participants: readonly string[];
@@ -80,4 +99,97 @@ export interface PlayerChatSystemPayload {
   readonly message: string;
   readonly timestamp: string;
   readonly type: 'join' | 'leave';
+}
+
+/**
+ * What a notification is about.
+ *
+ * Its own wire value rather than the name of the job that produced it: a job name
+ * is the server talking to itself, and a name a browser can read is a name somebody
+ * will send. So `user.registered` stays server-side and this is what crosses.
+ */
+export const NotificationKind = Object.freeze({
+  USER_REGISTERED: 'userRegistered',
+  USER_BANNED: 'userBanned',
+} as const);
+export type NotificationKind =
+  (typeof NotificationKind)[keyof typeof NotificationKind];
+
+/**
+ * One notice, sent to a user's own topic or to the admin room.
+ *
+ * The text is written **by the publisher**, because a browser cannot be expected to
+ * know what a job meant. It is also the whole reason this type exists: the four
+ * publishes it replaces carried `{userId,email,name}`, `{userId,email}`,
+ * `{email,role}` and `{userId,reason}` under one event name - four shapes for one
+ * frame, which is what an unchecked `Record<string, unknown>` permits - and nothing
+ * on the client read any of them.
+ */
+export interface NotificationPayload {
+  readonly kind: NotificationKind;
+  readonly title: string;
+  readonly message: string;
+}
+
+/**
+ * Every server-sent event that is not the game's, with the payload it carries.
+ *
+ * The counterpart of `GamePayloads`, and it did not exist: these six went out
+ * through a publisher that takes `unknown`, which is the hole all four historical
+ * drift bugs came through.
+ */
+export interface SocketPayloads {
+  readonly [SOCKET_EVENTS.CONNECTED]: ConnectedPayload;
+  readonly [SOCKET_EVENTS.NOTIFICATION]: NotificationPayload;
+  readonly [SOCKET_EVENTS.MESSAGE]: ChatLine;
+  readonly [SOCKET_EVENTS.CHAT_HISTORY]: readonly ChatLine[];
+  /** Subscribers on the node that sent it - see the gateway on why per-node. */
+  readonly [SOCKET_EVENTS.USER_COUNT]: number;
+  readonly [SOCKET_EVENTS.CHAT_ACK]: ChatAckPayload;
+}
+
+/**
+ * The body of a `chatMessage`.
+ *
+ * The server also accepts a bare string, because both shapes were once on the
+ * wire. This is the one a client should send.
+ */
+export interface ChatMessageBody {
+  readonly message: string;
+}
+
+/**
+ * The body of a `joinPlayerChat`: a room to rejoin, or somebody to open one with.
+ *
+ * At least one is needed and the server refuses a frame with neither. An **empty
+ * string reads as absent** - the client sends `targetUserId: ''` alongside a
+ * `roomId` when it reconnects, and a user whose id is `""` does not exist.
+ */
+export interface JoinPlayerChatMessage {
+  readonly roomId?: string | undefined;
+  readonly targetUserId?: string | undefined;
+}
+
+/** The body of a `sendPlayerChatMessage`. The text is capped at 1000 characters. */
+export interface SendPlayerChatMessage {
+  readonly roomId: string;
+  readonly message: string;
+}
+
+/** The body of a `leavePlayerChat`. */
+export interface LeavePlayerChatMessage {
+  readonly roomId: string;
+}
+
+/** What a client may send under `SOCKET_CLIENT_EVENTS`. */
+export interface SocketClientPayloads {
+  readonly [SOCKET_CLIENT_EVENTS.CHAT_MESSAGE]: ChatMessageBody;
+}
+
+/** The one-to-one rooms. `ROOM_CREATED` reaches the other participant's own topic. */
+export interface PlayerChatPayloads {
+  readonly [PLAYER_CHAT_EVENTS.ROOM_CREATED]: PlayerChatRoom;
+  readonly [PLAYER_CHAT_EVENTS.ROOM_JOINED]: PlayerChatRoom;
+  readonly [PLAYER_CHAT_EVENTS.MESSAGE]: PlayerChatMessagePayload;
+  readonly [PLAYER_CHAT_EVENTS.SYSTEM_MESSAGE]: PlayerChatSystemPayload;
 }

@@ -5,11 +5,12 @@ import { EventsPublisher } from '../events/events.publisher.js';
 import {
   EVENTS,
   JOBS,
+  NotificationKind,
+  publishSocket,
   QUEUES,
   TOPICS,
   Topics,
   type PasswordResetJob,
-  type UserInvitedJob,
   type UserBannedJob,
   type UserRegisteredJob,
 } from '../events/events.js';
@@ -20,11 +21,6 @@ import { EmailService } from '../services/email.service.js';
  * no `@Processor`, no queue token, no registry. `WorkerFactory` finds it by walking
  * the prototypes of the classes already in `providers`, which is the same
  * marker-plus-scan the route and gateway discovery use.
- *
- * The NestJS template had to add `@JobHandler` itself on top of `@nestjs/bullmq`,
- * plus a `JobDispatcher` that walked the `DiscoveryService` and a forked
- * `job.processor.ts` to give the worker a DI context. All of that is
- * `WorkerFactory.create(WorkerModule)` here.
  */
 export class NotificationJobs {
   constructor(
@@ -49,16 +45,22 @@ export class NotificationJobs {
 
     // Two topics: the user's own, and the admin room. Written by the worker
     // process, so a browser seeing this is proof the frame crossed processes.
-    this.events.publish(Topics.user(userId), EVENTS.NOTIFICATION, {
-      event: JOBS.USER_REGISTERED,
-      payload: { userId, email, name },
+    //
+    // The text is written here rather than derived in the browser from a job name:
+    // `JOBS.USER_REGISTERED` is how this process talks to itself, and a client that
+    // switched on it would be reading the queue's vocabulary off the wire.
+    publishSocket(this.events, Topics.user(userId), EVENTS.NOTIFICATION, {
+      kind: NotificationKind.USER_REGISTERED,
+      title: 'Welcome to Firecracker',
+      message: `Your account is ready, ${name}.`,
     });
-    this.events.publish(TOPICS.ADMINS, EVENTS.NOTIFICATION, {
-      event: JOBS.USER_REGISTERED,
-      payload: { userId, email },
+    publishSocket(this.events, TOPICS.ADMINS, EVENTS.NOTIFICATION, {
+      kind: NotificationKind.USER_REGISTERED,
+      title: 'A player signed up',
+      message: `${email} joined.`,
     });
 
-    this.logger.info('handled user.registered', { userId });
+    this.logger.debug('handled user.registered', { userId });
     return { notified: userId };
   }
 
@@ -87,41 +89,8 @@ export class NotificationJobs {
       body: `Hello ${name}, use this link within the hour to choose a new password: ${url}`,
     });
 
-    this.logger.info('handled user.password-reset', { userId });
+    this.logger.debug('handled user.password-reset', { userId });
     return { sent: email };
-  }
-
-  /**
-   * The invitation email, and a notice to the admin room.
-   *
-   * The link carries the code, so this job's payload is a credential in a queue -
-   * which is why the queue is the app's own Redis rather than a third party, and
-   * why the invite expires in a week regardless of whether anybody reads it.
-   */
-  @JobHandler({
-    queue: QUEUES.NOTIFICATIONS,
-    background: true,
-    name: JOBS.USER_INVITED,
-  })
-  async invited(job: Job<UserInvitedJob>): Promise<{ invited: string }> {
-    const { email, role, url, expiresAt } = job.data;
-
-    await this.email.send({
-      to: email,
-      subject: 'You have been invited to Firecracker',
-      body:
-        `You have been invited to join Firecracker as ${role}. ` +
-        `Set your password here: ${url}\n\n` +
-        `The invitation expires on ${new Date(expiresAt).toUTCString()}.`,
-    });
-
-    this.events.publish(TOPICS.ADMINS, EVENTS.NOTIFICATION, {
-      event: JOBS.USER_INVITED,
-      payload: { email, role },
-    });
-
-    this.logger.info('handled user.invited', { email, role });
-    return { invited: email };
   }
 
   @JobHandler({
@@ -138,9 +107,10 @@ export class NotificationJobs {
       body: reason,
     });
 
-    this.events.publish(TOPICS.ADMINS, EVENTS.NOTIFICATION, {
-      event: JOBS.USER_BANNED,
-      payload: { userId, reason },
+    publishSocket(this.events, TOPICS.ADMINS, EVENTS.NOTIFICATION, {
+      kind: NotificationKind.USER_BANNED,
+      title: 'An account was suspended',
+      message: `${email}: ${reason}`,
     });
 
     return { notified: userId };

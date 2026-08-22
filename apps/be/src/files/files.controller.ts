@@ -1,7 +1,6 @@
 import { Controller, Delete, Get, Post, Roles, type Input } from '@dunx/http';
 import { ApiDoc } from '@dunx/openapi';
 import { CurrentUser } from '../auth/services/current-user.service.js';
-import { Throttle } from '../core/decorators/throttle.decorator.js';
 import { UserRole } from '../users/schema/user.schema.js';
 import type { Page } from '@dunx/infra/pagination';
 import {
@@ -18,10 +17,8 @@ import { FilesService } from './services/files.service.js';
  * configured. Nothing here knows which: it injects `FilesService`, which injects
  * the abstract `Storage`, so a directory and a bucket are the same code path.
  *
- * The NestJS template guarded uploads with a `MultipartFormDataGuard` because the
- * interceptor would otherwise read a JSON body as an empty file list. dunx parses
- * by content type and answers 415 itself when the declared body cannot be parsed,
- * so there is nothing to guard.
+ * Uploads need no guard of their own: dunx parses by content type and answers 415
+ * itself when the declared body cannot be parsed.
  */
 @ApiDoc({
   tags: ['files'],
@@ -53,9 +50,16 @@ export class FilesController {
     summary: 'Upload one object, multipart/form-data',
   })
   @Roles(UserRole.ADMIN, UserRole.USER)
-  // Uploads are the one route worth limiting harder than the global default: they
-  // decode bytes and hit storage. The decorator overrides the config, per route.
-  @Throttle({ limit: 20, windowSeconds: 60 })
+  /**
+   * No `@Throttle` here, deliberately. It used to carry
+   * `{ limit: 20, windowSeconds: 60 }`, which is character-for-character the
+   * `THROTTLE_LIMIT`/`THROTTLE_WINDOW_SECONDS` default - so it changed nothing,
+   * while *replacing* the configured limit for this handler alone. A literal in a
+   * decorator is evaluated at class-definition time and no environment can raise
+   * it, which is a trap for the suite that uploads nine times in one window with
+   * `THROTTLE_LIMIT: '10000'` set precisely so it can. Bytes are already bounded
+   * by `UPLOAD_MAX_BYTES` and the route by `@Roles`.
+   */
   @Post('/', uploadFile)
   upload(input: Input<typeof uploadFile>): Promise<FileMetadata> {
     return this.files.upload(this.caller.require().id, input.body);

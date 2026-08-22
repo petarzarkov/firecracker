@@ -13,10 +13,6 @@ interface ChatCompletionResponse {
   readonly choices?: { message?: { content?: string } }[];
 }
 
-interface ModelListResponse {
-  readonly data?: { id: string }[];
-}
-
 export interface OpenAICompatibleOptions {
   /** OpenAI-compatible API root, e.g. `https://api.groq.com/openai/v1`. */
   readonly baseUrl: string;
@@ -26,8 +22,6 @@ export interface OpenAICompatibleOptions {
   readonly label: string;
   /** The model used when the caller does not pin one. */
   readonly defaultModel: string;
-  /** Fallback ids for when the live `/models` listing cannot be fetched. */
-  readonly staticModels: readonly string[];
 }
 
 /**
@@ -38,8 +32,6 @@ export interface OpenAICompatibleOptions {
  * timeout, retry with backoff that honours `Retry-After`, and request-id
  * propagation on top of `fetch`. So there is no SDK here and no new dependency:
  * one HTTP shape covers every provider that speaks it.
- *
- * ## Why `json_object` and not `json_schema`
  *
  * Structured output asks for `response_format: { type: 'json_object' }` rather
  * than the strict `json_schema` mode, which most Groq models reject outright.
@@ -53,14 +45,9 @@ export abstract class OpenAICompatibleService extends BaseProviderService {
    *
    * A named client is bound to a `Token`, and a token has no type name for
    * `@dunx/transform` to record - so it cannot be a constructor parameter. That is
-   * the documented shape, and this app needs it: `NotificationsModule` already
-   * binds an unnamed `HttpService` for the email webhook, and two modules binding
-   * the same class is a duplicate rather than two clients.
-   *
-   * It also fixed a boot failure. With the client nested inside `AIModule` as an
-   * unnamed binding, resolving `AIService` from `GameModule` - where the bots live -
-   * failed with `Cannot resolve HttpService in module "GameModule"`, because the
-   * dependency was invisible from the requesting scope.
+   * the documented shape, and this app needs it: `NotificationsModule` already binds
+   * an unnamed `HttpService` for the email webhook, and two modules binding the same
+   * class is a duplicate rather than two clients.
    */
   protected readonly http = inject(httpClient(AI_HTTP_CLIENT));
 
@@ -95,26 +82,6 @@ export abstract class OpenAICompatibleService extends BaseProviderService {
       systemPrompt === undefined ? shape : `${systemPrompt}\n\n${shape}`;
     const raw = await this.#chat(model, this.#messages(prompt, system), true);
     return this.parseJson(raw, schema);
-  }
-
-  /**
-   * The provider's own list, falling back to a static one.
-   *
-   * Never throws: an unreachable provider contributes no models rather than
-   * failing the whole listing, which is what `AIService.listAllModels` relies on.
-   */
-  async listModels(): Promise<readonly string[]> {
-    if (!this.configured) return [];
-    try {
-      const data = await this.http.get<ModelListResponse>(
-        `${this.options.baseUrl}/models`,
-        { headers: this.#authHeaders() },
-      );
-      const ids = data?.data?.map((model) => model.id) ?? [];
-      return ids.length > 0 ? ids : this.options.staticModels;
-    } catch {
-      return this.options.staticModels;
-    }
   }
 
   /**

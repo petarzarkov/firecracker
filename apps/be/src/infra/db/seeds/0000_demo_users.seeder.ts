@@ -12,7 +12,7 @@ import * as schema from '../schema.js';
  *
  * **These users cannot sign in, on purpose.** A row inserted here has no `account`
  * row and therefore no password hash - it is a directory entry, useful for paging
- * and audit demos and nothing else. The first administrator is created through
+ * demos and nothing else. The first administrator is created through
  * better-auth by `AuthAdminSeeder`, which is the only path that produces a
  * credential.
  */

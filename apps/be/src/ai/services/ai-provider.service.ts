@@ -90,17 +90,6 @@ export class AIProviderService {
     }
   }
 
-  /** Never throws: an unreachable provider contributes nothing to the listing. */
-  async listModels(provider: AIProvider): Promise<readonly string[]> {
-    try {
-      if (provider === AIProvider.GOOGLE) return await this.google.listModels();
-      return await this.#openAICompatible(provider).listModels();
-    } catch (error) {
-      this.#log('list models', provider, undefined, error);
-      return [];
-    }
-  }
-
   #openAICompatible(provider: AIProvider): OpenAICompatibleService {
     switch (provider) {
       case AIProvider.GROQ:

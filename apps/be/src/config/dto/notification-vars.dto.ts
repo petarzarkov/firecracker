@@ -3,15 +3,12 @@ import { z } from 'zod';
 /**
  * Outbound notification transport.
  *
- * A **webhook URL** rather than a vendor's SDK, which is the same call the NestJS
- * template's Resend integration was not worth porting for: an email provider is a
- * `POST` with a JSON body, and every one of them accepts that shape. Naming
- * Resend, Postmark or SES here would pick for the reader; a URL does not, and it
- * also covers an internal relay.
+ * A **webhook URL** rather than a vendor's SDK: an email provider is a `POST` with a
+ * JSON body and every one of them accepts that shape, so naming Resend, Postmark or
+ * SES here would pick for the reader while a URL also covers an internal relay.
  *
- * Absent by default, and `EmailService` logs the message it would have sent when it
- * is - so the queue still demonstrably delivers a job to a worker with nothing
- * configured.
+ * Absent by default, and `EmailService` degrades rather than failing - so the queue
+ * still demonstrably delivers a job to a worker with nothing configured.
  */
 export const notificationVarsSchema = z.object({
   EMAIL_WEBHOOK_URL: z

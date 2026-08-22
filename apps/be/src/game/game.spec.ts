@@ -4,13 +4,21 @@ import { AppModule } from '../app.module.js';
 import { EnvConfig } from '../config/env.validation.js';
 import { AppHttpOptions } from '../http.options.js';
 import { TestSession } from '../test-support/session.js';
-import { GameRoundStatus } from './schema/game-round.schema.js';
-import { GameBetStatus } from './schema/game-bet.schema.js';
-import { BetRejected, GameBetService } from './services/game-bet.service.js';
-import { GameRoundService } from './services/game-round.service.js';
-import { WalletService } from './services/wallet.service.js';
-import { GameRoundRepository } from './repos/game-round.repository.js';
-import { GameRoundWatchdog } from './services/game-watchdog.service.js';
+import { GameRoundStatus } from './rounds/game-round.schema.js';
+import { GameBetStatus } from './betting/game-bet.schema.js';
+import type { GameBet } from './surface/game.dto.js';
+import { BetRejected, GameBetService } from './betting/game-bet.service.js';
+import { GameRoundService } from './rounds/game-round.service.js';
+import { WalletService } from '../wallet/services/wallet.service.js';
+import { GameRoundRepository } from './rounds/game-round.repository.js';
+import { GameRoundWatchdog } from './rounds/round-watchdog.service.js';
+import { CrashEngineService } from './engine/crash-engine.service.js';
+import { GameBotsModule } from './bots/bots.module.js';
+import { GameSurfaceModule } from './surface/surface.module.js';
+import {
+  dropTestNamespaces,
+  testNamespace,
+} from '../test-support/namespace.js';
 
 /**
  * The money path, against a real in-memory SQLite and the real container.
@@ -26,6 +34,7 @@ let wallets: WalletService;
 let roundRepo: GameRoundRepository;
 let watchdog: GameRoundWatchdog;
 let userId: string;
+let userToken: string;
 
 const source = {
   API_PORT: '0',
@@ -34,7 +43,7 @@ const source = {
   // so a consuming test server would start the clock under the assertions.
   QUEUE_CONSUME: 'false',
   THROTTLE_LIMIT: '10000',
-  THROTTLE_PREFIX: `test-${crypto.randomUUID()}`,
+  ...testNamespace(),
   // Deterministic money: 100 cents minimum, $50.00 demo balance.
   GAME_MIN_BET_CENTS: '100',
   GAME_DEMO_INITIAL_BALANCE_CENTS: '5000',
@@ -76,10 +85,37 @@ beforeAll(async () => {
     'a-password-123',
   );
   userId = player.userId;
+  userToken = player.token;
 });
 
 afterAll(async () => {
   await server.close();
+});
+
+/**
+ * The split's own assertion, against the graph the application actually boots.
+ *
+ * `game.module.test.ts` proves the *bindings* are shared without constructing
+ * anything; this proves resolution then produced one instance of the class it
+ * matters most for. A second engine would tick its own multiplier and enqueue its
+ * own crash job, and the failure a client sees is the number stuttering between two
+ * timelines - not something a test that only counts rows would notice.
+ */
+describe('the module graph the app boots', () => {
+  test('the bots and the socket resolve the same clock', () => {
+    expect(server.app.get(CrashEngineService, GameBotsModule)).toBe(
+      server.app.get(CrashEngineService, GameSurfaceModule),
+    );
+  });
+
+  /**
+   * The free half: dunx pushes a warning for every ambiguous import and every
+   * shadowed binding, which is exactly what a `forRoot()` on a shared sub-module
+   * produces. Empty, or somebody configured a module that had nothing to configure.
+   */
+  test('nothing in the graph is ambiguous or shadowed', () => {
+    expect(server.app.warnings).toEqual([]);
+  });
 });
 
 describe('placing a bet', () => {
@@ -330,4 +366,61 @@ describe('the stuck-round watchdog', () => {
     expect(roundRepo.findById(orphanId)?.status).toBe(GameRoundStatus.FAILED);
     expect(roundRepo.findById(liveId)?.status).toBe(GameRoundStatus.RUNNING);
   });
+});
+
+/**
+ * The history panel's own read, over HTTP, because the bug it covers was in the
+ * mapper rather than in the money: `/api/game/my-bets` never sent `crashPoint`, the
+ * client rendered `(bet.crashPoint ?? 0).toFixed(2)`, and every lost row said
+ * `x0.00x`.
+ */
+describe('my bet history', () => {
+  const myBets = async (): Promise<GameBet[]> => {
+    const { body } = await server.json<{ data: GameBet[] }>(
+      'api/game/my-bets?take=20',
+      { headers: TestSession.bearer(userToken) },
+    );
+    return body.data;
+  };
+
+  test('a settled bet carries the multiplier its round crashed at', async () => {
+    const roundId = await openRound();
+    bets.placeBet(userId, roundId, 100, true);
+    launch(roundId, 742);
+
+    // While it is running the crash point exists in the row already - drawn at the
+    // transition - so this assertion is the one that stops it leaking.
+    const open = (await myBets()).find((bet) => bet.roundId === roundId);
+    expect(open?.status).toBe(GameBetStatus.ACTIVE);
+    expect(open?.crashPoint).toBeUndefined();
+
+    rounds.settleCrash(roundId);
+
+    const settled = (await myBets()).find((bet) => bet.roundId === roundId);
+    expect(settled?.status).toBe(GameBetStatus.LOST);
+    expect(settled?.crashPoint).toBe(7.42);
+  });
+
+  test('a page of bets from many rounds gets each round its own crash point', async () => {
+    const first = await openRound();
+    bets.placeBet(userId, first, 100, true);
+    launch(first, 250);
+    rounds.settleCrash(first);
+
+    const second = await openRound();
+    bets.placeBet(userId, second, 100, true);
+    launch(second, 1099);
+    rounds.settleCrash(second);
+
+    const page = await myBets();
+    expect(page.find((bet) => bet.roundId === first)?.crashPoint).toBe(2.5);
+    expect(page.find((bet) => bet.roundId === second)?.crashPoint).toBe(10.99);
+  });
+});
+
+// Registered last, so it runs after the server has closed. Isolating the suites
+// stopped them writing into the application's namespace; this stops them leaving
+// their own behind, since bullmq's `meta` keys carry no TTL.
+afterAll(async () => {
+  await dropTestNamespaces();
 });

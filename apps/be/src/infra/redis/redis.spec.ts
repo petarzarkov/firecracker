@@ -5,7 +5,10 @@ import { AppModule } from '../../app.module.js';
 import { EnvConfig } from '../../config/env.validation.js';
 import { AppHttpOptions } from '../../http.options.js';
 import { TestSession } from '../../test-support/session.js';
-import { CacheService } from './services/cache.service.js';
+import {
+  dropTestNamespaces,
+  testNamespace,
+} from '../../test-support/namespace.js';
 
 /**
  * The Redis-backed areas, in both states.
@@ -22,7 +25,7 @@ const base = (over: Record<string, string>): Record<string, string> => ({
   SQLITE_DB_PATH: ':memory:',
   // Off: this suite asserts what degrades without a broker.
   QUEUE_CONSUME: 'false',
-  THROTTLE_PREFIX: `test-${crypto.randomUUID()}`,
+  ...testNamespace(),
   SEED_ADMIN_EMAIL: 'admin@local.dev',
   SEED_ADMIN_PASSWORD: 'admin-password',
   ...over,
@@ -116,6 +119,11 @@ describe('with a broker that will not answer', () => {
    * The rate limiter fails **open**. `THROTTLE_LIMIT` is 1 here, so with a
    * reachable counter the second call would be a 429 - refusing every request
    * because the limiter is down would turn a degraded cache into an outage.
+   *
+   * This is also what pins `store: new RedisThrottleStore(redis)` in
+   * `AppModule.#throttle()`. `ThrottleModule`'s default store is the in-process
+   * `MemoryThrottleStore`, which cannot fail and therefore cannot stand aside:
+   * leaving it out would 429 the second call here with no Redis in sight.
    */
   test('the throttler stops counting instead of refusing', async () => {
     for (const _ of [1, 2, 3]) {
@@ -124,19 +132,6 @@ describe('with a broker that will not answer', () => {
       });
       expect(status).toBe(200);
     }
-  });
-
-  test('the cache reads through to the computed value', async () => {
-    const cache = server.app.get(CacheService);
-    let computed = 0;
-    const value = await cache.wrap('spec:key', () => {
-      computed += 1;
-      return 'fresh';
-    });
-
-    expect(value).toBe('fresh');
-    expect(computed).toBe(1);
-    expect((await cache.status()).reachable).toBe(false);
   });
 });
 
@@ -160,45 +155,34 @@ describe('with a live broker', () => {
     await server?.close();
   });
 
-  test('the cache round trips a value with a TTL', async () => {
-    if (!live) return;
-    const cache = (server as TestServer).app.get(CacheService);
-    const key = `spec:${crypto.randomUUID()}`;
-
-    await cache.set(key, { hello: 'world' }, 30);
-    expect(await cache.get<{ hello: string }>(key)).toEqual({
-      hello: 'world',
-    });
-    expect(await cache.del(key)).toBe(1);
-    expect(await cache.get(key)).toBeUndefined();
-  });
-
-  test('wrap computes once and serves the second call from the cache', async () => {
-    if (!live) return;
-    const cache = (server as TestServer).app.get(CacheService);
-    const key = `spec:${crypto.randomUUID()}`;
-    let computed = 0;
-    const compute = () => {
-      computed += 1;
-      return { n: 42 };
-    };
-
-    expect(await cache.wrap(key, compute, 30)).toEqual({ n: 42 });
-    expect(await cache.wrap(key, compute, 30)).toEqual({ n: 42 });
-    expect(computed).toBe(1);
-    await cache.del(key);
-  });
-
   test('the throttler refuses the third call in the window', async () => {
     if (!live) return;
-    const statuses: number[] = [];
+    const responses: Response[] = [];
     for (const _ of [1, 2, 3]) {
-      const { status } = await (server as TestServer).json('api/profile', {
-        headers: TestSession.bearer(token),
-      });
-      statuses.push(status);
+      responses.push(
+        await (server as TestServer).request('api/profile', {
+          headers: TestSession.bearer(token),
+        }),
+      );
     }
-    expect(statuses).toEqual([200, 200, 429]);
+    expect(responses.map((response) => response.status)).toEqual([
+      200, 200, 429,
+    ]);
+
+    /**
+     * The 429 is *thrown*, so it comes out of `ErrorMapper` rather than the
+     * guard - and a mapper that only reads `status` and `message` drops the one
+     * header a client needs to act on. Asserted here rather than in the unit
+     * test alone because the throw crossing the mapper is the part that broke.
+     */
+    const refused = responses[2] as Response;
+    expect(Number(refused.headers.get('retry-after'))).toBeGreaterThan(0);
+    expect(refused.headers.get('ratelimit-limit')).toBe('2');
+    expect(refused.headers.get('ratelimit-remaining')).toBe('0');
+    // An allowed call reports the budget too, which is what makes the 429 predictable.
+    expect((responses[0] as Response).headers.get('ratelimit-remaining')).toBe(
+      '1',
+    );
   });
 
   test('readiness reports the cache up', async () => {
@@ -209,4 +193,11 @@ describe('with a live broker', () => {
     const redis = body.checks.find((check) => check.name === 'redis');
     expect(redis?.state).toBe('up');
   });
+});
+
+// Registered last, so it runs after the server has closed. Isolating the suites
+// stopped them writing into the application's namespace; this stops them leaving
+// their own behind, since bullmq's `meta` keys carry no TTL.
+afterAll(async () => {
+  await dropTestNamespaces();
 });

@@ -10,12 +10,11 @@ import { JOBS, QUEUES } from '../../notifications/events/events.js';
 /**
  * Publish here, consume in a **forked child**.
  *
- * This suite used to spawn `bun src/worker.ts` and wait 2.5 seconds for it. There is no
- * such entrypoint now: `notifications` and `media` are `background`, so bullmq forks
- * `src/jobs.processor.ts` from this very test server - `consume` is on here, unlike
- * every other spec, which is the whole subject. The result is still computed in another
- * process and read back through Redis, and the fork is the mechanism the deployed app
- * uses.
+ * There is no worker entrypoint to spawn: `notifications` and `media` are
+ * `background`, so bullmq forks `src/jobs.processor.ts` from this very test server -
+ * `consume` is on here, unlike every other spec, which is the whole subject. The
+ * result is computed in another process and read back through Redis, which is the
+ * mechanism the deployed app uses.
  *
  * Broker assertions are skipped when Redis is unreachable, because `bun test` has to
  * pass on a machine with nothing running; the degraded side is in `redis.spec.ts`.
@@ -52,13 +51,17 @@ const source = {
   SEED_ADMIN_PASSWORD: 'admin-password',
 };
 
-const enqueue = async (name: string, data: unknown): Promise<string> => {
-  const job = await publisher.publish(QUEUES.NOTIFICATIONS, name, data);
+const enqueue = async (
+  queue: string,
+  name: string,
+  data: unknown,
+): Promise<string> => {
+  const job = await publisher.publish(queue, name, data);
   return job.id ?? '(unassigned)';
 };
 
-const view = async (id: string): Promise<JobView> => {
-  const job = await publisher.queue(QUEUES.NOTIFICATIONS).getJob(id);
+const view = async (queue: string, id: string): Promise<JobView> => {
+  const job = await publisher.queue(queue).getJob(id);
   if (job === undefined) throw new Error(`no job ${id}`);
   return {
     state: await job.getState(),
@@ -72,10 +75,10 @@ const view = async (id: string): Promise<JobView> => {
  * before `returnvalue` is necessarily readable, and a test that stopped at
  * `completed` would flake on exactly the assertion that matters.
  */
-const settled = async (id: string): Promise<JobView> => {
+const settled = async (queue: string, id: string): Promise<JobView> => {
   let last: JobView | undefined;
   for (let attempt = 0; attempt < 60; attempt += 1) {
-    last = await view(id);
+    last = await view(queue, id);
     // `failedReason` rather than `state === 'failed'`: with retries configured a
     // job that has thrown sits in `delayed` between attempts, and only becomes
     // `failed` once every attempt is spent.
@@ -179,12 +182,12 @@ describe('publish here, consume in a forked child', () => {
   test('a job enqueued by this process is completed in a child', async () => {
     if (!queueUp) return;
 
-    const id = await enqueue(JOBS.USER_REGISTERED, {
+    const id = await enqueue(QUEUES.NOTIFICATIONS, JOBS.USER_REGISTERED, {
       userId: crypto.randomUUID(),
       email: 'queued@example.com',
       name: 'Queued',
     });
-    const finished = await settled(id);
+    const finished = await settled(QUEUES.NOTIFICATIONS, id);
 
     expect(finished.state).toBe('completed');
     // The result was computed in a forked process and read back through Redis,
@@ -197,13 +200,47 @@ describe('publish here, consume in a forked child', () => {
 
     // No handler for this name, so the child's dispatcher rejects it - the same path a
     // throwing handler takes, and it proves the rejection crosses the fork.
-    const id = await enqueue('no.such.job', {});
-    const finished = await settled(id);
+    const id = await enqueue(QUEUES.NOTIFICATIONS, 'no.such.job', {});
+    const finished = await settled(QUEUES.NOTIFICATIONS, id);
 
     // Still `delayed` between attempts - the retry policy is three attempts with
     // exponential backoff, which is the point.
     expect(['delayed', 'failed']).toContain(finished.state);
     expect(finished.failedReason).toContain('No handler for');
+  }, 40_000);
+});
+
+/**
+ * The other sandboxed queue, and the one whose handler does real work.
+ *
+ * A WebP encode is CPU-bound, so `MediaJobs.thumbnail` is `background: true` and
+ * bullmq forks `src/jobs.processor.ts` for `media` as well - that fork is what the
+ * avatar feature's thumbnails come out of.
+ *
+ * The source key is deliberately one that is not there. A spec's config is an
+ * in-memory literal and **a literal cannot cross a fork** (see `jobs.processor.ts`),
+ * so the child reads `Bun.env` and resolves a different `STORAGE_LOCAL_ROOT` than
+ * this server did - there is no temp directory both processes can be pointed at
+ * without mutating the environment every other suite reads. What the missing key
+ * proves is the part that is in doubt: the frame reached `MediaJobs` in another
+ * process, and came back through Redis in that handler's own words.
+ */
+describe('the media queue, forked for the same reason', () => {
+  test('a thumbnail job is dispatched to MediaJobs in a child', async () => {
+    if (!queueUp) return;
+
+    const id = await enqueue(QUEUES.MEDIA, JOBS.FILE_THUMBNAIL, {
+      fileId: crypto.randomUUID(),
+      key: 'users/nobody/avatars/gone.png',
+      width: 64,
+    });
+    const finished = await settled(QUEUES.MEDIA, id);
+
+    // `MediaJobs`'s own message, from `MediaJobs.#read`.
+    expect(finished.failedReason).toContain('thumbnail source missing');
+    // And `failed` rather than `delayed`: a source that is not there can never
+    // appear, so the handler raises `UnrecoverableError` and spends no retries.
+    expect(finished.state).toBe('failed');
   }, 40_000);
 });
 
@@ -226,7 +263,7 @@ describe('draining', () => {
     // which is the point: it waits for the next boot rather than half-running.
     await server.app.drain();
 
-    const id = await enqueue(JOBS.USER_REGISTERED, {
+    const id = await enqueue(QUEUES.NOTIFICATIONS, JOBS.USER_REGISTERED, {
       userId: crypto.randomUUID(),
       email: 'after-drain@example.com',
       name: 'After Drain',
@@ -235,7 +272,7 @@ describe('draining', () => {
     // Long enough that a live worker would have taken it - the same job completed in
     // well under a second above.
     await Bun.sleep(2500);
-    const after = await view(id);
+    const after = await view(QUEUES.NOTIFICATIONS, id);
     expect(['waiting', 'delayed', 'prioritized']).toContain(after.state);
     expect(after.result).toBeNull();
 

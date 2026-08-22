@@ -49,7 +49,6 @@ export function ChatWindow({
   const user = useAuthStore((state) => state.user);
   const setKeyboardDisabled = useKeyboardStore((state) => state.setDisabled);
 
-  // --- SCROLL LOGIC ---
   const handleScroll = () => {
     if (!scrollContainerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } =
@@ -67,7 +66,6 @@ export function ChatWindow({
     }
   }, [messages, isStreaming, greeting]);
 
-  // --- KEYBOARD & FOCUS ---
   useEffect(() => {
     if (isFocused) setKeyboardDisabled(true);
     return () => setKeyboardDisabled(false);

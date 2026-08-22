@@ -3,22 +3,14 @@ import { Assets, Container, Sprite, type Texture } from 'pixi.js';
 /**
  * The firecracker itself.
  *
- * ## It flies now
+ * A sprite in the same scene as the curve, rather than an `<img>` over the canvas.
+ * One coordinate system, no `getBoundingClientRect()` on the render path to reconcile
+ * two, and it can do the obvious thing and ride the tip.
  *
- * It used to be an `<img>` centred over the canvas by CSS, and the canvas found
- * its wick by calling `getBoundingClientRect()` on the DOM node **every frame**
- * to reconcile two coordinate systems. It also never moved: the round climbed
- * and the rocket sat in the middle of the screen with sparks coming off it.
- *
- * As a sprite in the same scene as the curve there is one coordinate system, no
- * layout read on the render path, and it can do the obvious thing - ride the tip.
- *
- * ## Its own art
- *
- * The texture is `sprites/firecracker.svg`, drawn for this. Before that it was
- * the favicon: square, padded for a 16px browser tab, and with its fuse wherever
- * the icon designer happened to put it. The offsets below are measured off the
- * artwork, so they belong with it - see the note in the SVG.
+ * The texture is `sprites/firecracker.svg`, drawn for this rather than reusing the
+ * favicon - which is square, padded for a 16px tab, and has its fuse wherever the
+ * icon designer put it. The offsets below are measured off the artwork, so they
+ * belong with it; see the note in the SVG.
  */
 
 /**

@@ -39,19 +39,12 @@ export interface QueueSummary {
 }
 
 /**
- * What Bull Board showed, as JSON. A holding position, deliberately.
+ * What Bull Board shows, as JSON: job counts per queue, one job's state and result,
+ * retry and drain, admin-only. Four calls on bullmq's own `Queue`.
  *
- * The NestJS template mounted `@bull-board/express` at `/api/queues` behind a
- * session-cookie middleware. dunx briefly had a counterpart - `@dunx/queue-dashboard`
- * served the real Bull Board over `Bun.serve`, which proved the adapter was cheap -
- * and it has since been **deleted**, because a queue-only dashboard is the wrong unit
- * for a framework. Its replacement is one page covering routes, the provider graph,
- * the queues and runtime health, designed in the dunx repo under
- * `docs/roadmap/dunx-dashboard.md` and not yet built.
- *
- * So there is no page today, and this is what serves the *data* until there is: job
- * counts per queue, one job's state and result, retry and drain, admin-only. Four
- * calls on bullmq's own `Queue`, which is all the panel will do either.
+ * A holding position. `@dunx/dashboard` serves the real bull-board and would delete
+ * this file and `QueueUnavailableMiddleware` outright, at the cost of four packages
+ * this app does not depend on and re-pointing the route assertions in `queues.spec.ts`.
  *
  * `getWorkers()` is deliberately absent. bullmq matches workers by client name
  * through `CLIENT LIST` and its Bun adapter never names a connection, so it returns

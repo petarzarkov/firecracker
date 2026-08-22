@@ -29,9 +29,8 @@ export const FileIdParams = z.object({ fileId: z.uuid() });
 
 /**
  * A multipart upload. dunx parses `multipart/form-data` with `req.formData()` and
- * hands the handler the grouped fields, so a `File` arrives as a `File` and the
- * schema that validates it is an ordinary zod schema - there is no `FilesInterceptor`,
- * no multer, and no `@UploadedFiles()` parameter decorator.
+ * hands the handler the grouped fields, so a `File` arrives as a `File` and the schema
+ * that validates it is an ordinary zod schema.
  *
  * `z.instanceof(File)` rather than `z.file()`: the latter is a zod-4 type whose JSON
  * Schema conversion is `{ type: 'string', format: 'binary' }` only in some versions,

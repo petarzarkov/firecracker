@@ -1,15 +1,9 @@
-import { Controller, Get, Public, Roles } from '@dunx/http';
+import { Controller, Get, Post, Public, type Input } from '@dunx/http';
 import { ApiDoc } from '@dunx/openapi';
-import {
-  PaginationDirection,
-  PaginationOrder,
-  type Page,
-} from '@dunx/infra/pagination';
-import { AuditService } from '../audit/services/audit.service.js';
-import type { AuditLogEntry } from '../audit/dto/audit-log.dto.js';
-import { UserRole } from '../users/schema/user.schema.js';
+import { avatarFile, setAvatar } from './dto/profile.dto.js';
 import { AvatarsService } from './services/avatars.service.js';
 import { CurrentUser, type Caller } from './services/current-user.service.js';
+import { ProfilePictureService } from './services/profile-picture.service.js';
 
 /**
  * What the session actually resolved to, which is the one endpoint every client
@@ -28,8 +22,8 @@ import { CurrentUser, type Caller } from './services/current-user.service.js';
 export class ProfileController {
   constructor(
     private readonly caller: CurrentUser,
-    private readonly audit: AuditService,
     private readonly avatars: AvatarsService,
+    private readonly picture: ProfilePictureService,
   ) {}
 
   @ApiDoc({ tags: ['profile'], summary: 'The current session' })
@@ -39,28 +33,10 @@ export class ProfileController {
   }
 
   /**
-   * The global `SessionGuard` reads this and 403s unless the caller holds `admin`
-   * - the same metadata `@dunx/openapi` reads to emit `x-required-roles`, so the
-   * document and the guard cannot disagree.
-   */
-  @ApiDoc({ tags: ['profile'], summary: 'Recent audit entries for the caller' })
-  @Roles(UserRole.ADMIN)
-  @Get('/audit')
-  entries(): Promise<Page<AuditLogEntry>> {
-    return this.audit.list({
-      order: PaginationOrder.DESC,
-      direction: PaginationDirection.FORWARD,
-      take: 20,
-      actorId: this.caller.require().id,
-    });
-  }
-
-  /**
    * Avatar suggestions for the sign-up form.
    *
-   * `@Public()` because it is reached *before* anybody has an account - that is
-   * the whole point of it. It was `GET /api/auth/avatars/trending` on the NestJS
-   * auth controller; better-auth owns `/auth` now, so it lives here.
+   * `@Public()` because it is reached *before* anybody has an account - that is the
+   * whole point of it. Under `/profile` rather than `/auth`, which better-auth owns.
    */
   @ApiDoc({ tags: ['profile'], summary: 'Trending avatars to choose from' })
   @Public()
@@ -70,20 +46,32 @@ export class ProfileController {
   }
 
   /**
-   * The guard reads this and skips: no session lookup, no rejection. A public
-   * route that wants to *adapt* to an optional caller asks `CurrentUser` and gets
-   * `undefined`.
+   * Point `users.image` at an object the caller uploaded, or at a URL they chose.
    *
-   * The game leans on exactly this: an anonymous visitor watches rounds and holds
-   * a demo wallet, and only a bet needs a session.
+   * No `@Throttle`. The bytes went through `POST /api/files`, which is where
+   * `UPLOAD_MAX_BYTES` and the configured limit already apply; this is a column
+   * write, and a literal here could only restate the default - which is a no-op
+   * that no environment can then raise.
+   *
+   * `input.req.headers` is passed on because better-auth's `updateUser` needs the
+   * caller's session to update it, and answers with the cookie that keeps its
+   * cached copy in step.
    */
-  @ApiDoc({
-    tags: ['profile'],
-    summary: 'Whether this request carried a session',
-  })
+  @ApiDoc({ tags: ['profile'], summary: 'Set the caller’s avatar' })
+  @Post('/avatar', setAvatar)
+  avatar(input: Input<typeof setAvatar>): Promise<Response> {
+    return this.picture.set(input.req.headers, input.body);
+  }
+
+  /**
+   * `@Public()` because an avatar is read by whoever can see the player: the lobby
+   * chat carries a sender's picture and a spectator has no session. Which objects
+   * that admits is `ProfilePictureService.bytes`'s decision, not this route's.
+   */
+  @ApiDoc({ tags: ['profile'], summary: 'An avatar’s bytes' })
   @Public()
-  @Get('/anonymous')
-  anonymous(): { caller: string | null } {
-    return { caller: this.caller.optional()?.email ?? null };
+  @Get('/avatar/:fileId', avatarFile)
+  avatarBytes(input: Input<typeof avatarFile>): Promise<Response> {
+    return this.picture.bytes(input.params.fileId);
   }
 }

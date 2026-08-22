@@ -13,13 +13,9 @@ const WIDE = '(min-width: 1024px)';
 /**
  * Whether the desktop layout is the live one.
  *
- * ## Why this exists rather than `display: none`
- *
- * `Game` rendered **both** layouts and hid one with `display`. A hidden element
- * is still mounted, so the game was running two `CrashChart`s - which, once the
- * chart became a PIXI scene, meant two WebGL contexts, two tickers and two full
- * particle simulations, one of them drawing to a box nobody could see. It was
- * already wasteful with the canvas version; it is expensive now.
+ * **Not `display: none`.** A hidden element is still mounted, so rendering both
+ * layouts means two `CrashChart`s - two WebGL contexts, two tickers and two full
+ * particle simulations, one of them drawing to a box nobody can see.
  *
  * Reading `matchMedia` during the initial state means the first paint already
  * knows which layout it is, so nothing flashes.

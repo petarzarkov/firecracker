@@ -39,9 +39,8 @@ export const pageOptionsSchema = z.object({
 /**
  * Assignable to `@dunx/infra/pagination`'s `PageOptions`, which is what lets the
  * validated query go straight into `paginate` with no adapter. `order` is lowercase
- * now (`asc`/`desc`) because that is what the framework's frozen object spells -
- * the enum this replaced used `ASC`/`DESC`, so a client sending `?order=DESC` gets a
- * 400 where it used to get a page.
+ * (`asc`/`desc`), because that is what the framework's frozen object spells - a
+ * client sending `?order=DESC` gets a 400.
  */
 export type PageOptionsQuery = z.infer<typeof pageOptionsSchema>;
 

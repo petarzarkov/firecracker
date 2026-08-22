@@ -10,9 +10,9 @@ import { AppHttpOptions } from './http.options.js';
 import { HEALTH_ROUTES, SERVICE_ROUTES } from './constants.js';
 
 /**
- * Boot, and nothing else. What used to be conditional out here now belongs to a
- * module: the client is two middlewares in `AppHttpOptions`, the queues are
- * `consume: true`, and the shutdown watchdog is `enableShutdownHooks`.
+ * Boot, and nothing else. Nothing here is conditional: the client is two middlewares
+ * in `AppHttpOptions`, the queues are `consume: true`, and the shutdown watchdog is
+ * `enableShutdownHooks`.
  */
 const main = async (): Promise<void> => {
   /**

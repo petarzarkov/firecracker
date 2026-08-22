@@ -1,64 +1,42 @@
 import { Module } from '@dunx/core';
-import { AccountsModule } from '../auth/auth.module.js';
-import { ChatModule } from '../chat/chat.module.js';
-import { GameBotsService } from './bots/game-bots.service.js';
-import { CrashEngineService } from './engine/crash-engine.service.js';
-import { GameController } from './game.controller.js';
-import { GameGateway } from './game.gateway.js';
-import { GameJobs } from './handlers/game.jobs.js';
-import { GameBetRepository } from './repos/game-bet.repository.js';
-import { GameRoundRepository } from './repos/game-round.repository.js';
-import { WalletRepository } from './repos/wallet.repository.js';
-import { AutoCashOutService } from './services/auto-cashout.service.js';
-import { GameBetService } from './services/game-bet.service.js';
-import { GameStateService } from './services/game-state.service.js';
-import { GameRoundWatchdog } from './services/game-watchdog.service.js';
-import { PlayerChatService } from './services/player-chat.service.js';
-import { GameRoundService } from './services/game-round.service.js';
-import { WalletService } from './services/wallet.service.js';
-import { WalletController } from './wallet.controller.js';
+import { GameBettingModule } from './betting/betting.module.js';
+import { GameBotsModule } from './bots/bots.module.js';
+import { GameEngineModule } from './engine/engine.module.js';
+import { GameFairnessModule } from './fairness/fairness.module.js';
+import { GameRoundsModule } from './rounds/rounds.module.js';
+import { GameSurfaceModule } from './surface/surface.module.js';
 
 /**
- * The crash game.
+ * The crash game: a facade over six modules, and nothing of its own. The split is
+ * what makes three invariants properties of the graph rather than paragraphs:
+ * `GameBotsModule` cannot see `GameBetService`, `GameEngineModule` exports the one
+ * clock, and everything a player re-runs to check us is under `fairness/`.
  *
- * **Decorated, and it used to be configured.** `forRoot({ engine, controllers })` had
- * exactly one caller - `WorkerModule`, which left the clock and the gateway out so a
- * second process could own the database transitions. There is no second process, and
- * the sandboxed child does not build this module at all. Dropping the factory also
- * removes the hazard it created: `forRoot()` returns a fresh object per call and a
- * scope is keyed on the module reference, so two callers meant two engines - which is
- * what `engine: false` was guarding against.
+ * Nothing is exported. `AppModule` is the only importer and declares no provider
+ * that injects into the game.
  *
- * `AccountsModule` because the socket upgrade resolves a session, `ChatModule` because
- * the gateway carries the lobby chat. No `NotificationsModule`: both reach
- * `EventsPublisher` through the `global: true` `EventsPublisherModule`, and importing
- * it would call its `forRoot()` again and bind a second publisher.
+ * Two rules, each one edit away from breaking something:
+ *
+ * **No game sub-module carries `global: true`.** If one did and somebody later
+ * added it to `Foundation.for()`, `JobsModule` would build it - and if that module
+ * were `GameEngineModule`, or anything that transitively imports it, every BullMQ
+ * fork would be a second clock.
+ *
+ * **No game sub-module carries a `static forRoot()`.** Per-caller configuration is
+ * what produces two engines and two nonce counters - see `GameEngineModule`.
+ *
+ * Import order is construction order: fairness and betting have no game-internal
+ * dependencies, rounds needs both, the engine needs rounds, and the surface needs
+ * everything.
  */
 @Module({
-  imports: [AccountsModule, ChatModule],
-  controllers: [GameController, WalletController],
-  providers: [
-    GameRoundRepository,
-    GameBetRepository,
-    WalletRepository,
-    WalletService,
-    // `GameBetService` and `GameRoundService` reference each other - the round
-    // service settles bets, the bet service names the round service's
-    // `RefundedBet`. In Nest this needed `forwardRef()` on both sides. dunx
-    // records a dependency as a thunk evaluated at resolution rather than at
-    // class-definition time, so the cycle resolves on its own and there is
-    // nothing to annotate.
-    GameBetService,
-    GameRoundService,
-    GameJobs,
-    CrashEngineService,
-    AutoCashOutService,
-    GameStateService,
-    PlayerChatService,
-    GameGateway,
-    GameBotsService,
-    GameRoundWatchdog,
+  imports: [
+    GameFairnessModule,
+    GameBettingModule,
+    GameRoundsModule,
+    GameEngineModule,
+    GameBotsModule,
+    GameSurfaceModule,
   ],
-  exports: [GameRoundService, GameBetService, WalletService],
 })
 export class GameModule {}

@@ -21,17 +21,10 @@ export interface EventsPublisherOptions {
  * One binding of `EventsPublisher` per process, `global: true`, built by
  * `foundation()`.
  *
- * ## Why this is its own module
- *
- * It used to be a provider inside `NotificationsModule`. That was fine while
- * notifications were the only thing publishing, and stopped being fine the moment
- * the game did too: `NotificationsModule.forRoot()` returns a **new object per
- * call**, so a second module importing it to reach `EventsPublisher` would get a
- * second scope with a second binding - the exact trap `app.module.ts` documents
- * about decorating and configuring the same module.
- *
- * Pulling the binding out is the fix that scales: both `NotificationsModule` and
- * `GameModule` now inject `EventsPublisher` and neither imports the other.
+ * Its own module rather than a provider inside `NotificationsModule`, because both
+ * that module and the game publish: a `forRoot()` returns a **new object per call**,
+ * so the second importer reaching for `EventsPublisher` would get a second scope with
+ * a second binding. As a global module both inject it and neither imports the other.
  */
 export class EventsPublisherModule {
   static forRoot(options: EventsPublisherOptions): DynamicModule {

@@ -6,9 +6,8 @@ import { SERVICE_ROUTES } from '../../constants.js';
 /**
  * Which build is this - the commit an incident is being debugged against.
  *
- * All that is left of a controller that served three routes. `/service/health` and
- * `/service/up` are `@dunx/http`'s `/health/ready` and `/health/live` now; this one
- * stayed because no framework can know a commit sha.
+ * The probes are `@dunx/http`'s `/health/ready` and `/health/live`. This route exists
+ * because no framework can know a commit sha.
  */
 @ApiDoc({
   tags: ['service'],

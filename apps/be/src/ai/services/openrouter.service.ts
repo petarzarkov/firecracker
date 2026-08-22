@@ -17,11 +17,6 @@ export class OpenRouterService extends OpenAICompatibleService {
       temperature: ai.temperature,
       label: 'OpenRouter',
       defaultModel: 'meta-llama/llama-3.1-70b-instruct',
-      staticModels: [
-        'anthropic/claude-3.5-sonnet',
-        'openai/gpt-4o',
-        'meta-llama/llama-3.1-70b-instruct',
-      ],
     });
   }
 }

@@ -17,13 +17,12 @@ export interface ErrorBody {
 }
 
 /**
- * dunx's answer to a stack of `@Catch()` exception filters: one function passed to
- * `HttpFactory.create`. Anything it does not recognise falls through to
- * `defaultErrorMapper`, which never leaks an unexpected error's message.
+ * One function passed to `HttpFactory.create`, in place of a stack of exception
+ * filters. Anything it does not recognise falls through to `defaultErrorMapper`,
+ * which never leaks an unexpected error's message.
  *
- * The envelope matches the NestJS template's: `{ error, message, status }`, with
- * `issues` added when a schema rejected the input. Note `status`, not `statusCode`.
- *
+ * The envelope is `{ error, message, status }`, with `issues` added when a schema
+ * rejected the input. Note `status`, not `statusCode`.
  */
 export class ErrorMapper {
   static readonly #STATUS_NAME = new Map<number, string>(
@@ -34,7 +33,18 @@ export class ErrorMapper {
   static readonly toResponseBody: DunxErrorMapper = (error, req) => {
     const body = ErrorMapper.toErrorBody(error);
     if (body === undefined) return defaultErrorMapper(error, req);
-    return Response.json(body, { status: body.status });
+    /**
+     * `HttpError.headers` is part of the status, not an extra: `Retry-After` and
+     * `RateLimit-*` on `ThrottleGuard`'s 429, `WWW-Authenticate` on a 401. dunx's
+     * own `errorMapper` copies them, and replacing the mapper means copying them
+     * here - a 429 whose body says "try again" and whose headers do not say when
+     * is a 429 a client cannot act on.
+     */
+    const headers = error instanceof HttpError ? error.headers : undefined;
+    return Response.json(body, {
+      status: body.status,
+      ...(headers === undefined ? {} : { headers }),
+    });
   };
 
   static toErrorBody(error: unknown): ErrorBody | undefined {
@@ -89,7 +99,7 @@ export class ErrorMapper {
     return ErrorMapper.#STATUS_NAME.get(status) ?? 'INTERNAL_SERVER_ERROR';
   }
 
-  /** `bun:sqlite` constraint codes, mapped the way the NestJS filter did. */
+  /** `bun:sqlite` constraint codes, as the status a client can act on. */
   static #fromSqlite(error: SQLiteError): ErrorBody {
     const nameOf = ErrorMapper.nameOf;
     switch (error.code) {

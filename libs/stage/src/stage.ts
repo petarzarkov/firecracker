@@ -13,9 +13,7 @@ import { haloTexture, softDotTexture } from './textures.js';
 import type { Stage, StageOptions, StagePhase, StagePoint } from './types.js';
 
 /**
- * The round, assembled.
- *
- * ## The stage drives itself
+ * The round, assembled. **The stage drives itself:**
  *
  * It owns the ticker and pulls from {@link StageOptions.sample} rather than being
  * pushed at, which is what keeps the whole animation off React: the client's
