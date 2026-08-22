@@ -20,7 +20,7 @@ export const SanitizedUser = z
   })
   .meta({
     id: 'SanitizedUser',
-    title: 'A user, without anything secret on it',
+    description: 'A user, without anything secret on it',
   });
 
 export type SanitizedUser = z.infer<typeof SanitizedUser>;
@@ -43,7 +43,7 @@ export const CreateUser = z
     password: z.string().min(8).max(64),
     role: z.enum([UserRole.ADMIN, UserRole.USER]).default(UserRole.USER),
   })
-  .meta({ id: 'CreateUser', title: 'Create a user' });
+  .meta({ id: 'CreateUser', description: 'Create a user' });
 
 export type CreateUser = z.infer<typeof CreateUser>;
 
@@ -53,7 +53,7 @@ export const UpdateUser = z
     role: z.enum([UserRole.ADMIN, UserRole.USER]).optional(),
     banned: z.boolean().optional(),
   })
-  .meta({ id: 'UpdateUser', title: 'Patch a user' });
+  .meta({ id: 'UpdateUser', description: 'Patch a user' });
 
 export type UpdateUser = z.infer<typeof UpdateUser>;
 

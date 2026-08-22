@@ -18,7 +18,7 @@ export const FileMetadata = z
   })
   .meta({
     id: 'FileMetadata',
-    title: 'An uploaded object, without its bytes',
+    description: 'An uploaded object, without its bytes',
   });
 
 export type FileMetadata = z.infer<typeof FileMetadata>;

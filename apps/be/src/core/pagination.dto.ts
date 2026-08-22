@@ -51,8 +51,6 @@ const pageMetaSchema = z.object({
  */
 export class Paginated {
   static of<T extends z.ZodType>(item: T, id: string) {
-    return z
-      .object({ data: z.array(item), meta: pageMetaSchema })
-      .meta({ id, title: id });
+    return z.object({ data: z.array(item), meta: pageMetaSchema }).meta({ id });
   }
 }

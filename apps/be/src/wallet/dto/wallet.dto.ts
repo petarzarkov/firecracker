@@ -10,7 +10,7 @@ export const Wallet = z
     isDemo: z.boolean(),
     updatedAt: z.iso.datetime(),
   })
-  .meta({ id: 'Wallet', title: 'A balance' });
+  .meta({ id: 'Wallet', description: 'A balance' });
 export type Wallet = z.infer<typeof Wallet>;
 
 export const WalletTransaction = z
@@ -23,7 +23,7 @@ export const WalletTransaction = z
     description: z.string().nullable(),
     createdAt: z.iso.datetime(),
   })
-  .meta({ id: 'WalletTransaction', title: 'One movement on a balance' });
+  .meta({ id: 'WalletTransaction', description: 'One movement on a balance' });
 export type WalletTransaction = z.infer<typeof WalletTransaction>;
 
 /**

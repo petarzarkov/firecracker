@@ -42,9 +42,9 @@ preload = ["@dunx/transform/preload"]
 
 `@dunx/transform` reads each class's constructor parameter types at load time and records them. Without it the app boots and fails naming the provider it could not build. It is a **runtime** dependency, not a build-time one — do not let a `--production` install or a `.dockerignore` drop it or `bunfig.toml`.
 
-### The other runtime dependency that looks optional
+### The docs page serves Swagger UI
 
-`swagger-ui-dist`. As of dunx 2.3.0 `@dunx/openapi` no longer ships an explorer of its own: it serves Swagger UI out of the consumer's install, resolved **lazily on the first request** for `/api/docs`, which is what keeps it an optional peer for a service that only serves the JSON. This app serves the page, so it is a plain `dependencies` entry and has to survive the Dockerfile's `--production` install. A missing one is not a boot failure — it is `/api/docs` answering with an install command, in production only.
+As of dunx 2.3.0 `@dunx/openapi` no longer ships an explorer of its own; as of **2.4.0 `swagger-ui-dist` is its own dependency rather than an optional peer**, so this app does not declare it and there is no `--production` install to lose it to. It is still resolved lazily on the first request for `/api/docs`, so a service that serves only the JSON never reads it — it just pays 12 MB on disk for the option.
 
 Since 2.3.1 the four files come off **one wildcard route** under `/api/docs`, guarded by an allow-list in `@dunx/openapi` — the package directory also holds four other builds and about 4 MB of sourcemaps, so that list is the only thing keeping the wildcard off them. `openapi.spec.ts` fetches all four over a real server and asserts that a name outside the list 404s, so neither half can rot unnoticed.
 
@@ -242,7 +242,7 @@ is therefore **optional** — branch on `isAuthenticated`, never on `token`.
 
 `Readiness` implements `OnBeforeShutdown` (`OnDrain` in 2.1.0, renamed in 2.1.1 because `@dunx/http` already had an unrelated `@OnDrain()` websocket decorator). That phase runs while the server is still accepting, which is the whole point: an `onShutdown` hook runs after `server.stop()`, so a probe answering from there answers on a closed socket. `HEALTH_DRAIN_DELAY_MS` holds readiness failing before the port closes. Liveness deliberately keeps passing while draining — a pod shutting down does not need killing.
 
-The probes are `@ApiHidden()` upstream, so they are absent from the OpenAPI document by design; `openapi.spec.ts` asserts the omission, and asserts the same of Swagger UI's two asset routes. `/api/service/config` is what survived of the old controller, because no framework can know a commit sha.
+**dunx 2.4.0 documents the probes.** They were `@ApiHidden()` before it, and `openapi.spec.ts` asserted the omission; both routes now appear under a `Health` tag with `HealthReport` on the 200 _and_ the 503, and the spec asserts that instead. `HealthModule.forRoot({ documented: false })` is the opt-out, which this app does not take — the paths are already in the boot banner and the README. Swagger UI's own asset route stays hidden. `/api/service/config` is what survived of the old controller, because no framework can know a commit sha.
 
 ---
 

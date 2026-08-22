@@ -23,14 +23,14 @@ export const GameRound = z
     crashedAt: z.iso.datetime().nullable(),
     createdAt: z.iso.datetime(),
   })
-  .meta({ id: 'GameRound', title: 'One round of the crash game' });
+  .meta({ id: 'GameRound', description: 'One round of the crash game' });
 export type GameRound = z.infer<typeof GameRound>;
 
 export const CurrentRound = GameRound.extend({
   /** Only while RUNNING: where the curve is right now. */
   multiplier: z.number().optional(),
   elapsed: z.number().int().optional(),
-}).meta({ id: 'CurrentRound', title: 'The round in progress' });
+}).meta({ id: 'CurrentRound', description: 'The round in progress' });
 export type CurrentRound = z.infer<typeof CurrentRound>;
 
 /**
@@ -51,7 +51,7 @@ export const GameBet = z
     isDemo: z.boolean(),
     createdAt: z.iso.datetime(),
   })
-  .meta({ id: 'GameBet', title: 'A stake in one round' });
+  .meta({ id: 'GameBet', description: 'A stake in one round' });
 export type GameBet = z.infer<typeof GameBet>;
 
 /**
@@ -73,7 +73,7 @@ export const RoundVerification = z
   })
   .meta({
     id: 'RoundVerification',
-    title: 'Provably-fair inputs for a crashed round',
+    description: 'Provably-fair inputs for a crashed round',
   });
 /**
  * The *response*. `GameRoundService.RoundProof` is what comes off the round row -

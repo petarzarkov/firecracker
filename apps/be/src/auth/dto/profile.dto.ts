@@ -22,13 +22,14 @@ export const AvatarSource = z
   ])
   .meta({
     id: 'AvatarSource',
-    title: 'An object the caller owns, or a URL they chose',
+    description: 'An object the caller owns, or a URL they chose',
   });
 export type AvatarSource = z.infer<typeof AvatarSource>;
 
-export const AvatarUpdated = z
-  .object({ picture: z.string() })
-  .meta({ id: 'AvatarUpdated', title: 'The caller’s avatar after the change' });
+export const AvatarUpdated = z.object({ picture: z.string() }).meta({
+  id: 'AvatarUpdated',
+  description: 'The caller’s avatar after the change',
+});
 export type AvatarUpdated = z.infer<typeof AvatarUpdated>;
 
 /**

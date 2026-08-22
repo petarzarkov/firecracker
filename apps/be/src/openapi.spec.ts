@@ -89,12 +89,30 @@ describe('the generated OpenAPI document', () => {
       'AvatarSource',
       'AvatarUpdated',
       'CreateUser',
+      // dunx 2.4.0 documents the probes, so the report shape is a component too.
+      'HealthReport',
       'Session',
       'UpdateUser',
       'User',
       'ValidationError',
       'Verification',
     ]);
+  });
+
+  /**
+   * Every hoisted schema's `title` is its own component key, which is what Swagger
+   * UI labels a model with. dunx 2.4.0 supplies that default because a `$ref`
+   * reached through `items` has no other fallback, so `array<User>` rendered as
+   * `array<object>`.
+   *
+   * A declared `title` wins, which is why none of this app's DTOs declare one: the
+   * prose that used to sit there is in `description` now, or the Schemas list reads
+   * as sentences instead of type names.
+   */
+  test('every component is titled with its own name', () => {
+    for (const [name, schema] of Object.entries(doc.components.schemas)) {
+      expect((schema as { title?: string }).title).toBe(name);
+    }
   });
 
   /**
@@ -111,12 +129,15 @@ describe('the generated OpenAPI document', () => {
   });
 
   /**
-   * Locks in a real gap. `RouteSchemas` has no `response` and there is no
-   * `@ApiResponse` equivalent, so a success is documented as a bare description
-   * with no `content` and the schemas never reach `components` - which means the
-   * generated document cannot drive client codegen.
+   * **The gap is this app's now, not the framework's.** `RouteSchemas.response`
+   * exists - keyed by status, and since 2.4.0 it takes a plain JSON Schema as well
+   * as a Standard Schema - so a success body is documentable and none of these
+   * routes declare one. Until they do, the document cannot drive client codegen.
+   *
+   * Kept as an assertion rather than a comment so closing it has to come here and
+   * delete this, instead of quietly leaving a stale claim behind.
    */
-  test('KNOWN GAP: no success response body is documented', () => {
+  test('KNOWN GAP: no route declares a success response body', () => {
     const ok = doc.paths['/api/users']?.['get']?.['responses'] as Record<
       string,
       Record<string, unknown>
@@ -143,14 +164,33 @@ describe('the generated OpenAPI document', () => {
   });
 
   /**
-   * Deliberately absent: `HealthController` carries `@ApiHidden()`, because a probe is
-   * for the orchestrator. Asserted so the omission is not rediscovered as a bug.
+   * dunx 2.4.0 reversed this: the probes used to carry `@ApiHidden()` and the old
+   * assertion here was that they were absent. They are endpoints someone calls, so
+   * they are documented now, and `HealthModule.forRoot({ documented: false })` is
+   * the opt-out this app deliberately does not take - the paths are already in the
+   * boot banner and the README.
    */
-  test('the health probes are hidden from the document', () => {
-    const paths = Object.keys(doc.paths);
-    expect(paths).not.toContain('/api/health/live');
-    expect(paths).not.toContain('/api/health/ready');
-  });
+  test.each(['/api/health/live', '/api/health/ready'])(
+    '%s is documented, with the report on both outcomes',
+    (path) => {
+      const probe = doc.paths[path]?.['get'];
+      expect(probe?.['tags']).toEqual(['Health']);
+      // Public: an orchestrator has no session to present.
+      expect(probe?.['security']).toEqual([]);
+
+      const responses = probe?.['responses'] as Record<
+        string,
+        { content: Record<string, { schema: { $ref: string } }> }
+      >;
+      // 503 as well as 200, because a probe that only documents the happy path
+      // tells a reader nothing about what a failing one returns.
+      for (const status of ['200', '503']) {
+        expect(
+          responses[status]?.content['application/json']?.schema.$ref,
+        ).toBe('#/components/schemas/HealthReport');
+      }
+    },
+  );
 
   /**
    * `tags` is repeated on every method-level `@ApiDoc` on purpose: a method-level

@@ -29,6 +29,10 @@ export class AppHttpOptions {
       // and guarding a miss puts a database round trip on every one.
       notFound: 'public',
       requestLogging: {
+        // Both default to `false` and should stay there outside a debugging session:
+        // as of dunx 2.4.0 `requestBody` genuinely includes the body, and
+        // `LOG_MASK_FIELDS` masks by field *name* - it cannot save a sign-in body
+        // whose secret is not one of the names it knows.
         requestBody: config.log.requestBody,
         responseBody: config.log.responseBody,
         ignore: AppHttpOptions.#probePaths(config),
