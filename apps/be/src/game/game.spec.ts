@@ -12,6 +12,11 @@ import { GameRoundService } from './rounds/game-round.service.js';
 import { WalletService } from '../wallet/services/wallet.service.js';
 import { GameRoundRepository } from './rounds/game-round.repository.js';
 import { GameRoundWatchdog } from './rounds/round-watchdog.service.js';
+import { RoundJobs } from './rounds/round.jobs.js';
+import { AutoCashOutService } from './betting/auto-cashout.service.js';
+import { GameBetRepository } from './betting/game-bet.repository.js';
+import type { RoundJob } from './game.events.js';
+import type { Job } from 'bullmq';
 import { CrashEngineService } from './engine/crash-engine.service.js';
 import { GameBotsModule } from './bots/bots.module.js';
 import { GameSurfaceModule } from './surface/surface.module.js';
@@ -33,6 +38,9 @@ let rounds: GameRoundService;
 let wallets: WalletService;
 let roundRepo: GameRoundRepository;
 let watchdog: GameRoundWatchdog;
+let roundJobs: RoundJobs;
+let autoCashOut: AutoCashOutService;
+let betRepo: GameBetRepository;
 let userId: string;
 let userToken: string;
 
@@ -78,6 +86,9 @@ beforeAll(async () => {
   wallets = server.app.get(WalletService);
   roundRepo = server.app.get(GameRoundRepository);
   watchdog = server.app.get(GameRoundWatchdog);
+  roundJobs = server.app.get(RoundJobs);
+  autoCashOut = server.app.get(AutoCashOutService);
+  betRepo = server.app.get(GameBetRepository);
 
   const player = await TestSession.signUp(
     server,
@@ -265,6 +276,71 @@ describe('settlement', () => {
     expect(refunds[0]?.userId).toBe(userId);
     expect(refunds[0]?.refundedCents).toBe(400);
     expect(wallets.getWallet(userId, true).balanceCents).toBe(afterBet + 400);
+  });
+});
+
+/**
+ * A promise made during the round is kept even if no tick was there to keep it.
+ *
+ * `AutoCashOutService.sweep` only runs on a tick, and the crashing tick deliberately
+ * does not sweep - so a target between the last tick and the crash point was never
+ * paid. A restart is the same gap made large: a process that was down while the
+ * round ran produced no ticks at all, so every promise settled as a loss even though
+ * the curve had passed the target. The crash point is drawn at launch and stored, so
+ * the round is knowable after the fact and this is a reconciliation, not a guess.
+ */
+describe('reconciling auto-cashouts at the crash', () => {
+  const crashRound = (roundId: string): Promise<{ settled: boolean }> =>
+    roundJobs.crash({ data: { roundId } } as Job<RoundJob>);
+
+  test('a target the round reached is paid, not written off', async () => {
+    const roundId = await openRound();
+    const placed = bets.placeBet(userId, roundId, 200, true);
+    await autoCashOut.store(roundId, userId, 'player', 2, true);
+    launch(roundId, 383);
+    const afterBet = wallets.getWallet(userId, true).balanceCents;
+
+    // No tick ever ran: this is the settlement doing the reconciling.
+    await crashRound(roundId);
+
+    const bet = betRepo.findById(placed.id);
+    expect(bet?.status).toBe(GameBetStatus.CASHED_OUT);
+    // 200 cents at the target of 2.00x, not at the 3.83x the round reached.
+    expect(bet?.cashedOutAtX100).toBe(200);
+    expect(bet?.payoutCents).toBe(400);
+    expect(wallets.getWallet(userId, true).balanceCents).toBe(afterBet + 400);
+  });
+
+  test('a target above the crash point still loses', async () => {
+    const roundId = await openRound();
+    const placed = bets.placeBet(userId, roundId, 200, true);
+    await autoCashOut.store(roundId, userId, 'player', 5, true);
+    launch(roundId, 383);
+    const afterBet = wallets.getWallet(userId, true).balanceCents;
+
+    await crashRound(roundId);
+
+    expect(betRepo.findById(placed.id)?.status).toBe(GameBetStatus.LOST);
+    expect(wallets.getWallet(userId, true).balanceCents).toBe(afterBet);
+  });
+
+  /**
+   * The engine crashes on `multiplier >= crashPoint` and sweeps only below it, so a
+   * target *at* the crash point is one the running round would have refused. The
+   * reconciliation has to refuse it too, or a restart pays out what being up would
+   * not have.
+   */
+  test('a target exactly at the crash point is refused, as a tick would', async () => {
+    const roundId = await openRound();
+    const placed = bets.placeBet(userId, roundId, 200, true);
+    await autoCashOut.store(roundId, userId, 'player', 3, true);
+    launch(roundId, 300);
+    const afterBet = wallets.getWallet(userId, true).balanceCents;
+
+    await crashRound(roundId);
+
+    expect(betRepo.findById(placed.id)?.status).toBe(GameBetStatus.LOST);
+    expect(wallets.getWallet(userId, true).balanceCents).toBe(afterBet);
   });
 });
 

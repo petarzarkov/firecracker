@@ -182,6 +182,32 @@ The sweep was a `game.round.cleanup` job that rescheduled itself, plus a `#boots
 
 Not armed in a sandbox child: BullMQ forks one per burst, so an armed schedule there would fire in two or three processes at once, on a cadence set by how busy the queues are.
 
+### Boot recovery does not reuse a spent `jobId`
+
+`CrashEngineService.#recover` enqueues its START and CRASH jobs with **no `jobId`**.
+The normal path uses one - `game-round-start-<id>` - and bullmq dedupes against the
+_completed_ set as well as the pending one, so recovery reusing that id is a silent
+no-op whenever the job has already run. A round then sits in WAITING with nothing
+left to start it, which is a lobby stuck on "starting" forever.
+
+What makes the duplicate safe is the same thing that makes the schedule job safe:
+the **transition is guarded on status**. `transitionToRunning` moves only from
+WAITING and `settleCrash` only from RUNNING, so a second job settles nothing twice -
+where a missing one is a dead round.
+
+### A crash pays the targets the round actually reached
+
+`RoundJobs.crash` sweeps the auto-cashouts before settling. The sweep otherwise only
+runs on a tick and the crashing tick deliberately does not sweep, so a target between
+the last tick and the crash point was never paid. A restart is that gap made large:
+no ticks ran at all, so every promise made during the round settled as a loss even
+though the curve passed the target - and the crash point is drawn at launch and
+stored, so the round is knowable after the fact.
+
+Swept at `crashPoint - 1`, because the engine crashes on `multiplier >= crashPoint`
+and sweeps only below it. Paying _at_ the crash point would pay a target the running
+round would have refused, which is a restart paying out what being up would not.
+
 ### Multipliers are integer hundredths
 
 `1.07x` is `107`, everywhere: in the database (`crash_point_x100`), in the engine, in the payout. Only `toMultiplier()` divides, at the edge. Never reintroduce a float multiplier — the payout arithmetic depends on this.

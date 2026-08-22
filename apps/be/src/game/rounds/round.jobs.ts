@@ -19,6 +19,8 @@ import {
 } from '../engine/engine.commands.js';
 import { GameRoundService } from './game-round.service.js';
 import { ClientSeedService } from '../fairness/client-seed.service.js';
+import { AutoCashOutService } from '../betting/auto-cashout.service.js';
+import { GameRoundStatus } from './game-round.schema.js';
 
 /**
  * The round lifecycle, as three jobs; the stuck-round sweep is a schedule instead,
@@ -36,6 +38,7 @@ export class RoundJobs {
   constructor(
     private readonly rounds: GameRoundService,
     private readonly clientSeeds: ClientSeedService,
+    private readonly autoCashOut: AutoCashOutService,
     private readonly jobs: JobPublisher,
     private readonly redis: RedisConnection,
     private readonly events: EventsPublisher,
@@ -132,6 +135,7 @@ export class RoundJobs {
   @JobHandler({ queue: GAME_QUEUE, name: GAME_JOBS.CRASH })
   async crash(job: Job<RoundJob>): Promise<{ settled: boolean }> {
     const { roundId } = job.data;
+    await this.#honourAutoCashOuts(roundId);
     const round = this.rounds.settleCrash(roundId);
 
     if (round === undefined || round.crashPointX100 === null) {
@@ -162,6 +166,34 @@ export class RoundJobs {
     );
 
     return { settled: true };
+  }
+
+  /**
+   * Pay everyone whose target the round actually reached, before the rest is
+   * written off.
+   *
+   * The sweep otherwise only runs on a tick, and the crashing tick deliberately
+   * does not sweep - so a target between the last tick and the crash point was
+   * never paid. The large version of the same gap is a restart: a process that was
+   * down while the round ran produced no ticks at all, so **every** promise made
+   * during it settled as a loss even though the curve passed the target.
+   *
+   * Swept at `crashPoint - 1`, not at the crash point: the engine crashes on
+   * `multiplier >= crashPoint` and sweeps only below it, so a hundredth under is
+   * the highest multiplier a tick could ever have paid. Paying *at* the crash
+   * point would pay a target the running round would have refused.
+   *
+   * A bet the sweep settles stops being ACTIVE, so `settleAllBetsAsLost` skips it.
+   */
+  async #honourAutoCashOuts(roundId: string): Promise<void> {
+    const round = this.rounds.getById(roundId);
+    if (
+      round?.status !== GameRoundStatus.RUNNING ||
+      round.crashPointX100 === null
+    ) {
+      return;
+    }
+    await this.autoCashOut.sweep(roundId, round.crashPointX100 - 1);
   }
 
   async #command(command: EngineCommand): Promise<void> {

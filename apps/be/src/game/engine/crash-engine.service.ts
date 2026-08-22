@@ -169,10 +169,17 @@ export class CrashEngineService implements OnInit, OnShutdown {
           ? 0
           : Math.max(0, round.waitingEndsAt.getTime() - Date.now());
       this.setWaiting(round.id);
+      // **No `jobId`.** `RoundJobs.schedule` already enqueued one as
+      // `game-round-start-<id>`, and bullmq dedupes against the *completed* set as
+      // well as the pending one - so reusing that id here is a no-op whenever the
+      // job has already run, and the round then waits forever with nothing left to
+      // start it. `transitionToRunning` is guarded on `status = WAITING`, so a
+      // second start is a no-op where a missing one is a dead lobby. Same reasoning
+      // as `GameRoundService.currentRound`.
       await this.#enqueue(
         GAME_JOBS.START,
         { roundId: round.id },
-        { delay: remaining, jobId: `game-round-start-${round.id}` },
+        { delay: remaining },
       );
       this.logger.info('recovered a waiting round', {
         roundId: round.id,
@@ -194,11 +201,10 @@ export class CrashEngineService implements OnInit, OnShutdown {
           nowX100: now,
           crashPointX100: round.crashPointX100,
         });
-        await this.#enqueue(
-          GAME_JOBS.CRASH,
-          { roundId: round.id },
-          { jobId: `game-round-crash-${round.id}` },
-        );
+        // No `jobId`, for the reason above: the engine may already have enqueued
+        // and completed `game-round-crash-<id>` before it died. `settleCrash`
+        // transitions from RUNNING only, so a second crash settles nothing twice.
+        await this.#enqueue(GAME_JOBS.CRASH, { roundId: round.id });
         return;
       }
 
