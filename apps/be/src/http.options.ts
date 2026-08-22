@@ -14,6 +14,7 @@ import { SpaFallback } from './client/client.module.js';
 import type { AppConfig } from './config/env.validation.js';
 import { ErrorMapper } from './core/errors/error-mapper.js';
 import { SocketErrorReporter } from './core/errors/socket-error.reporter.js';
+import { SocketThrottle } from './game/surface/socket-throttle.js';
 
 /**
  * One place, because these go to `HttpFactory.create` **and** to `createTestServer`
@@ -49,7 +50,11 @@ export class AppHttpOptions {
       },
       // Inside the logging middleware, which dunx puts outermost - which is why
       // there is no `websocket.onError` beside it. See `SocketErrorReporter`.
-      socketMiddleware: [SocketErrorReporter],
+      //
+      // `SocketThrottle` is inside the reporter, so a refused frame is not an error
+      // and never reaches it: a rate limit that logged a line per frame would move
+      // the flood into the log rather than stopping it.
+      socketMiddleware: [SocketErrorReporter, SocketThrottle],
       // Never conditional: with no Redis this degrades to single-process fan-out and
       // the app still boots.
       relay: new RedisRelay({

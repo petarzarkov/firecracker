@@ -244,6 +244,35 @@ is therefore **optional** — branch on `isAuthenticated`, never on `token`.
 `http://localhost:5173` must stay in `AUTH_TRUSTED_ORIGINS`: better-auth checks the
 `Origin` header, which the browser still sets to Vite's port through a proxy.
 
+### A session may not outlive its user
+
+`cookieCache` is **off**. better-auth's cookie cache signs the session _and the user_
+into the cookie, so `getSession` answers without reading the database — and keeps
+answering for `maxAge` after the user row is gone. `anonymous()` deletes the demo
+account when a player converts it, so that row does get deleted: for five minutes the
+server then believed in a user this database did not have, and the socket's first
+frame died on `FOREIGN KEY constraint failed` inside `WalletRepository.getOrCreate`.
+No balance, a 400 per reconnect, and a sign-out that could not take effect either.
+
+The price is one indexed SQLite read per `getSession`, which is what makes the answer
+true. `auth/auth.spec.ts` holds both halves.
+
+### Signing out has to reach the server
+
+The session lives in an `HttpOnly` cookie, so `clearAuth()` alone forgets only the
+client's copy — the reload afterwards asked `/get-session`, got the live session back
+and signed the user straight in again. `UserMenu` awaits `signOut()` first.
+
+### The socket has its own rate limit
+
+`ThrottleGuard` reads a `BunRequest` and cannot see a frame, so `SocketThrottle`
+reuses the one transport-agnostic piece — `ThrottleStore` — for one counter, one
+prefix and one answer when Redis is unreachable. Counted per **player**, falling back
+to the connection for a spectator, and refusals are **sent as the event's own ack**
+rather than thrown: a throw would put a `warn` in the log for every frame of an
+abusive loop, moving the flood rather than stopping it. Limits are cadences of the
+game, in `socket-throttle.ts`.
+
 ### Bots are cosmetic and must stay that way
 
 `GameBotsService` has no repository and no `GameBetService`, by design. A bot that placed real bets would be contributing entropy to the crash point through the client-seed pool — the house influencing its own outcome. Keep them outside the fairness boundary.

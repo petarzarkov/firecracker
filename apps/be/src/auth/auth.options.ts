@@ -49,7 +49,23 @@ export class AuthOptions {
       session: {
         expiresIn: auth.sessionExpiration,
         updateAge: auth.sessionUpdateAge,
-        cookieCache: { enabled: true, maxAge: 300 },
+        /**
+         * **Off, and this is not a tuning choice.** The cookie cache signs a copy of
+         * the session *and the user* into the cookie, so `getSession` answers from it
+         * without reading the database - and keeps answering for `maxAge` after the
+         * user row is gone.
+         *
+         * That row does get deleted: `anonymous()` removes the demo account when a
+         * player converts it to a real one. For the next five minutes the server then
+         * believed in a user this database did not have, which surfaced as
+         * `FOREIGN KEY constraint failed` from `WalletRepository.getOrCreate` on the
+         * socket's very first frame - no balance, and a 400 on every reconnect.
+         *
+         * The cost is one indexed SQLite read per `getSession`, which is what makes
+         * the answer true. `auth.spec.ts` holds it: a session whose user was deleted
+         * must resolve to nothing.
+         */
+        cookieCache: { enabled: false },
       },
       /**
        * A provider is two environment variables and better-auth owns the callback.

@@ -2,6 +2,7 @@ import { Badge, Box, Flex, Image, Menu, Text } from '@chakra-ui/react';
 import { useState } from 'react';
 import { AvatarDialog } from '@/components/ui/AvatarDialog';
 import { useAuthStore } from '@/store/authStore';
+import { signOut } from '@/systems/auth/auth-api';
 
 function getInitials(displayName?: string | null, email?: string): string {
   if (displayName) {
@@ -16,6 +17,7 @@ function getInitials(displayName?: string | null, email?: string): string {
 
 export function UserMenu() {
   const user = useAuthStore((state) => state.user);
+  const token = useAuthStore((state) => state.token);
   const clearAuth = useAuthStore((state) => state.clearAuth);
   const [pickingAvatar, setPickingAvatar] = useState(false);
 
@@ -24,7 +26,18 @@ export function UserMenu() {
   const initials = getInitials(user.displayName, user.email);
   const displayLabel = user.displayName ?? user.email.split('@')[0];
 
-  function handleLogout() {
+  /**
+   * **Ends the session on the server first.** Clearing the store alone only forgot
+   * the *client's* copy: better-auth's session lives in an `HttpOnly` cookie, so the
+   * reload below re-ran `AuthMiddleware`, which asked `/get-session`, got the still
+   * live session back and signed the user straight back in. Logging out did nothing
+   * but flicker.
+   *
+   * Awaited, because the reload is what races it. The call swallows its own errors,
+   * so a dead network still clears the client and lands on the login form.
+   */
+  async function handleLogout() {
+    await signOut(token);
     clearAuth();
     window.location.href = '/';
   }
