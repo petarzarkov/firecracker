@@ -1,10 +1,4 @@
 {
-  /* The one strict base every workspace extends, matching the dunx repo's shape:
-     the flags live here with the reasoning, and each package overrides only what
-     genuinely differs about it — its lib, how it resolves modules, and what it
-     compiles. Before this, `apps/be` carried the dunx template's settings and
-     `apps/fe` carried Vite's React starter, so the client was missing six of the
-     strictness flags the server had been written against. */
   "compilerOptions": {
     "target": "ESNext",
     "lib": ["ESNext"],
@@ -39,6 +33,5 @@
     "noEmit": true /* Typecheck only — Bun runs the server, Vite bundles the client. */,
     "sourceMap": false,
     "declaration": false
-  },
-  "include": []
+  }
 }
