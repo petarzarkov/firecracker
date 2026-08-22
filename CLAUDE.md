@@ -42,6 +42,12 @@ preload = ["@dunx/transform/preload"]
 
 `@dunx/transform` reads each class's constructor parameter types at load time and records them. Without it the app boots and fails naming the provider it could not build. It is a **runtime** dependency, not a build-time one — do not let a `--production` install or a `.dockerignore` drop it or `bunfig.toml`.
 
+### The other runtime dependency that looks optional
+
+`swagger-ui-dist`. As of dunx 2.3.0 `@dunx/openapi` no longer ships an explorer of its own: it serves Swagger UI out of the consumer's install, resolved **lazily on the first request** for `/api/docs`, which is what keeps it an optional peer for a service that only serves the JSON. This app serves the page, so it is a plain `dependencies` entry and has to survive the Dockerfile's `--production` install. A missing one is not a boot failure — it is `/api/docs` answering with an install command, in production only.
+
+Since 2.3.1 the four files come off **one wildcard route** under `/api/docs`, guarded by an allow-list in `@dunx/openapi` — the package directory also holds four other builds and about 4 MB of sourcemaps, so that list is the only thing keeping the wildcard off them. `openapi.spec.ts` fetches all four over a real server and asserts that a name outside the list 404s, so neither half can rot unnoticed.
+
 ---
 
 ## Writing dunx code
@@ -236,7 +242,7 @@ is therefore **optional** — branch on `isAuthenticated`, never on `token`.
 
 `Readiness` implements `OnBeforeShutdown` (`OnDrain` in 2.1.0, renamed in 2.1.1 because `@dunx/http` already had an unrelated `@OnDrain()` websocket decorator). That phase runs while the server is still accepting, which is the whole point: an `onShutdown` hook runs after `server.stop()`, so a probe answering from there answers on a closed socket. `HEALTH_DRAIN_DELAY_MS` holds readiness failing before the port closes. Liveness deliberately keeps passing while draining — a pod shutting down does not need killing.
 
-The probes are `@ApiHidden()` upstream, so they are absent from the OpenAPI document by design; `openapi.spec.ts` asserts the omission. `/api/service/config` is what survived of the old controller, because no framework can know a commit sha.
+The probes are `@ApiHidden()` upstream, so they are absent from the OpenAPI document by design; `openapi.spec.ts` asserts the omission, and asserts the same of Swagger UI's two asset routes. `/api/service/config` is what survived of the old controller, because no framework can know a commit sha.
 
 ---
 

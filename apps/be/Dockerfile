@@ -14,7 +14,7 @@
 # `main-worker.js` and the preload never matches a `.ts` file.
 
 # ── The client, built once and served by the API ─────────────────────────────
-FROM oven/bun:1.3.14-slim AS client
+FROM oven/bun:1.4.0-slim AS client
 WORKDIR /app
 COPY package.json bun.lock bunfig.toml ./
 COPY apps/fe/package.json ./apps/fe/
@@ -23,14 +23,14 @@ COPY apps/fe ./apps/fe
 RUN bun run --filter 'firecracker-fe' build
 
 # ── Server dependencies ──────────────────────────────────────────────────────
-FROM oven/bun:1.3.14-slim AS deps
+FROM oven/bun:1.4.0-slim AS deps
 WORKDIR /app
 COPY package.json bun.lock bunfig.toml ./
 COPY apps/be/package.json ./apps/be/
 RUN bun install --frozen-lockfile --production --filter 'firecracker-be'
 
 # ── Runtime ──────────────────────────────────────────────────────────────────
-FROM oven/bun:1.3.14-slim AS runtime
+FROM oven/bun:1.4.0-slim AS runtime
 WORKDIR /app
 
 RUN apt-get update \

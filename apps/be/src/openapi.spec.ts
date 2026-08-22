@@ -31,6 +31,7 @@ const source = {
 };
 const config = EnvConfig.validate(source);
 let app: HttpApp;
+let url: string;
 let doc: OpenApiDoc;
 
 beforeAll(async () => {
@@ -44,7 +45,7 @@ beforeAll(async () => {
     { ...AppHttpOptions.for(config), requestLogging: false },
   );
   app.setGlobalPrefix('api');
-  await app.listen(0);
+  url = await app.listen(0);
   doc = JSON.parse(app.get(OpenApiExplorer).json('api')) as OpenApiDoc;
 });
 
@@ -243,15 +244,66 @@ describe('the generated OpenAPI document', () => {
   });
 
   /**
-   * `page()` is async: the 456 KB explorer bundle lives behind `@dunx/openapi/ui`
-   * and is reached with `await import()`, so importing `@dunx/openapi` does not pull
-   * a React app in with it.
+   * dunx 2.3.0 replaced its own inlined explorer with Swagger UI, which is an
+   * **optional peer**: `@dunx/openapi` resolves `swagger-ui-dist` lazily, on the
+   * first request for this page, so a missing install is a broken route rather than
+   * a failed boot. `swagger-ui-dist` is therefore a `dependencies` entry here and
+   * has to survive the Dockerfile's `--production` install.
    */
-  test('the explorer renders a self-contained page', async () => {
+  test('the explorer page renders and points at its own origin', async () => {
     const page = await app.get(OpenApiExplorer).page('api');
     expect(page).toStartWith('<!doctype html>');
-    // No external host: a strict CSP or an offline machine must still work.
+    expect(page).toContain('/api/docs/swagger-ui-bundle.js');
+    // No CDN: a strict CSP or an offline machine must still work.
     expect(page).not.toContain('https://cdn.');
+    expect(page).not.toContain('unpkg.com');
+  });
+
+  /**
+   * The assets actually serve, which is the half `page()` cannot prove: resolution
+   * happens per request against the consumer's `node_modules`, so this is what
+   * fails if `swagger-ui-dist` is ever dropped from the install.
+   */
+  test.each([
+    ['swagger-ui-bundle.js', 'javascript'],
+    ['swagger-ui.css', 'text/css'],
+    // Served because `swagger-ui.css` ends with a `sourceMappingURL` pointing at
+    // it, so without it every visitor with devtools open logs a 404 against us.
+    ['swagger-ui.css.map', 'application/json'],
+    ['favicon-32x32.png', 'image/png'],
+  ])('%s is served from this app', async (file, type) => {
+    const response = await fetch(`${url}api/docs/${file}`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain(type);
+    // `immutable`, made honest by the version in the query string.
+    expect(response.headers.get('cache-control')).toContain('immutable');
+    expect((await response.arrayBuffer()).byteLength).toBeGreaterThan(100);
+  });
+
+  /**
+   * 2.3.1 serves these from **one wildcard** under `/api/docs`, and the allow-list
+   * in `@dunx/openapi` is the only thing between that route and the rest of
+   * `swagger-ui-dist` - which also ships four other builds and ~4 MB of sourcemaps.
+   */
+  test.each([
+    'swagger-ui-bundle.js.map',
+    'swagger-ui-es-bundle.js',
+    'package.json',
+    '../../../package.json',
+  ])('%s is not served', async (file) => {
+    const response = await fetch(`${url}api/docs/${file}`);
+    expect(response.status).toBe(404);
+  });
+
+  /**
+   * `@ApiHidden()`, because a stylesheet in an OpenAPI document is noise - and a
+   * literal `*` is not an OpenAPI path template either, so the wildcard would
+   * describe nothing if it leaked in.
+   */
+  test('the explorer assets are absent from the document', () => {
+    const paths = Object.keys(doc.paths);
+    expect(paths.filter((path) => path.includes('*'))).toEqual([]);
+    expect(paths.some((path) => path.startsWith('/api/docs/'))).toBe(false);
   });
 });
 
