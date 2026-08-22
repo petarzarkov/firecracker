@@ -3,16 +3,11 @@ import * as palette from '../palette.js';
 import type { StageCashOut } from '../types.js';
 
 /**
- * Everyone who got out, drifting down under a canopy with what they won.
+ * Everyone who got out, drifting down under a canopy with what they won - the same
+ * information a side panel carried, where the player is already looking.
  *
- * A cash-out used to be a row changing colour in a side panel. This is the same
- * information where the player is already looking - the difference between a
- * lobby that reports outcomes and one where you can see other people escaping
- * while you are still deciding.
- *
- * Pooled like everything else in the scene: a fixed set of canopies is built up
- * front and reused, because a lobby of forty can settle inside one frame and
- * allocating sprites and text objects at that moment is the worst time to do it.
+ * Pooled: a lobby of forty can settle inside one frame, and allocating sprites and
+ * text objects at that moment is the worst time to do it.
  */
 
 /** Canopies in the air at once. Beyond this the oldest is recycled. */
@@ -29,13 +24,9 @@ const SWAY_PIXELS = 26;
 const SWAY_RATE = 0.028;
 
 /**
- * Drift, leftward.
- *
- * Not symmetrical, and not incidental: the rocket lives at the plot's right
- * edge, so jumpers leave from there and anything that keeps them near it gets
- * clamped back against the same margin - two cash-outs in the same second
- * stacked their labels on top of each other's canopies. Sending them away from
- * the rocket is what makes a crowd legible.
+ * Leftward, and not symmetrical: jumpers leave from the rocket at the plot's right
+ * edge, so anything keeping them near it gets clamped against the same margin and
+ * two cash-outs in one second stack their labels on each other's canopies.
  */
 const DRIFT = [-1.15, -0.2] as const;
 
@@ -166,14 +157,9 @@ export const createParachutes = async (url?: string): Promise<Parachutes> => {
         jumper.x += jumper.vx * delta;
 
         const swing = Math.sin(jumper.swayAt) * SWAY_PIXELS;
-        /**
-         * Kept inside the canvas.
-         *
-         * Jumpers leave from the rocket, which lives at the plot's right edge,
-         * so without this the canopy and - worse - the label it carries hang off
-         * the side. A cash-out whose winnings read `+$55.0` is the one thing
-         * here that must not be cut in half.
-         */
+        // Kept inside the canvas: jumpers leave from the plot's right edge, so
+        // without this the canopy and its label hang off the side - and a cash-out
+        // reading `+$55.0` is the one thing here that must not be cut in half.
         const margin = Math.max(CANOPY_WIDTH, jumper.label.width) / 2 + 4;
         const drawnX = Math.max(
           margin,

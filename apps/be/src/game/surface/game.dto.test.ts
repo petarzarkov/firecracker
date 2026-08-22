@@ -5,19 +5,14 @@ import { GameBet } from './game.dto.js';
 
 /**
  * The zod schema and the interface the browser reads are two declarations of one
- * response, and this is what stops them parting ways.
+ * response - they have to be, since sharing the schema would put zod in the browser
+ * bundle - and this is what stops them parting ways. Nothing compared them before,
+ * which is how `crashPoint` was declared and rendered by a client no route ever
+ * sent it to.
  *
- * They have to be two: the schema is server-side because sharing it would put zod
- * in the browser bundle, and it carries `.meta({ id })` for the OpenAPI document.
- * Nothing compared them before, and `crashPoint` is what that cost - the client
- * declared the field, rendered `(crashPoint ?? 0).toFixed(2)`, and no route had
- * ever sent it, so every lost bet read as a crash at zero.
- *
- * `Mutual` is checked by `bun run typecheck`, not by `bun test`: a field on one
- * side and not the other makes the `true` below a `false` and the annotation fails
- * to compile, naming this file. The runtime test underneath is the other half -
- * that an inhabitant of the interface really does satisfy the schema, which a
- * type-level check cannot say anything about.
+ * `Mutual` is checked by `bun run typecheck` rather than `bun test`. The runtime
+ * test underneath is the other half: that an inhabitant of the interface really
+ * satisfies the schema, which a type-level check cannot say.
  */
 
 /**

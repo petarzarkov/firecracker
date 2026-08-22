@@ -18,16 +18,10 @@ import { gameRounds } from '../rounds/game-round.schema.js';
 export { BET_STATUSES, GameBetStatus } from '@firecracker/contracts';
 
 /**
- * One player's stake in one round.
- *
- * `game_bet_round_user_demo_index` is load-bearing and not belt-and-braces. There is
- * no lock on the bet path: a `bun:sqlite` transaction is synchronous, so a double bet
- * cannot interleave inside one process, and this index is the only thing that refuses
- * the second when the two arrive on **different** processes.
- *
- * So a `SQLITE_CONSTRAINT_UNIQUE` here is not a bug, it is the duplicate check
- * firing. `GameBetService.placeBet` catches it and answers "you already have an
- * active bet in this round".
+ * One player's stake in one round. `game_bet_round_user_demo_index` is load-bearing:
+ * there is no lock on the bet path, and it is the only thing refusing the second of
+ * two bets arriving on **different** processes. A `SQLITE_CONSTRAINT_UNIQUE` here is
+ * that check firing, which `GameBetService.placeBet` translates for the player.
  */
 export const gameBets = sqliteTable(
   'game_bet',
@@ -59,9 +53,8 @@ export const gameBets = sqliteTable(
       .default(GameBetStatus.ACTIVE),
 
     /**
-     * A demo bet is backed by the demo wallet. Everything else about it - the
-     * settlement path, the payout arithmetic, the broadcast - is identical, which
-     * is deliberate: the demo mode is the real game with different money.
+     * Only the wallet differs. The settlement path, the arithmetic and the broadcast
+     * are identical: demo mode is the real game with different money.
      */
     isDemo: integer('is_demo', { mode: 'boolean' }).notNull().default(false),
 

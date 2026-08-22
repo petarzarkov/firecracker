@@ -21,21 +21,16 @@ import { GameRoundService } from './game-round.service.js';
 import { ClientSeedService } from '../fairness/client-seed.service.js';
 
 /**
- * The round lifecycle, as three jobs. The stuck-round sweep is a schedule rather
- * than a fourth, in `GameRoundWatchdog`, which says why.
+ * The round lifecycle, as three jobs; the stuck-round sweep is a schedule instead,
+ * in `GameRoundWatchdog`.
  *
- * Jobs rather than method calls even with one process consuming, and the reason is
- * retry: a `crash` that fails mid-settlement must be attempted again or a round's bets
- * are never paid. The idempotency that makes a retry safe is not a `try`/`catch` - it
- * is `GameRoundRepository.transition`, which puts the expected current status in the
- * `WHERE`, so a second run updates no rows.
+ * Jobs rather than method calls, for retry: a `crash` that fails mid-settlement must
+ * be attempted again or a round's bets are never paid. What makes a retry safe is
+ * `GameRoundRepository.transition` putting the expected status in the `WHERE`, so a
+ * second run updates no rows.
  *
- * This queue is **not** `background`, unlike notifications and media: a transition is
- * latency-critical and the engine reading its result is in this process, so a fork
- * would sit between the crash point and the payout.
- *
- * An {@link EngineCommand} on a Redis channel is still how the clock is told what a
- * round became - a loopback publish now, kept because it is also the recovery path.
+ * **Not** `background`, unlike notifications and media: a fork would sit between the
+ * crash point and the payout.
  */
 export class RoundJobs {
   constructor(

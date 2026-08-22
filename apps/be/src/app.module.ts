@@ -91,17 +91,13 @@ class Foundation {
 }
 
 /**
- * The application. **One process**: it serves HTTP, holds the clock, owns the sockets
- * and consumes its own queues.
+ * The application. **One process**: HTTP, the clock, the sockets and its own queue
+ * consumer. There is no entrypoint for the consumer because an entrypoint cannot
+ * express the ordering - workers must stop before the connections their handlers
+ * use. Isolation is per handler; see `src/jobs.processor.ts`.
  *
- * There is no entrypoint that starts the consumer, because an entrypoint cannot
- * express the ordering: `QueueModule.forRoot({ consume: true })` stops the workers at
- * `onShutdown`, which runs in reverse construction order and therefore before the
- * connections the handlers use. Isolation is per handler - see `src/jobs.processor.ts`.
- *
- * **Undecorated, with a static factory**, because every option here varies: `source`
- * and `logLevel` per suite, and `CLIENT_DIST` decides whether `ClientModule` is in the
- * graph at all. A `@Module` on top would compose, but it has no default to state.
+ * Undecorated with a static factory, because every option varies: `source` and
+ * `logLevel` per suite, and `CLIENT_DIST` decides whether `ClientModule` exists.
  */
 export class AppModule {
   static forRoot(options: AppModuleOptions = {}): DynamicModule {
@@ -133,19 +129,16 @@ export class AppModule {
   }
 
   /**
-   * Registered here rather than in `Foundation.for()`: `ClientAddress` is an HTTP
-   * binding, a job child has no server, and nothing in a child answers a request to
-   * limit.
+   * Not in `Foundation.for()`: `ClientAddress` is an HTTP binding and a job child
+   * has no server.
    *
-   * `store` is explicit because the default is `MemoryThrottleStore`, which
-   * **counts** when Redis is unreachable rather than standing aside. Only
-   * `RedisThrottleStore` can fail - and failing is what the guard reads as
-   * "allow", which is this app's posture everywhere: an absent Redis degrades a
-   * route, never the process.
+   * `store` is explicit because the default `MemoryThrottleStore` **counts** when
+   * Redis is unreachable rather than standing aside. `RedisThrottleStore` fails
+   * instead, which the guard reads as "allow" - the app's posture everywhere.
    *
-   * `subject` is an option rather than an injected caller because `@dunx/http`
-   * must not depend on `@dunx/auth`. It is why `ThrottleGuard` is listed after
-   * `SessionGuard` in `http.options.ts`: ahead of it, every caller is an address.
+   * `subject` is an option rather than an injected caller so `@dunx/http` need not
+   * depend on `@dunx/auth`, and is why `ThrottleGuard` follows `SessionGuard`:
+   * ahead of it, every caller is an address.
    */
   static #throttle(): DynamicModule {
     return ThrottleModule.forRootAsync({

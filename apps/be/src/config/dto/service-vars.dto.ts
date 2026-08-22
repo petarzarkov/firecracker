@@ -68,11 +68,8 @@ export const serviceVarsSchema = z.object({
 
   /**
    * How long readiness keeps failing after `SIGTERM` before the socket closes.
-   *
-   * **Set this wherever something is load balancing.** A balancer notices a failing
-   * probe on its own schedule, so traffic still arrives for several seconds after this
-   * process decided to go. `0` in development, where nothing is routing to a local
-   * `bun dev`; `docker-compose.prod.yml` sets it.
+   * **Set this wherever something is load balancing**: a balancer notices a failing
+   * probe on its own schedule, so traffic still arrives for seconds afterwards.
    */
   HEALTH_DRAIN_DELAY_MS: z.coerce.number().int().min(0).max(120_000).default(0),
 
@@ -101,16 +98,12 @@ export const serviceVarsSchema = z.object({
     }, 'Invalid IANA timezone'),
 
   /**
-   * Where the built client lives, when this process is the one serving it.
+   * Where the built client lives when this process serves it. Unset in development,
+   * where Vite does.
    *
-   * Unset in development - Vite serves the client on its own port. Set in the
-   * Docker image, which builds `apps/fe` and copies its `dist` in. Absent means
-   * `ClientModule` is never registered, so nothing static can shadow an API route.
-   *
-   * `min(1)` after a trim because two readers disagree otherwise: `app.module.ts`
-   * registers the module on `length > 0` while `http.options.ts` adds the
-   * middleware on `!== undefined`, so `CLIENT_DIST=''` used to name `StaticFiles`
-   * in the chain with no module providing `StaticOptions` - a boot failure.
+   * `min(1)` after a trim, because two readers disagree otherwise: the module is
+   * registered on `length > 0` and the middleware on `!== undefined`, so
+   * `CLIENT_DIST=''` named `StaticFiles` with nothing providing `StaticOptions`.
    */
   CLIENT_DIST: z.string().trim().min(1).optional(),
 });

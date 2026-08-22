@@ -1,18 +1,13 @@
 /**
- * The plot's geometry: one object that owns the mapping from a multiplier to a y,
- * from an elapsed time to an x, and the list of gridlines.
+ * The plot's geometry: multiplier to y, elapsed time to x, and the gridlines.
  *
- * **One object, because two declarations of one mapping drift.** When the curve
- * mapped a multiplier through the chart's real height and the axis labels were
- * positioned by percentage against a hardcoded 360px, they agreed only on a chart
- * that happened to be 360px tall: measured on a 1600x1000 desktop the `1x` label sat
- * 43px below its own gridline and `50x` sat 82px below, and the drift grew with the
- * chart. Everything that needs to know where a number goes asks this.
+ * **One object, because two declarations of one mapping drift.** With the curve
+ * mapped through the chart's real height and the labels positioned by percentage
+ * against a hardcoded 360px, the two agreed only on a 360px chart - on a desktop the
+ * `1x` label sat 43px below its own gridline, and the error grew with the chart.
  */
 
 /**
- * The ceilings the axis is allowed to snap to.
- *
  * A ladder rather than "round up the multiplier", so the top gridline is always a
  * number worth printing and the axis does not relabel itself every frame.
  */
@@ -20,9 +15,7 @@ const CEILINGS = [
   2, 3, 5, 10, 20, 50, 100, 250, 500, 1000, 2500, 5000,
 ] as const;
 
-/**
- * Multipliers worth a gridline, in order. The axis draws the ones that fit.
- */
+/** Multipliers worth a gridline, in order. The axis draws the ones that fit. */
 const NICE = [
   1, 1.5, 2, 3, 5, 10, 20, 50, 100, 250, 500, 1000, 2500, 5000,
 ] as const;
@@ -56,12 +49,8 @@ export interface Plot {
 }
 
 /**
- * The ceiling for a multiplier: the first rung of the ladder that leaves
- * {@link HEADROOM} above it.
- *
- * The last rung is the end of the ladder, so a round beyond it does flatten -
- * but at 5000x, which no crash game reaches, rather than at 50x, which this one
- * reaches most days.
+ * The first rung leaving {@link HEADROOM} above the multiplier. A round past the
+ * last rung does flatten, but at 5000x rather than at the 50x this game sees.
  */
 export const ceilingFor = (multiplier: number): number => {
   const wanted = Math.max(FLOOR, multiplier) * HEADROOM;
@@ -70,12 +59,9 @@ export const ceilingFor = (multiplier: number): number => {
 };
 
 /**
- * The gridlines for a ceiling.
- *
- * `1x` always survives - it is the baseline the curve leaves from, and an axis
- * without it reads as floating. Above it the highest values win, because a log
- * axis crushes the low end together and printing `1.5x` under a 500x ceiling
- * labels three pixels.
+ * `1x` always survives - it is the baseline the curve leaves from. Above it the
+ * highest values win, because a log axis crushes the low end and `1.5x` under a
+ * 500x ceiling labels three pixels.
  */
 export const gridFor = (ceiling: number): readonly number[] => {
   const fits = NICE.filter((value) => value <= ceiling);
@@ -134,11 +120,8 @@ export const createScale = (insets: Insets): Scale => {
       return grid;
     },
 
-    /**
-     * Normalised against the *current* ceiling, then mapped into the plot - so the
-     * position of a gridline is a fraction of the plot rather than a pixel count,
-     * and resizing cannot make the labels and the lines disagree.
-     */
+    // A fraction of the plot rather than a pixel count, so resizing cannot make the
+    // labels and the lines disagree.
     y(multiplier: number): number {
       const p = plot();
       const norm = Math.min(Math.log(Math.max(FLOOR, multiplier)) / logMax, 1);
@@ -151,13 +134,9 @@ export const createScale = (insets: Insets): Scale => {
     },
 
     /**
-     * Eases rather than jumps.
-     *
-     * Snapping the ceiling the frame a round crosses 2x would visibly yank the
-     * whole curve down, which reads as a glitch in the one moment the player is
-     * watching hardest. The ceiling also never comes back down inside a round:
-     * a curve that shrank and grew again would be lying about the shape of the
-     * round it is drawing.
+     * Eases rather than jumps: snapping the frame a round crosses 2x yanks the whole
+     * curve down, in the moment the player is watching hardest. It never comes back
+     * down inside a round either, or the curve would lie about the round's shape.
      */
     follow(multiplier: number): void {
       const wanted = Math.log(ceilingFor(multiplier));

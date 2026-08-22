@@ -110,14 +110,10 @@ describe('the generated OpenAPI document', () => {
   });
 
   /**
-   * Locks in a real gap rather than pretending it is not there.
-   *
-   * `RouteSchemas` has `body`, `query`, `params` and `status` and no `response`,
-   * and there is no `@ApiResponse` equivalent, so a success response is
-   * documented as a bare description with no `content`. `SanitizedUser` and
-   * `PaginatedUsers` both carry `.meta({ id })` and neither reaches
-   * `components`, because nothing references them. The generated
-   * document therefore cannot drive client codegen.
+   * Locks in a real gap. `RouteSchemas` has no `response` and there is no
+   * `@ApiResponse` equivalent, so a success is documented as a bare description
+   * with no `content` and the schemas never reach `components` - which means the
+   * generated document cannot drive client codegen.
    */
   test('KNOWN GAP: no success response body is documented', () => {
     const ok = doc.paths['/api/users']?.['get']?.['responses'] as Record<
@@ -156,11 +152,9 @@ describe('the generated OpenAPI document', () => {
   });
 
   /**
-   * `tags` is repeated on every method-level `@ApiDoc` on purpose. A
-   * method-level `@ApiDoc` replaces the class-level object wholesale rather than
-   * merging into it, so a class tag is silently dropped and the operation falls
-   * back to the class-name default (`Users`, not `users`). Drop the repetition
-   * and this assertion fails.
+   * `tags` is repeated on every method-level `@ApiDoc` on purpose: a method-level
+   * one replaces the class-level object wholesale rather than merging, so the class
+   * tag is dropped and the operation falls back to the class-name default.
    */
   test('@ApiDoc supplies the summary and the tag', () => {
     const listUsers = doc.paths['/api/users']?.['get'];
@@ -169,11 +163,9 @@ describe('the generated OpenAPI document', () => {
   });
 
   /**
-   * This was a KNOWN GAP pinning a real defect: `doc.tags` was derived from
-   * controller class names while operations carried their `@ApiDoc` tags, so the
-   * document declared tags nothing used and used tags nothing declared. Fixed in
-   * @dunx/openapi 0.2.5, which reads the tags back off the built operations. The
-   * test now asserts the two agree, which is what it was always about.
+   * `doc.tags` used to come from controller class names while operations carried
+   * their `@ApiDoc` tags, so the document declared tags nothing used. Fixed in
+   * @dunx/openapi 0.2.5; this asserts the two agree.
    */
   test('every tag the operations use is declared, and no others', () => {
     const declared = new Set(
@@ -206,11 +198,9 @@ describe('the generated OpenAPI document', () => {
   });
 
   /**
-   * Better Auth serves `<basePath>/*` from one handler, so route discovery sees a
-   * single wildcard and the document would otherwise describe an API with no
-   * authentication surface at all. `contribute: [betterAuthDocument(...)]` asks the
-   * library for its own schema and merges it. A declared route wins a collision
-   * rather than being overwritten.
+   * Better Auth serves `<basePath>/*` from one handler, so route discovery sees one
+   * wildcard and the document would describe no authentication surface at all.
+   * `contribute` merges the library's own schema; a declared route wins a collision.
    */
   test('Better Auth contributes its own endpoints', () => {
     const paths = Object.keys(doc.paths);
@@ -236,15 +226,9 @@ describe('the generated OpenAPI document', () => {
   });
 
   /**
-   * This was a KNOWN GAP and is now closed, so the test is inverted rather than
-   * deleted - a regression here is invisible otherwise.
-   *
-   * `@dunx/auth` mounts Better Auth's handler as five one-line wildcard routes, and
-   * route discovery used to document them like any other: a literal path
-   * `/api/auth/*` carrying five operations tagged with the internal class name
-   * `MountedAuthHandler`, because the class has no `@ApiDoc`. `*` is not an OpenAPI
-   * path template, the operations described nothing, and they duplicated the surface
-   * `betterAuthDocument` describes properly.
+   * Better Auth's handler is mounted as five wildcard routes, and discovery used to
+   * document them like any other - a literal `/api/auth/*`, which is not an OpenAPI
+   * path template, duplicating the surface `betterAuthDocument` describes properly.
    */
   test('the mounted auth handler is no longer documented as a wildcard', () => {
     expect(doc.paths['/api/auth/*']).toBeUndefined();

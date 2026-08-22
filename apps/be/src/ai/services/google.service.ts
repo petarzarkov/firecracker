@@ -4,11 +4,7 @@ import type { ZodType } from 'zod';
 import { AppConfigService } from '../../config/app.config.service.js';
 import { BaseProviderService } from './base-provider.service.js';
 
-/**
- * Free-tier requests per minute, per model. The values are Google's, and they are
- * the reason this service paces itself rather than letting a burst turn into a
- * quota ban.
- */
+/** Google's free-tier requests per minute, and why this service paces itself. */
 const MODEL_RPM: Readonly<Record<string, number>> = Object.freeze({
   'gemini-2.5-pro': 5,
   'gemini-2.5-flash': 10,
@@ -28,28 +24,17 @@ const DEFAULT_MODEL = 'gemini-2.5-flash';
 const UPGRADE_COOLDOWN_MS = 10 * 60 * 1000;
 
 /**
- * Gemini, through `@google/genai`.
- *
- * The SDK is the vendor's own rather than a generic AI abstraction, which is the
- * same choice every provider here makes: one integration per provider, talking to
- * the API that provider actually documents.
- *
- * What this adds on top of the SDK is the part a free tier makes necessary:
- *
- *  - **Pacing.** Each model has a requests-per-minute ceiling, and a call that
- *    would breach it waits rather than spends a 429.
- *  - **Deranking.** A quota error drops to the next model down and stays there
- *    for {@link UPGRADE_COOLDOWN_MS}, so one exhausted model degrades quality
- *    instead of taking the feature offline.
- *  - **A live model list**, because the hard-coded hierarchy goes stale.
+ * Gemini, through the vendor's own SDK. What this adds is what a free tier makes
+ * necessary: **pacing**, so a call that would breach the per-minute ceiling waits
+ * rather than spending a 429; **deranking**, so a quota error drops to the next
+ * model down for {@link UPGRADE_COOLDOWN_MS} instead of taking the feature offline;
+ * and a live model list, because the hard-coded hierarchy goes stale.
  */
 export class GoogleService extends BaseProviderService implements OnInit {
   /**
-   * Built lazily, and only with a key.
-   *
-   * `new GoogleGenAI({ apiKey: '' })` prints "API key should be set when using the
-   * Gemini API" on construction - so an app with no Gemini configured logged a
-   * warning at every boot and in every test run about a provider it was not using.
+   * Lazy, and only with a key: `new GoogleGenAI({ apiKey: '' })` warns on
+   * construction, so an app with no Gemini configured printed a line at every boot
+   * about a provider it was not using.
    */
   #lazyClient: GoogleGenAI | null = null;
   readonly #apiKey: string;
@@ -77,10 +62,9 @@ export class GoogleService extends BaseProviderService implements OnInit {
   }
 
   /**
-   * Narrow the hierarchy to models this key can actually see.
-   *
-   * Failing is not fatal - the hard-coded list is the fallback - because an AI
-   * provider being unreachable must not stop the app from booting.
+   * Narrow the hierarchy to models this key can see. Failing is not fatal - the
+   * hard-coded list is the fallback - because an unreachable provider must not stop
+   * the app booting.
    */
   async onInit(): Promise<void> {
     if (!this.configured) return;

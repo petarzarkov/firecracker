@@ -1,10 +1,7 @@
 /**
- * The names the notification side uses.
- *
- * The socket half - `EVENTS`, `CLIENT_EVENTS` and the payloads behind them - is
- * re-exported from `@firecracker/contracts`, which is where a name the browser
- * also has to know belongs. Queues, jobs and their payloads stay here: they are
- * how the web process talks to the worker, and nothing outside this app sends one.
+ * The socket half is re-exported from `@firecracker/contracts`, where a name the
+ * browser has to know belongs. Queues, jobs and their payloads stay here: they are
+ * the server talking to itself.
  */
 import type { SocketPayloads } from '@firecracker/contracts';
 import type { EventsPublisher } from './events.publisher.js';
@@ -23,12 +20,8 @@ export type {
 } from '@firecracker/contracts';
 
 /**
- * Publish one of the non-game frames, with the payload checked against the name.
- *
- * The counterpart of `publishGame`, and it exists for the same reason: the
- * publisher's own `publish` takes `unknown`, which is the hole every drift bug in
- * this repo's history came through. A `notification` published from a job handler
- * had four different shapes before this.
+ * The counterpart of `publishGame`, for the same reason: `EventsPublisher.publish`
+ * takes `unknown`, which is the hole every drift bug came through.
  */
 export function publishSocket<E extends keyof SocketPayloads>(
   events: EventsPublisher,
@@ -55,22 +48,15 @@ export const JOBS = Object.freeze({
 } as const);
 export type JobName = (typeof JOBS)[keyof typeof JOBS];
 
-/**
- * Bun's own pub/sub topics. A topic lives in the runtime rather than in a
- * JavaScript map, and with a relay configured it is fanned out across processes as
- * well.
- */
+/** Bun's own pub/sub topics, fanned out across processes when a relay is set. */
 export const TOPICS = Object.freeze({
   ADMINS: 'admins',
   CHAT: 'chat',
 } as const);
 
 /**
- * The topics that are computed rather than named.
- *
- * `TOPICS` above is a frozen map of literals because those two are fixed rooms;
- * these take an argument, so they are statics. Keeping them apart is the useful
- * distinction: a constant can be compared, a computed topic can only be built.
+ * The topics that are computed rather than named. Kept apart from `TOPICS` because
+ * a constant can be compared and a computed topic can only be built.
  */
 export class Topics {
   static user(userId: string): string {

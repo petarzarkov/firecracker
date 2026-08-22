@@ -33,22 +33,14 @@ import { WalletService } from '../../wallet/services/wallet.service.js';
 /**
  * The money path, against a real migrated SQLite and no container.
  *
- * `game.spec.ts` drives the same two services through the full graph, which is
- * what makes it slow and what makes it stop at "the balance moved". This file
- * counts rows: exactly one debit, exactly one bet, exactly one ledger entry per
- * movement. Those are the assertions that fail if a refactor of the wallet seam
- * ever debits twice, or commits a balance change with no ledger row beside it,
- * or lets a rolled-back transaction leave a debit behind.
+ * Where `game.spec.ts` stops at "the balance moved", this counts rows: exactly one
+ * debit, one bet and one ledger entry per movement - the assertions that fail if the
+ * wallet seam ever debits twice, writes a balance with no ledger row beside it, or
+ * lets a rolled-back transaction leave a debit behind.
  *
- * No container on purpose. `WalletService` and `GameBetService` need a database,
- * a config and a logger and nothing else, so a suite that boots the engine to
- * reach them is paying for a clock it must then avoid.
- *
- * It is also the only file under `game/` that names `WalletRepository`, and that
- * is a consequence of having no container rather than a hole in the seam: with no
- * injector to resolve it, the repository has to be constructed here to be handed
- * to `WalletService`. `WalletModule` still does not export it, so no *provider*
- * can reach it.
+ * No container, because these two services need a database, a config and a logger
+ * and nothing else. That is also why this is the only file under `game/` naming
+ * `WalletRepository` - with no injector, it has to be constructed by hand.
  */
 const MIN_BET_CENTS = 100;
 const OPENING_DEMO_CENTS = 5000;
@@ -214,20 +206,14 @@ describe('placing a bet', () => {
   });
 
   /**
-   * The same refusal, but arriving from the unique index rather than from the
-   * `findActiveByRoundAndUser` check above it.
+   * The same refusal arriving from the unique index rather than the active-bet
+   * check: the index covers `(round, user, isDemo)` regardless of status, so a
+   * *settled* bet in that slot passes the check and fails the insert - after the
+   * wallet has already been written, which is why the rollback matters.
    *
-   * `game_bet_round_user_demo_index` covers `(round, user, isDemo)` regardless of
-   * status, so a *settled* bet in that slot passes the active-bet check and then
-   * fails the insert - which is the shape of the cross-process double bet the
-   * index exists for. What matters here is that the debit went back with the
-   * transaction: the constraint fires after the wallet has already been written.
-   *
-   * `BetRejected` rather than any throw, and that is the whole point of the case.
-   * `#isDuplicateBet` used to look for the index *name* in the error message,
-   * which bun:sqlite never puts there - it names the indexed columns - so the
-   * translation never fired and a genuine double bet answered a player with a raw
-   * 500. Without the fix this line reports a bare `Error`.
+   * `BetRejected` rather than any throw is the point. `#isDuplicateBet` used to
+   * match the index *name*, which bun:sqlite never emits, so a genuine double bet
+   * answered a player with a raw 500.
    */
   test('the unique index refuses the insert and the debit rolls back with it', () => {
     const roundId = openRound();

@@ -15,11 +15,9 @@ import { HEALTH_ROUTES, SERVICE_ROUTES } from './constants.js';
  * `enableShutdownHooks`.
  */
 const main = async (): Promise<void> => {
-  /**
-   * Validated here as well as inside `ConfigModule`, because `HttpOptions` is an
-   * argument to the call that *builds* the container and so cannot inject anything.
-   * Pure over the environment, so twice cannot disagree.
-   */
+  // Validated here as well as in `ConfigModule`, because `HttpOptions` is an
+  // argument to the call that *builds* the container. Pure over the environment,
+  // so the two cannot disagree.
   const boot = EnvConfig.validate(Bun.env);
 
   const app = await HttpFactory.create(
@@ -53,20 +51,11 @@ const main = async (): Promise<void> => {
   app.setGlobalPrefix(appConfig.prefix);
   app.set('trust proxy', cors.trustProxy);
 
-  /**
-   * `credentials: true` in every environment, and it used to be `isProd`.
-   *
-   * That condition was the reason a cross-origin dev client could not authenticate.
-   * `@dunx/http` resolves `origin: '*'` by **reflecting the caller** when credentials
-   * are allowed - a literal `*` is illegal alongside cookies and browsers reject it -
-   * so with credentials off, the default `CORS_ORIGIN=*` answered `*` and every
-   * credentialed request failed with "the wildcard is not allowed when the request's
-   * credentials mode is 'include'". Turning it on in dev too makes the two behave the
-   * same, which is the point of the setting.
-   *
-   * Development normally never reaches this: the client goes through Vite's proxy, so
-   * it is same-origin and CORS does not apply.
-   */
+  // `credentials: true` in **every** environment, not just production. dunx resolves
+  // `origin: '*'` by reflecting the caller only when credentials are allowed, so
+  // with them off the default `CORS_ORIGIN=*` answers a literal `*`, which a browser
+  // rejects for any credentialed request. Development usually never reaches this,
+  // since the client goes through Vite's proxy and is same-origin.
   app.enableCors({ origin: cors.origin, credentials: true });
 
   // Reflecting any origin *and* allowing credentials lets any site make authenticated
@@ -78,17 +67,10 @@ const main = async (): Promise<void> => {
     );
   }
 
-  /**
-   * One call for the whole sequence: `onBeforeShutdown` fails readiness and holds it
-   * failing for `HEALTH_DRAIN_DELAY_MS`, then the server stops accepting, then
-   * providers tear down in reverse order - stopping the queue workers before the
-   * connections they use.
-   *
-   * This replaced a local `forceExitAfter()` watchdog. bullmq's Bun adapter cannot
-   * cancel a pending reconnect, so a process that touched an unreachable broker
-   * survives a successful shutdown; core's timer is `unref`'d, so a healthy process
-   * still exits immediately and it never fires.
-   */
+  // The whole sequence: readiness fails and stays failing for
+  // `HEALTH_DRAIN_DELAY_MS`, then the server stops accepting, then providers tear
+  // down in reverse - queue workers before the connections they use. The timer
+  // behind it is `unref`'d, so a healthy process still exits immediately.
   app.enableShutdownHooks();
 
   const { warnings } = app.get(OpenApiExplorer);
@@ -123,9 +105,8 @@ const links = (
     liveness: `${health}/${HEALTH_ROUTES.LIVENESS}`,
     readiness: `${health}/${HEALTH_ROUTES.READINESS}`,
     build: `${api}/${SERVICE_ROUTES.BASE}/${SERVICE_ROUTES.CONFIG}`,
-    // `/ok`, not the bare mount: `@dunx/auth` mounts better-auth as `<basePath>/*`
-    // and `Bun.serve`'s `/*` needs a segment, so nothing answers at the mount itself.
-    // Printing the mount advertised a URL that 404'd.
+    // `/ok`, not the bare mount: better-auth is mounted as `<basePath>/*` and
+    // `Bun.serve`'s `/*` needs a segment, so the mount itself 404s.
     auth: `${api}${AUTH_MOUNT}/ok`,
     // Admin-only, so a browser with no session gets a 401 by design.
     queues: `${api}/queues`,
@@ -137,9 +118,9 @@ const links = (
   };
 };
 
-// `.catch` rather than a top-level `await`, for the exit code: a boot that throws has
-// to be a failed process, or an orchestrator reads a container that exited 0 and stops
-// restarting it. `console.error` because there may be no container to get a Logger from.
+// `.catch` rather than a top-level `await`, for the exit code: a boot that throws
+// must be a failed process, or an orchestrator sees a container that exited 0 and
+// stops restarting it. `console.error` because there may be no container yet.
 main().catch((error: unknown) => {
   console.error('[firecracker] boot failed', error);
   process.exit(1);

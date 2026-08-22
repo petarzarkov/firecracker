@@ -3,10 +3,9 @@ import { createMotePool, type MotePool } from '../pool.js';
 import * as palette from '../palette.js';
 
 /**
- * The lit fuse: a halo while the round waits, sparks while it climbs.
- *
- * The halo was two `createRadialGradient` calls per frame on the canvas. Here it
- * is two tinted sprites of the shared halo texture, so it costs a transform.
+ * The lit fuse: a halo while the round waits, sparks while it climbs. Two tinted
+ * sprites of the shared halo texture, so it costs a transform rather than two
+ * gradients a frame.
  */
 
 const CAPACITY = 96;
@@ -15,21 +14,14 @@ const CAPACITY = 96;
 const IDLE_HALO = 44;
 const IDLE_CORE = 15;
 
-/**
- * How far the flame grows once it is burning. The fuse is lit the whole way up
- * now - it used to be dimmed the moment the round started, which left the rocket
- * flying with an unlit fuse and only a thin spark trail behind it.
- */
+/** How far the flame grows once burning. The fuse stays lit the whole way up. */
 const FLAME_HALO = [72, 240] as const;
 const FLAME_CORE = [26, 92] as const;
 
 /**
- * The jet trailing off the fuse: a stretched halo, anchored at the fuse and
- * pointing back down the rocket's body.
- *
- * Two concentric discs read as a lit fuse but never as thrust, however large
- * they get - a flame has a direction. This is what turns "the multiplier is
- * high" into something visible from across the screen.
+ * The jet: a stretched halo anchored at the fuse, pointing back down the body. Two
+ * concentric discs read as a lit fuse but never as thrust however large they get -
+ * a flame has a direction.
  */
 const PLUME_LENGTH = [26, 210] as const;
 const PLUME_WIDTH = [16, 62] as const;

@@ -60,13 +60,10 @@ export const walletTransactions = sqliteTable(
     /** Snapshot of the wallet balance after this row was written. */
     balanceAfterCents: integer('balance_after_cents').notNull(),
     /**
-     * The bet this movement settled, when there was one.
-     *
-     * The `references` is why this file imports from `game/`, and that is not the
-     * wallet module depending on the game module: a foreign key is declared on the
-     * table holding the column, drizzle needs the referenced table object to build
-     * it, and every schema here imports `users` the same way. The module graph and
-     * the schema graph are separate.
+     * The bet this movement settled. The `references` is why this file imports from
+     * `game/`, and is not the wallet module depending on the game module: a foreign
+     * key is declared on the table holding the column. The module graph and the
+     * schema graph are separate.
      */
     gameBetId: text('game_bet_id').references(() => gameBets.id, {
       onDelete: 'set null',

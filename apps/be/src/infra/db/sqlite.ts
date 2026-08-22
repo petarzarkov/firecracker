@@ -13,32 +13,18 @@ export interface SqliteInit {
 }
 
 /**
- * The pragmas, in the order that matters.
+ * The pragmas, in the order that matters. Two processes share this file - the
+ * server and a bullmq sandbox child - and three of the four are what make that safe.
  *
- * This app runs **two processes** against one database file - the serving process and
- * a bullmq sandbox child. Three of these four are what make that safe:
+ * **`busy_timeout` must be first.** Switching `journal_mode` itself takes a lock, so
+ * with the timeout third, two processes starting together against a fresh database
+ * crashed whichever lost with `SQLITE_BUSY` - and every pragma after the failing one
+ * is skipped, leaving the survivor without WAL.
  *
- *  - **`busy_timeout` is first, and the order is not cosmetic.** SQLite allows a
- *    single writer, and without a timeout the loser of a race gets `SQLITE_BUSY`
- *    immediately - which in a bet path is a player told "please try again" because
- *    a cleanup job happened to be writing. It has to be set **before**
- *    `journal_mode`, because switching journal mode itself takes a lock: with this
- *    pragma third, starting two processes together against a fresh database
- *    crashed whichever lost, at boot:
- *
- *        SQLiteError: database is locked  (SQLITE_BUSY)
- *          at openDriver (@dunx/infra/src/db/sqlite/options.ts)
- *
- *    Every pragma after the failing one is also never applied, so the process that
- *    *did* start could be left without WAL. Timeout first.
- *  - `journal_mode = WAL` lets one process read while the other writes. Without it
- *    a settling round blocks every `SELECT` in the tick loop.
- *  - `synchronous = NORMAL` is the documented WAL pairing: durable across a process
- *    crash, which is the failure this app actually has, and not across a power cut,
- *    which for round history is an acceptable trade for the fsync.
- *
- * `foreign_keys = ON` is not concurrency, it is SQLite defaulting to off and every
- * `references()` in the schema being decorative until it is set.
+ * `WAL` lets one process read while the other writes; `synchronous = NORMAL` is its
+ * documented pairing, durable across a process crash but not a power cut.
+ * `foreign_keys = ON` is not concurrency - SQLite defaults it off, which makes every
+ * `references()` in the schema decorative.
  */
 const pragmasFor = (busyTimeoutMs: number): readonly string[] => [
   `busy_timeout = ${busyTimeoutMs}`,
@@ -48,23 +34,18 @@ const pragmasFor = (busyTimeoutMs: number): readonly string[] => [
 ];
 
 /**
- * The validated default, not a second copy of `5_000`. A script boots no config
- * tree - `EnvConfig.validate` would demand `API_PORT`, which a script has no use
- * for - so it reads the one variable it needs through the one schema that states
- * what it means.
+ * The validated default, not a second copy of `5_000`. A script boots no config tree
+ * - `EnvConfig.validate` would demand `API_PORT` - so it reads the one variable it
+ * needs through the schema that states what it means.
  */
 const busyTimeoutFromEnv = (): number =>
   dbVarsSchema.pick({ DB_BUSY_TIMEOUT_MS: true }).parse(Bun.env)
     .DB_BUSY_TIMEOUT_MS;
 
 /**
- * How this app opens its database file, wherever it is opened from.
- *
- * It is one function because it had been three: `DatabaseModule` set four pragmas
- * in the order above, and `scripts/migrate.ts` and `scripts/seed.ts` each set two
- * of them with **no `busy_timeout` at all** - so `bun run mig:run` against a
- * running app was exactly the `SQLITE_BUSY` failure the list documents. Nobody hit
- * it only because a script is usually run against a stopped app.
+ * How this app opens its database file, wherever it is opened from - one function
+ * so a script cannot open it on weaker pragmas than the app, which is how
+ * `bun run mig:run` against a running server used to fail on `SQLITE_BUSY`.
  */
 export const sqliteOptionsFor = (
   init: SqliteInit,

@@ -13,13 +13,10 @@ import {
 } from '../test-support/namespace.js';
 
 /**
- * The whole graph behind a real `Bun.serve` on port 0, against a real in-memory
- * SQLite - migrations, Better Auth and all. `:memory:` means every table
- * is created from scratch on each run, so this covers the boot path too.
- *
- * `prefix` is `createTestServer`'s `setGlobalPrefix`, applied before `listen()` so
- * the client's URLs carry it, and so better-auth's `basePath` of `/api/auth` is the
- * URL its handler actually answers on.
+ * The whole graph behind a real `Bun.serve` on port 0, against in-memory SQLite -
+ * migrations, Better Auth and all, so this covers the boot path too. `prefix` is
+ * applied before `listen()`, which is what makes better-auth's `/api/auth` the URL
+ * its handler answers on.
  */
 let server: TestServer;
 let adminToken: string;
@@ -378,20 +375,11 @@ describe('routing', () => {
   });
 
   /**
-   * This was a KNOWN GAP and is now closed by configuration, so the test is
-   * inverted rather than deleted.
-   *
-   * `Bun.serve({ routes })` answers a miss itself, so `listen()` installs one
-   * `fetch` fallback that puts the global middleware in front of a 404 - which is
-   * what gets an unmatched path logged and given a request id. The middleware
-   * includes `SessionGuard`, and a path that matched no route carries no route
-   * metadata, so there was no `@Public()` for the guard to read: an anonymous
-   * request for a path that did not exist was answered 401 rather than 404.
-   *
-   * `HttpOptions.notFound: 'public'` reports the miss as `@Public()`, which keeps the
-   * log line and the request id without charging a better-auth session lookup to every
-   * unmatched request. Refusing the miss instead would only hide a route table this
-   * app publishes at `/api/docs` anyway. See http.options.ts.
+   * The `fetch` fallback puts the global middleware in front of a 404, which is what
+   * gets a miss logged and given a request id - but `SessionGuard` is in that chain
+   * and an unmatched path carries no route metadata, so there was no `@Public()` to
+   * read and an anonymous typo answered 401. `notFound: 'public'` reports the miss
+   * as public instead, keeping the log line without a session lookup per typo.
    */
   test('an anonymous request for a missing path is a 404', async () => {
     const { status, body } = await server.json<{ error: string }>(

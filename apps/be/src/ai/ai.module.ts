@@ -9,18 +9,12 @@ import { GroqService } from './services/groq.service.js';
 import { OpenRouterService } from './services/openrouter.service.js';
 
 /**
- * The model providers.
+ * The model providers. **`global: true` and decorated**, because a second scope
+ * would be a second Gemini client with its own pacing state, breaching the rate
+ * limit the first is respecting.
  *
- * **`global: true` and decorated**, because a second scope would be a second Gemini
- * client with its own pacing state, which would then breach the rate limit the first
- * one is carefully respecting.
- *
- * Every provider is constructed whether or not it has a key. They report
- * `configured` instead of failing, so an app with no AI configured still boots,
- * still serves, and simply has quieter bots.
- *
- * No controller and therefore no options: this module is reached only from
- * `GameBotsService` and `AvatarsService`, both of which inject it.
+ * Every provider is constructed whether or not it has a key: they report
+ * `configured` rather than failing, so an app with no AI still boots.
  */
 @Module({
   global: true,
@@ -50,15 +44,9 @@ import { OpenRouterService } from './services/openrouter.service.js';
     AIService,
   ],
   /**
-   * `HttpModule` as well as `AIService`, and the module rather than a token list.
-   *
-   * This module is `global: true`, so a consumer resolves `AIService` from
-   * anywhere - and resolving it means constructing the providers behind it,
-   * which reach the named client. Exporting only `AIService` left that
-   * invisible from the requesting scope and boot failed naming it.
-   *
-   * Naming the class resolves to the configuration of that class this module imports -
-   * the one above, with its `AI_HTTP_CLIENT` token.
+   * `HttpModule` too, not just `AIService`: resolving the service means constructing
+   * the providers behind it, which reach the named client - and dunx resolves those
+   * in the scope that *asked*, so exporting the service alone failed at boot.
    */
   exports: [AIService, HttpModule],
 })

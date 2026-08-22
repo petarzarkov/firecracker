@@ -61,26 +61,20 @@ export class GameRoundService {
   }
 
   /**
-   * The round the loop is currently driving, if there is one.
-   *
-   * `GameJobs.schedule` guards on this: the schedule job is enqueued from three
-   * places - boot recovery, the watchdog after a cleanup, and the cooldown after a
-   * crash - and only the third can scope a `jobId` to a round. A *fixed* id for the
-   * other two would be worse than none, because bullmq dedupes against the completed
-   * set too, so the id that stopped ten restarts making ten loops would also stop the
-   * eleventh restart making any. Guarding on state is the same reason the stuck-round
-   * sweep is a schedule rather than a self-rescheduling job.
+   * `GameJobs.schedule` guards on this rather than on a `jobId`: of the three places
+   * that enqueue a schedule job, only the post-crash cooldown can scope an id to a
+   * round, and a *fixed* id is worse than none - bullmq dedupes against the
+   * completed set, so the id stopping ten restarts from making ten loops would stop
+   * the eleventh from making any.
    */
   currentRound(): GameRoundRow | undefined {
     return this.rounds.findCurrentRound();
   }
 
   /**
-   * Close the betting window and draw the crash point.
-   *
-   * The transition is conditional on the round still being WAITING, so two workers
-   * racing on the same round produce one start and one no-op. The loser gets
-   * `undefined` and returns it - a retried job must not launch a round twice.
+   * Close the betting window and draw the crash point. Conditional on the round
+   * still being WAITING, so two workers racing produce one start and one no-op - a
+   * retried job must not launch a round twice.
    */
   async transitionToRunning(
     roundId: string,
@@ -90,10 +84,9 @@ export class GameRoundService {
       return undefined;
     }
 
-    // `null` is an unreachable Redis, not an empty lobby - see `collect`, which
-    // explains why the two must not be the same value. Rounds need Redis, and
-    // leaving this one WAITING is the honest answer: the stuck-round sweep picks it
-    // up, and no round claims entropy it did not have.
+    // `null` is an unreachable Redis, not an empty lobby. Leaving the round WAITING
+    // is the honest answer - the sweep picks it up, and no round claims entropy it
+    // did not have.
     const pool = await this.clientSeeds.collect(roundId);
     if (pool === null) return undefined;
 
@@ -132,12 +125,9 @@ export class GameRoundService {
   }
 
   /**
-   * Settle the round: mark it crashed and lose every bet still open.
-   *
    * One transaction, because a crashed round whose bets are still ACTIVE would let
-   * a late cash-out through. `transactionSync` rather than `transaction`: the
-   * callback is synchronous, so this commits without ever yielding, and no
-   * concurrent request can observe the half-settled state.
+   * a late cash-out through - and `transactionSync` so it commits without yielding,
+   * leaving no window in which the half-settled state is observable.
    */
   settleCrash(roundId: string): GameRoundRow | undefined {
     return transactionSync(this.db, (tx) => {
@@ -172,9 +162,8 @@ export class GameRoundService {
         crashedAt: new Date(),
       });
 
-      // `debug`, not `warn`: the caller knows whether one failed round is news.
-      // `GameRoundWatchdog` sweeps a backlog and reports it as one line, and this
-      // was the second half of the two-per-round pair that made that unreadable.
+      // `debug`, not `warn`: only the caller knows whether one failed round is news,
+      // and the watchdog reports a whole swept backlog as one line.
       this.logger.debug('game round failed and refunded', {
         roundId,
         refunded: refunds.length,
@@ -230,12 +219,9 @@ export class GameRoundService {
 }
 
 /**
- * The proof as it comes off the round row: hundredths, and no instructions.
- *
- * Named apart from the `RoundVerification` **response** in `game.dto.ts`, which is
- * this converted at the edge with `howToVerify` attached. They were both called
- * `RoundVerification`, so a reader had to check the import to know which shape a
- * variable held.
+ * The proof as it comes off the round row: hundredths, and no instructions. Named
+ * apart from the `RoundVerification` **response** in `game.dto.ts`, which is this
+ * converted at the edge with `howToVerify` attached.
  */
 export interface RoundProof {
   readonly roundId: string;

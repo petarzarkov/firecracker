@@ -93,13 +93,10 @@ afterAll(async () => {
 });
 
 /**
- * The split's own assertion, against the graph the application actually boots.
- *
  * `game.module.test.ts` proves the *bindings* are shared without constructing
- * anything; this proves resolution then produced one instance of the class it
- * matters most for. A second engine would tick its own multiplier and enqueue its
- * own crash job, and the failure a client sees is the number stuttering between two
- * timelines - not something a test that only counts rows would notice.
+ * anything; this proves resolution produced one instance. A second engine would
+ * tick its own multiplier and enqueue its own crash, which a client sees as the
+ * number stuttering between two timelines.
  */
 describe('the module graph the app boots', () => {
   test('the bots and the socket resolve the same clock', () => {
@@ -207,11 +204,9 @@ describe('cashing out', () => {
   });
 
   /**
-   * The regression. `BetPanel` sends a bare `socket.emit('cashOut')` with no
-   * payload, so the gateway has to work out which wallet the bet was against.
-   * Defaulting to real money made every demo cash-out fail silently - the bet
-   * stayed open, the balance never moved, and the ack was a rejection nobody
-   * surfaced. Only a browser found it.
+   * `BetPanel` sends `cashOut` with no payload, so the gateway works out which
+   * wallet the bet was against. Defaulting to real money made every demo cash-out
+   * fail silently, and only a browser found it.
    */
   test('the open bet decides the wallet, not the caller', async () => {
     const roundId = await openRound();
@@ -312,11 +307,8 @@ describe('provable fairness over HTTP', () => {
 
 /**
  * The watchdog, driven directly rather than through its schedule - waiting out
- * `GAME_CLEANUP_INTERVAL_MS` would put a clock in a test.
- *
- * These are assertions the old `game.round.cleanup` job never had: it rescheduled
- * itself, so testing it meant a broker and a delay. There is no "nothing stale finds
- * nothing" case on purpose - this suite shares one database, so the precondition is
+ * `GAME_CLEANUP_INTERVAL_MS` would put a clock in a test. There is no "nothing
+ * stale" case on purpose: this suite shares one database, so the precondition is
  * false by the time it would run.
  */
 describe('the stuck-round watchdog', () => {
@@ -369,10 +361,8 @@ describe('the stuck-round watchdog', () => {
 });
 
 /**
- * The history panel's own read, over HTTP, because the bug it covers was in the
- * mapper rather than in the money: `/api/game/my-bets` never sent `crashPoint`, the
- * client rendered `(bet.crashPoint ?? 0).toFixed(2)`, and every lost row said
- * `x0.00x`.
+ * Over HTTP, because the bug it covers was in the mapper rather than the money:
+ * `/api/game/my-bets` never sent `crashPoint`, so every lost row said `x0.00x`.
  */
 describe('my bet history', () => {
   const myBets = async (): Promise<GameBet[]> => {

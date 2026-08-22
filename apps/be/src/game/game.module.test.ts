@@ -17,15 +17,11 @@ import { GameRoundsModule } from './rounds/rounds.module.js';
 import { GameSurfaceModule } from './surface/surface.module.js';
 
 /**
- * The three invariants the split exists to turn from doc comments into properties
- * of the graph.
- *
- * `buildScopes` is dunx's own scope builder and it **constructs nothing** - so this
- * is a unit test with no container, no database and no Redis, asserting exactly what
- * a constructor in each module would be allowed to name. That matters, because
- * `app.get(token, from)` is deliberately permissive: it falls back to the root scope
- * and then to any single declaring module, so it answers "is this in the graph"
- * rather than "can that module see it". Only `scope.visible` answers the second.
+ * The three invariants the split turns from doc comments into properties of the
+ * graph. `buildScopes` **constructs nothing**, so this needs no container, database
+ * or Redis. It asserts on `scope.visible` rather than `app.get`, which is
+ * deliberately permissive - it answers "is this in the graph", not "can that module
+ * see it".
  */
 const graph = buildScopes(GameModule);
 

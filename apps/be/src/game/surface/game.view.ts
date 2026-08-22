@@ -14,23 +14,17 @@ import {
 } from '../rounds/game-round.schema.js';
 
 /**
- * What a round and a bet look like on the wire, decided once - because the rule
- * below must not be forgotten by the next caller that writes its own projection:
- * **the server seed and the crash point are absent until the round has CRASHED.** A
- * `RUNNING` round already holds its `crash_point_x100`, drawn at the launch, so a
- * projection that returned it unconditionally would hand a player the outcome of the
- * round they are betting in.
+ * What a round and a bet look like on the wire, decided once, because the rule must
+ * not be rediscovered by the next caller writing its own projection: **the server
+ * seed and the crash point are absent until the round has CRASHED.** A RUNNING round
+ * already holds its `crash_point_x100`, so returning it unconditionally hands a
+ * player the outcome of the round they are betting in.
  *
- * Pure statics, no provider. Every method takes a row and returns a payload, so it
- * is unit-testable and cannot reach a database by accident.
- *
- * The spreads are not stylistic: `exactOptionalPropertyTypes` separates an absent
- * key from an explicit `undefined`, and the payloads declare the former.
+ * Pure statics, so nothing here can reach a database. The spreads are not stylistic:
+ * the payloads declare an absent key, not an explicit `undefined`.
  */
 export class GameView {
   /**
-   * A round as a client may see it.
-   *
    * `seedHash` is present from the start - that is the commitment. `seed` and
    * `crashPoint` are attached only once the status is CRASHED.
    */
@@ -59,11 +53,9 @@ export class GameView {
   }
 
   /**
-   * A bet as its owner may see it.
-   *
    * `crashPoint` is the *round's*, and the repository only reads it for rounds that
-   * have crashed - so the absence here follows the same rule as {@link GameView.round}
-   * without this having to re-check a status it cannot see.
+   * have crashed - so this follows the same rule without re-checking a status it
+   * cannot see.
    */
   static bet(bet: BetWithCrash): GameBet {
     return {

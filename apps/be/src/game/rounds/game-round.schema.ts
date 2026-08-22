@@ -8,15 +8,10 @@ export { GameRoundStatus, ROUND_STATUSES } from '@firecracker/contracts';
 /**
  * One round of the crash game, and the provably-fair record for it.
  *
- * **Multipliers are integer hundredths, never a float.** SQLite has no decimal
- * type, and a `real` puts every `multiplier >= crashPoint` test in float64, where
- * `1.07` is not `1.07`. An integer count of hundredths is exact, and it lets the
- * engine's
- * `multiplier >= crashPoint` test and the payout multiply both run in integer
- * space. A round that crashes at 1.07x stores `107`.
- *
- * The wire format is unchanged: clients still receive `1.07`. `toMultiplier()` in
- * `game.math.ts` is the only place that divides.
+ * **Multipliers are integer hundredths, never a float**: SQLite has no decimal type,
+ * and a `real` puts every `multiplier >= crashPoint` test in float64 where `1.07` is
+ * not `1.07`. A round crashing at 1.07x stores `107`; `toMultiplier()` is the only
+ * place that divides.
  */
 export const gameRounds = sqliteTable(
   'game_round',
@@ -36,9 +31,9 @@ export const gameRounds = sqliteTable(
     seedHash: text('seed_hash').notNull(),
 
     /**
-     * `SHA256(sorted(playerSeeds).join(':'))`, or the string `firecracker` when
-     * nobody submitted one. Set at the transition to RUNNING and public from then
-     * on, which is what makes the result depend on the players and not only on us.
+     * `SHA256(sorted(playerSeeds).join(':'))`, or `firecracker` when nobody
+     * submitted one. Written at the transition to RUNNING and public from then on -
+     * it is what makes the result depend on the players and not only on us.
      */
     clientSeed: text('client_seed'),
 
@@ -46,12 +41,9 @@ export const gameRounds = sqliteTable(
     nonce: integer('nonce').notNull().default(0),
 
     /**
-     * The `@arkv/rng` algorithm the crash point was drawn with.
-     *
-     * Stored per round rather than read from config at verification time, and that
-     * is the whole point: the algorithm is part of the fairness contract. If the
-     * default ever changes, every round written before the change still says how to
-     * reproduce itself, and a verifier reads this column instead of guessing.
+     * Per round rather than read from config at verification time: the algorithm is
+     * part of the fairness contract, so changing the default must not stop an older
+     * round saying how to reproduce itself.
      */
     rngAlgorithm: text('rng_algorithm').notNull().default('pcg64'),
 

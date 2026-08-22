@@ -1,16 +1,10 @@
 import { Assets, Container, Sprite, type Texture } from 'pixi.js';
 
 /**
- * The firecracker itself.
- *
- * A sprite in the same scene as the curve, rather than an `<img>` over the canvas.
- * One coordinate system, no `getBoundingClientRect()` on the render path to reconcile
- * two, and it can do the obvious thing and ride the tip.
- *
- * The texture is `sprites/firecracker.svg`, drawn for this rather than reusing the
- * favicon - which is square, padded for a 16px tab, and has its fuse wherever the
- * icon designer put it. The offsets below are measured off the artwork, so they
- * belong with it; see the note in the SVG.
+ * The firecracker itself: a sprite in the same scene as the curve rather than an
+ * `<img>` over the canvas, so there is one coordinate system and no
+ * `getBoundingClientRect()` on the render path. The offsets below are measured off
+ * the artwork, so they belong with it - see the note in the SVG.
  */
 
 /**
@@ -47,11 +41,9 @@ export interface Rocket {
   /** The body's current lean, so the flame can hang along it. */
   readonly angle: number;
   /**
-   * Where it was last drawn.
-   *
-   * Not the same as the curve's tip: near the axis ceiling the sprite is nudged
-   * down to stay on the canvas. The explosion has to happen where the player
-   * watched the rocket be, not where the arithmetic put its tip.
+   * Where it was last drawn - not the curve's tip, which the sprite is nudged off
+   * near the axis ceiling. The explosion happens where the player watched the rocket
+   * be, not where the arithmetic put its tip.
    */
   readonly x: number;
   readonly y: number;
@@ -113,14 +105,10 @@ export const createRocket = async (url?: string): Promise<Rocket> => {
       const width = height * aspect;
 
       /**
-       * `atan` rather than `atan2`: the tilt is a lean, not a heading. A rocket
-       * that rotated to follow the curve exactly would be lying on its side by
-       * the time the round went vertical.
-       *
-       * Eased rather than applied. The slope is measured over a handful of
-       * server ticks, so it steps as they arrive; snapping to it made the rocket
-       * twitch about ten times a second, which was the most visible part of the
-       * old jitter.
+       * `atan`, not `atan2`: the tilt is a lean, not a heading - following the curve
+       * exactly would have it lying on its side by the time the round went vertical.
+       * Eased, because the slope is measured over a few server ticks and snapping to
+       * it made the rocket twitch ten times a second.
        */
       const wanted = Math.max(-MAX_TILT, Math.min(MAX_TILT, Math.atan(-slope)));
       tilt += (wanted - tilt) * Math.min(1, TILT_EASE * delta);

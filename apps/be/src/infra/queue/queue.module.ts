@@ -11,24 +11,17 @@ export interface QueueModuleOptions {
 }
 
 /**
- * The queue, publish **and** consume, in one process.
+ * The queue, publish **and** consume, in one process. `consume` here rather than an
+ * entrypoint, because only the container can start the workers at `onInit` and stop
+ * them at `onShutdown` - before the connections their handlers use.
  *
- * `consume` replaced `src/worker.ts` and the `WorkerFactory.attach` branch that came
- * after it: the container starts the workers at `onInit` and stops them at
- * `onShutdown`, which runs before the database and Redis connections the handlers use.
- * An entrypoint cannot express that ordering.
+ * `processor` is where the child processes come from: a queue with any
+ * `background: true` handler is given this **file path** and bullmq forks it.
  *
- * `processor` is where the child processes come from. A queue with any handler marked
- * `@JobHandler({ background: true })` is given this **file path** instead of a
- * function and bullmq forks it - that is `notifications` and `media`. The game queue is
- * deliberately not marked: a round transition is latency-critical and the engine
- * reading its result is in this process.
- *
- * The path must be absolute, because bullmq resolves it in the child against the
- * child's cwd. `isolation: 'process'` and not `'thread'`: a fork reads `bunfig.toml`
- * so `@dunx/transform/preload` records constructor types, where a thread enters
- * through bullmq's prebuilt `main-worker.js` and the preload never matches a `.ts`
- * file - the first provider with a constructor parameter then fails at boot.
+ * `isolation: 'process'`, never `'thread'`. A fork reads `bunfig.toml`, so
+ * `@dunx/transform/preload` runs; a thread enters through bullmq's prebuilt
+ * `main-worker.js` where the preload never matches a `.ts` file, and the first
+ * provider with a constructor parameter fails at boot.
  */
 export class QueuesModule {
   /** Absolute, and computed rather than written out, so moving the file cannot lie. */
@@ -85,12 +78,10 @@ export class QueuesModule {
       // Every feature that enqueues reads `JobPublisher`, which is what global is for.
       exports: [queues],
       /**
-       * One list, and it has to be: the conditional below spreads into this same
-       * object, so a second `providers` key there would replace this one rather than
-       * add to it - and `QueueDrain` would silently never be constructed.
-       *
-       * `QueueDrain` is bound so the container builds it, which is what gets its
-       * `onBeforeShutdown` called. Nothing injects it.
+       * One list, and it has to be: the conditional below spreads into this object,
+       * so a second `providers` key there would replace this one and `QueueDrain`
+       * would silently never be constructed - it is bound only so the container
+       * builds it and calls `onBeforeShutdown`.
        */
       providers: [
         QueueDrain,

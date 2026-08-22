@@ -15,13 +15,11 @@ import { BetActionsService } from './bet-actions.service.js';
 import type { SocketPlayer } from './socket-auth.service.js';
 
 /**
- * The socket's money path, with stubs and no container.
- *
- * `bet-actions.test.ts` under `betting/` covers what a debit and a credit do to the
- * database. This file covers the layer above it - the phase gate, the ack a refusal
- * becomes, which wallet a bare `cashOut` settles against, and the two frames each
- * action publishes - which lived in `GameGateway`'s private methods and could only
- * be reached through a WebSocket. Every case below is a bug that shipped once.
+ * The socket's money path, with stubs and no container. Where `betting/`'s
+ * `bet-actions.test.ts` covers what a debit does to the database, this covers the
+ * layer above: the phase gate, the ack a refusal becomes, which wallet a bare
+ * `cashOut` settles against, and the frames each action publishes. Every case below
+ * is a bug that shipped once.
  */
 const ROUND_ID = 'round-1';
 

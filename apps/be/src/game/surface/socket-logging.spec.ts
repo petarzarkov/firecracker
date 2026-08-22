@@ -24,14 +24,10 @@ import {
 import { BetActionsService } from './bet-actions.service.js';
 
 /**
- * The socket's observability, against a real `Bun.serve` and a real browser
- * `WebSocket`.
- *
- * It is a spec rather than a unit test because none of it is the app's code: the
- * assertions are about what a frame produces once dunx's middleware chain, the
- * gateway, the logger and the error reporter are wired to each other. A fake socket
- * would only prove the shape of the entry, and the entry was never in doubt - what
- * was in doubt is whether a throwing handler still escapes to `console.error`.
+ * The socket's observability, against a real `Bun.serve` and a real `WebSocket`. A
+ * spec rather than a unit test because none of it is the app's code: what was in
+ * doubt is whether a throwing handler still escapes to `console.error`, and a fake
+ * socket could only prove the shape of the entry.
  */
 let server: TestServer;
 let logger: RecordingLogger;

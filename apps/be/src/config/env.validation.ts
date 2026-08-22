@@ -6,12 +6,9 @@ import type { OAuthCredentials } from './app.config.js';
 import pkg from '../../package.json' with { type: 'json' };
 
 /**
- * The environment, parsed once into the nested typed tree the app reads - so nothing
- * downstream ever touches `process.env` or a raw string again.
- *
- * `#oauth` is `#private` rather than a module-level `const`, which is the whole
- * reason this is a class: it is a rule about *these* three providers and nothing
- * outside this file should be building an `OAuthCredentials` from a pair of maybes.
+ * The environment, parsed once into the typed tree the app reads, so nothing
+ * downstream touches `process.env` again. A class only so `#oauth` can be private:
+ * nothing outside this file should build an `OAuthCredentials` from a pair of maybes.
  */
 export class EnvConfig {
   /** Both halves or nothing: a provider with one of the two is a misconfiguration. */
@@ -132,10 +129,7 @@ export class EnvConfig {
           openrouter: vars.AI_OPENROUTER_API_KEY,
         },
       },
-      /**
-       * The crash game's tunables, read by the engine, the bet service and the
-       * lifecycle handlers. `GAME` in `src/constants.ts` before the migration.
-       */
+      // Read by the engine, the bet service and the round handlers.
       game: {
         waitingPhaseMs: vars.GAME_WAITING_PHASE_MS,
         cooldownMs: vars.GAME_COOLDOWN_MS,
@@ -194,10 +188,7 @@ type DeepReadonly<T> = T extends readonly (infer E)[]
     : T;
 
 /**
- * The shape the app reads, taken from the function that produces it.
- *
- * `ReturnType`, not a declaration: the validator already describes every field,
- * and a second description is one that drifts. Adding a field to the returned
- * object is the only edit a new setting needs.
+ * `ReturnType`, not a declaration: the validator already describes every field, and
+ * a second description is one that drifts.
  */
 export type AppConfig = DeepReadonly<ReturnType<typeof EnvConfig.validate>>;

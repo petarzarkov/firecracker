@@ -16,26 +16,13 @@ export interface CollectedSeeds {
 }
 
 /**
- * The per-round client-seed pool, from a player's contribution to the value the
- * draw consumes to the discard after the launch - and the nonce. One class rather
- * than four files reaching for one Redis key with raw verbs, because that lifecycle
- * *is* the fairness ordering and it has to be readable in one place:
+ * The per-round client-seed pool and the nonce. One class rather than four files
+ * reaching for one Redis key, because this lifecycle *is* the fairness ordering:
+ * contribute during the window, `collect` once it shuts, draw, then `discard`.
  *
- * 1. The round is created with `SHA256(serverSeed)` committed and **no crash point**.
- * 2. The betting window: {@link ClientSeedService.contribute} for a player who sends
- *    one, {@link ClientSeedService.contributeIfAbsent} for a player who just bets.
- * 3. The window shuts, {@link ClientSeedService.collect} folds the pool, and only
- *    then is the crash point drawn from it.
- * 4. {@link ClientSeedService.discard} runs **after** the draw, so a job retry that
- *    lost the transition race still had the seeds it needed.
- *
- * Moving `collect` earlier would let the house draw before the players had finished
- * contributing; moving `discard` before the draw would make a retry launch a round
- * from an empty pool while recording it as fair.
- *
- * There must be exactly one of these in the graph. Two would be two nonce counters -
- * harmless in itself, because they `INCR` the same key, but it is the clearest sign
- * that a module gained a `forRoot()` and its importers each got their own scope.
+ * `collect` earlier would let the house draw before the players finished
+ * contributing; `discard` before the draw would let a retry launch from an empty
+ * pool and record it as fair.
  */
 export class ClientSeedService {
   /** Per-round hash of client seeds, written during WAITING and dropped after. */
@@ -55,10 +42,8 @@ export class ClientSeedService {
   }
 
   /**
-   * A player's own seed, keyed by whatever identifies them.
-   *
-   * Keyed by user where there is one, so a player cannot stuff the pool with one
-   * seed per socket. A spectator still contributes, keyed by connection.
+   * Keyed by user where there is one, so a player cannot stuff the pool with a seed
+   * per socket. A spectator still contributes, keyed by connection.
    */
   async contribute(
     roundId: string,
@@ -71,11 +56,8 @@ export class ClientSeedService {
   }
 
   /**
-   * Entropy on a betting player's behalf, when they did not send any.
-   *
-   * `HSETNX`, so a seed the player submitted through `submitClientSeed` is never
-   * overwritten by this. Failing is survivable - the pool is one seed smaller and
-   * the round still launches - so it does not take a bet down with it.
+   * `HSETNX`, so a seed the player submitted themselves is never overwritten.
+   * Failing is survivable - one seed fewer - so it does not take a bet down.
    */
   async contributeIfAbsent(roundId: string, userId: string): Promise<void> {
     await this.redis
@@ -88,16 +70,11 @@ export class ClientSeedService {
   }
 
   /**
-   * The pool folded into the value the draw consumes, or `null` when Redis could
-   * not be asked. Called at the launch transition and nowhere else.
-   *
-   * The distinction is the whole point, and it is not defensive coding. An empty
-   * hash is normal - an idle lobby has no players and therefore no seeds - and
-   * `Fairness.combine([])` is the constant `'firecracker'`. A *failed read* used to
-   * produce the same `{}`, so the round drew its crash point from the server seed
-   * alone, a value the house committed at creation and can compute in advance,
-   * while recording itself as provably fair. Worse, that record is byte-for-byte
-   * identical to an idle lobby's, so nothing afterwards distinguishes the two.
+   * The folded pool, or `null` when Redis could not be asked - and that distinction
+   * is the whole point. An empty hash is a normal idle lobby, but a failed *read*
+   * returning the same `{}` drew the crash point from the server seed alone, a
+   * value the house committed at creation, in a record identical to an idle
+   * lobby's.
    */
   async collect(roundId: string): Promise<CollectedSeeds | null> {
     try {

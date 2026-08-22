@@ -20,12 +20,9 @@ export interface ThumbnailResult {
 }
 
 /**
- * The one job in this app that does real work: decode the original, resize it,
- * re-encode it as WebP and write it back beside the source.
- *
- * It injects the very same `ThumbnailsService` and `Storage` the HTTP routes use -
- * one wiring, two entrypoints - which is the point of a job handler being an ordinary
- * provider.
+ * Decode the original, resize, re-encode as WebP, write it back beside the source.
+ * It injects the same `ThumbnailsService` and `Storage` the HTTP routes use, which
+ * is the point of a job handler being an ordinary provider.
  */
 export class MediaJobs {
   constructor(
@@ -48,15 +45,9 @@ export class MediaJobs {
     const thumbnailKey = `${key}.thumb.webp`;
 
     await this.storage.write(thumbnailKey, encoded.bytes);
-    /**
-     * The row can be **gone by the time this lands**, and the write above would
-     * then be an object nothing names. A player who replaces an avatar within a
-     * second of uploading it does exactly that: `FilesService.remove` deletes the
-     * source and the thumbnail *the row knows about*, and this one is not on the
-     * row yet - so it survived the delete that was meant to take it.
-     *
-     * The update says which happened: `undefined` is no such row.
-     */
+    // The row can be **gone by the time this lands** - a player replacing an avatar
+    // a second after uploading it deletes the thumbnail the row knows about, and
+    // this one is not on the row yet. `undefined` is no such row.
     const recorded = this.repo.update(fileId, { thumbnailKey }) !== undefined;
     if (!recorded) await this.storage.delete(thumbnailKey);
 
@@ -75,17 +66,10 @@ export class MediaJobs {
   }
 
   /**
-   * A source that is not there is **permanent**, so it fails once instead of three
-   * times with exponential backoff between.
-   *
-   * `UnrecoverableError` is bullmq's way to say "do not retry this". The default
-   * `attempts` is for a slow disk or a bucket that blinked, and neither describes a
-   * key that was deleted - so retrying logged the same failure three times, twice
-   * each because a sandboxed handler reports in the child and again in the parent, to
-   * reach the conclusion the first attempt already had.
-   *
-   * The usual cause is an upload rolled back, or a file deleted between the enqueue
-   * and the fork.
+   * A source that is not there is **permanent**, so `UnrecoverableError` fails it
+   * once. The default `attempts` is for a slow disk or a bucket that blinked, not a
+   * deleted key - and a sandboxed handler reports in the child and again in the
+   * parent, so retrying logged the same conclusion six times.
    */
   async #read(key: string, fileId: string): Promise<Uint8Array> {
     try {
@@ -101,14 +85,9 @@ export class MediaJobs {
   }
 
   /**
-   * By `name`, **not `instanceof`**, and that is not a shortcut.
-   *
-   * Each `@dunx/infra` subpath is its own bundle, so the `FileNotFoundError` thrown
-   * inside the storage backend is a different class object than the one
-   * `@dunx/infra/files` exports - `instanceof` is false against a genuine match. The
-   * package's own `StorageError` sets `name` from `new.target.name`, which survives
-   * the boundary. `@dunx/infra`'s queue options file documents the same trap for
-   * `RedisError`.
+   * By `name`, **not `instanceof`**: each `@dunx/infra` subpath is its own bundle,
+   * so the `FileNotFoundError` thrown inside the backend is a different class object
+   * than the exported one and `instanceof` is false against a genuine match.
    */
   static #isMissing(error: unknown): boolean {
     return error instanceof Error && error.name === 'FileNotFoundError';

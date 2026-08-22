@@ -4,14 +4,10 @@ import type { Scale } from '../scale.js';
 import type { StagePoint } from '../types.js';
 
 /**
- * The round itself: a filled area under a stroked line, with a lit dot at the
- * live end.
- *
- * The glow is a second, fatter, translucent stroke of the same path rather than
- * `shadowBlur`. The canvas version set `shadowBlur = 12` on a stroke covering
- * every point of the round, which is one of the most expensive things a 2D
- * context can be asked to do and got more expensive the longer a player was
- * winning. Two strokes are two draw calls at any length.
+ * The round itself: a filled area under a stroked line, with a lit dot at the live
+ * end. The glow is a second, fatter, translucent stroke rather than `shadowBlur` -
+ * two draw calls at any length, where a blurred stroke got more expensive the longer
+ * a player was winning.
  */
 
 const LINE_WIDTH = 3;
@@ -24,15 +20,11 @@ const TIP_HALO_RADIUS = 7;
 const TIP_RADIUS = 4;
 
 /**
- * The area under the round: strongest at the curve, gone by the axis.
+ * The area under the round: strongest at the curve, gone by the axis. A flat fill
+ * buries the starfield and flattens the shape into a wedge by 3x.
  *
- * A flat fill was tried first and it was wrong - by 3x the round covers most of
- * the plot, and a uniform slab of orange buries the starfield and flattens the
- * shape into a wedge. The fade is what keeps the line reading as the subject.
- *
- * `textureSpace: 'local'` maps the gradient across the shape's own bounds, which
- * is what makes it track a plot that resizes and an axis that rescales without
- * anything recomputing coordinates.
+ * `textureSpace: 'local'` maps the gradient across the shape's own bounds, which is
+ * what tracks a resizing plot and a rescaling axis with no recomputed coordinates.
  */
 const fadeUnder = (colour: number): FillGradient => {
   // A stop is `{ offset, color }` with no alpha of its own, so the alpha rides
@@ -60,16 +52,11 @@ const RISING_FILL = fadeUnder(palette.CURVE);
 const CRASHED_FILL = fadeUnder(palette.CURVE_CRASHED);
 
 /**
- * The points to draw, oldest first, always ending at `head`.
- *
- * Pure, and separate from the drawing, because this is where the round's shape
- * is decided and the drawing needs a DOM to test. Two things happen here:
- *
- *  - the interpolated `head` is appended, so the line grows between the server's
- *    ten-a-second ticks instead of stepping to each one, and
- *  - any recorded point the head has already passed is dropped, because the
- *    newest tick can arrive a frame after the client's clock has run beyond it
- *    and the line would double back on itself for that frame.
+ * The points to draw, oldest first, always ending at `head`. Pure and separate from
+ * the drawing, which needs a DOM to test. The interpolated `head` is appended so the
+ * line grows between ticks rather than stepping, and any recorded point the head has
+ * passed is dropped - a tick can arrive a frame after the client's clock ran beyond
+ * it, and the line would double back.
  */
 export const pathTo = (
   points: readonly StagePoint[],

@@ -1,22 +1,16 @@
 import { Particle, ParticleContainer, type Texture } from 'pixi.js';
 
 /**
- * A fixed pool of motes: the shape behind the starfield, the trail, the wick
- * sparks and the fireworks.
+ * A fixed pool of motes: the starfield, the trail, the wick sparks and the
+ * fireworks.
  *
- * **Fixed, and never resized.** Pushing a fresh object per spawn and `splice`ing dead
- * ones out of the middle is allocation and array shuffling every frame, during the
- * seconds a player is watching most closely. Here the particles are allocated once and
- * recycled: a spawn claims a dead slot, a death sets `alpha = 0`, and nothing is ever
- * added to or removed from the container after construction.
+ * **Fixed, and never resized.** Particles are allocated once and recycled - a spawn
+ * claims a dead slot, a death sets `alpha = 0` - because {@link ParticleContainer}
+ * uploads its children as one batched buffer, so a stable child list is the fast
+ * path.
  *
- * That also suits what {@link ParticleContainer} is for. It uploads its children
- * as one batched buffer, so a stable child list is the fast path and a changing
- * one is not.
- *
- * When every slot is alive a spawn overwrites the oldest. Dropping the request
- * instead would make a burst quietly thin out at exactly the moment it should be
- * densest, and the oldest mote is the one about to die anyway.
+ * A spawn with every slot alive overwrites the oldest, which is the one about to die
+ * anyway: dropping it would thin a burst out exactly when it should be densest.
  */
 
 export interface Mote {
@@ -45,12 +39,9 @@ export interface MoteSeed {
 }
 
 /**
- * Advances one mote. Returning `false` kills it early.
- *
- * `delta` is PIXI's frame delta, `1` at 60fps. Every velocity in this scene is
- * expressed per-60fps-frame and multiplied by it, so a 144Hz display does not
- * run the round's particles at two and a half times speed - which is what
- * "snappy" looked like before, alongside the stepping curve.
+ * Advances one mote; `false` kills it early. `delta` is PIXI's frame delta, `1` at
+ * 60fps - every velocity in this scene is per-60fps-frame and multiplied by it, so a
+ * 144Hz display does not run the particles at two and a half times speed.
  */
 export type MoteStep = (mote: Mote, delta: number) => boolean | void;
 
@@ -73,13 +64,10 @@ export const createMotePool = (
 ): MotePool => {
   const view = new ParticleContainer({
     /**
-     * `vertex` is what carries scale and anchor, which is not obvious from the
-     * name and is the whole reason this list matters: these motes shrink as they
-     * die, so their vertices change every frame. Passing a `scale` key instead -
-     * which is not one of the five PIXI recognises - built a geometry with an
-     * attribute the particle shader had never heard of, and the batch silently
-     * rendered nothing. Nor did it fail alone: it took the grid and the curve
-     * down with it, because they are drawn after it in the same pass.
+     * `vertex` carries scale and anchor, which the name does not say and these motes
+     * need - they shrink as they die. A `scale` key instead, which is not one of the
+     * five PIXI recognises, builds a geometry the particle shader has never heard of
+     * and silently renders nothing, taking the grid and the curve down with it.
      */
     dynamicProperties: {
       vertex: true,

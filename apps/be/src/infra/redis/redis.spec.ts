@@ -11,12 +11,9 @@ import {
 } from '../../test-support/namespace.js';
 
 /**
- * The Redis-backed areas, in both states.
- *
- * "Nothing running" is not simulated by not having Redis - that would make the
- * suite depend on the machine. It is a **dead URL**, which is deterministic
- * everywhere and is the harder case anyway: a configured broker that will not
- * answer, rather than one nobody asked for.
+ * The Redis-backed areas, in both states. "Nothing running" is a **dead URL**, not
+ * an absent one: deterministic on any machine, and the harder case anyway - a
+ * configured broker that will not answer.
  */
 const DEAD_REDIS = 'redis://127.0.0.1:1';
 
@@ -116,14 +113,10 @@ describe('with a broker that will not answer', () => {
   });
 
   /**
-   * The rate limiter fails **open**. `THROTTLE_LIMIT` is 1 here, so with a
-   * reachable counter the second call would be a 429 - refusing every request
-   * because the limiter is down would turn a degraded cache into an outage.
-   *
-   * This is also what pins `store: new RedisThrottleStore(redis)` in
-   * `AppModule.#throttle()`. `ThrottleModule`'s default store is the in-process
-   * `MemoryThrottleStore`, which cannot fail and therefore cannot stand aside:
-   * leaving it out would 429 the second call here with no Redis in sight.
+   * The rate limiter fails **open**: `THROTTLE_LIMIT` is 1, so a reachable counter
+   * would 429 the second call. This also pins `RedisThrottleStore` in
+   * `AppModule.#throttle()` - the default `MemoryThrottleStore` cannot fail and
+   * therefore cannot stand aside.
    */
   test('the throttler stops counting instead of refusing', async () => {
     for (const _ of [1, 2, 3]) {

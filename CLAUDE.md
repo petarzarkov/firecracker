@@ -93,24 +93,22 @@ src/
 ├── auth/                      Better Auth options, profile controller, CurrentUser
 ├── users/                     users CRUD
 ├── client/                    serves apps/fe/dist in production (SpaFallback)
-├── game/                      ← the application
-│   ├── game.module.ts         @Module — no options left to vary
-│   ├── game.gateway.ts        @Gateway('/ws') — the only socket
-│   ├── game.controller.ts     /api/game/*
-│   ├── wallet.controller.ts   /api/wallet/*
-│   ├── game.math.ts           the curve, the payout, the crash-point draw
-│   ├── game.events.ts         queue, job, topic and event names + payloads
-│   ├── game.messages.ts       inbound socket payload parsers
+├── game/                      ← the application, six modules behind a facade
+│   ├── game.module.ts         @Module — imports the six, exports nothing
+│   ├── game.math.ts           the curve and the payout
+│   ├── game.events.ts         queue, job and topic names + publishGame
+│   ├── fairness/              Fairness, ClientSeedService — what a player re-runs
+│   ├── betting/               bets, the schema and repo, auto-cashout
+│   ├── rounds/                the round schema and repo, the three jobs, the watchdog
 │   ├── engine/                CrashEngineService — the clock
-│   ├── handlers/game.jobs.ts  the round lifecycle, as three jobs
-│   ├── bots/                  cosmetic lobby activity (opt-in)
-│   ├── schema/                drizzle tables
-│   ├── repos/                 drizzle queries
-│   ├── services/              round, bet, wallet, auto-cashout, state, player-chat,
-│   │                          watchdog (the @Interval stuck-round sweep)
-│   └── dto/                   zod schemas + route schemas
-├── notifications/             email, the events publisher, chat topics
-└── infra/                     db, redis, queue, schedule, health
+│   ├── surface/               the gateway, controller, state projection, bet actions
+│   └── bots/                  cosmetic lobby activity (opt-in)
+├── wallet/                    balances and the ledger — the game is one caller
+├── chat/                      lobby scrollback and one-to-one rooms
+├── files/                     uploads, and the sandboxed thumbnail handler
+├── ai/                        model providers, for the bots and avatar suggestions
+├── notifications/             email, the events publisher
+└── infra/                     db, redis, queue, schedule, files, images, health
 ```
 
 ---
@@ -155,7 +153,7 @@ Annotate with `SyncDatabase<AppSchema>`; the alias is for generics and `over()`.
 
 `ScheduleModule` from `@dunx/infra/schedule`, wrapped as `SchedulesModule` so it is `global: true` — `ScheduleRegistry` has two injectors and a second `forRootAsync()` call would mean two registries and two copies of every schedule.
 
-- **`@Interval` / `@Cron` where the cadence is a constant.** `GameBotsService.watch` (250 ms) and `InvitesService.expireStale` (`@hourly`, which replaced a write on the `list()` read path).
+- **`@Interval` / `@Cron` where the cadence is a constant.** `GameBotsService.watch` (250 ms) is the only one left.
 - **`ScheduleRegistry.add()` where it comes from config.** The per-round tick (`GAME_TICK_INTERVAL_MS`) and the stuck-round sweep (`GAME_CLEANUP_INTERVAL_MS`). A decorator argument is evaluated at class-definition time, before the container exists, so a decorator would mean hard-coding the number.
 
 The sweep was a `game.round.cleanup` job that rescheduled itself, plus a `#bootstrapCleanup()` in the engine to start it — and the two dodged a BullMQ trap in opposite directions. The bootstrap needed a fixed `jobId` or ten restarts meant ten loops; the reschedule needed _no_ `jobId`, because a just-completed job with that id is still in the completed set and deduplicates the next one. **Do not put it back on the queue.**

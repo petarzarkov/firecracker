@@ -3,25 +3,14 @@ import { RedisModule } from '@dunx/infra/redis';
 import { AppConfigService } from '../../config/app.config.service.js';
 
 /**
- * Registered unconditionally, and that is the whole convention: `Bun.RedisClient`
- * connects lazily, so nothing is dialled here and an unavailable cache cannot stop
- * the process from booting. What degrades is the *route*, never the graph.
+ * Registered unconditionally: `Bun.RedisClient` connects lazily, so nothing is
+ * dialled here and an unavailable cache degrades a *route*, never the graph.
  *
- * `maxRetries: 0` is not impatience. Measured on Bun 1.3.14, a client that failed
- * to connect with `maxRetries > 0` keeps a retry timer alive past `close()` and the
- * process never exits; with `0` it exits cleanly. `eager` is left at its default of
- * `false` for the same reason - finding out at startup is the opposite of the point.
+ * `maxRetries: 0` is not impatience - on Bun 1.3.14 a client that failed to connect
+ * with `maxRetries > 0` keeps a retry timer alive past `close()` and the process
+ * never exits. `eager` stays `false` for the same reason.
  *
- * `global: true` and decorated for the same reasons as `DatabaseModule`: one client,
- * built once by `Foundation.for()`, read by auth, notifications, the throttler and
- * the health probe.
- *
- * `exports: [RedisModule]` names the class, which resolves to the configuration
- * imported beside it.
- *
- * `ThrottleGuard` is `AppModule`'s and not this module's: it is app-level middleware
- * and it needs the caller, so binding it here would make an infra module import the
- * auth feature that imports it back.
+ * `global: true` and decorated like `DatabaseModule`: one client, built once.
  */
 @Module({
   global: true,

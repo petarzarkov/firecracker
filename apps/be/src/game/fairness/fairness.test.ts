@@ -2,14 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { Rng } from '@arkv/rng';
 import { Fairness } from './fairness.js';
 
-/**
- * The provable half of a round, on its own and with no container.
- *
- * The draw's assertions came out of `game.math.test.ts` unchanged when the fairness
- * code left `GameMath`; the three above them are new, and cover the inputs that used
- * to be private methods on `GameRoundService` and were therefore only ever exercised
- * through a database.
- */
+/** The provable half of a round, on its own and with no container. */
 describe('the commitment', () => {
   test('a server seed is 32 bytes of hex, and never repeats', () => {
     const seed = Fairness.serverSeed();
@@ -113,12 +106,9 @@ describe('the crash point is provably fair', () => {
   });
 
   /**
-   * The distribution, which is the house edge.
-   *
-   * These bounds are wide enough not to be flaky and tight enough to catch a real
-   * change. They exist because the *previous* implementation silently missed them:
-   * HMAC with a `Math.max(1.0, …)` clamp produced ~5% instant crashes against a
-   * documented 3%, because the clamp added its own on top of `h % 33 === 0`.
+   * The distribution, which is the house edge. Wide enough not to flake and tight
+   * enough to catch a real change - the previous implementation silently produced
+   * ~5% instant crashes against a documented 3%.
    */
   test('~3% instant crash, ~50% under 2x, ~9.9% at or above 10x', () => {
     const N = 40_000;

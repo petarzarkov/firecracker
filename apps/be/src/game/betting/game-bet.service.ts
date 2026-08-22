@@ -28,50 +28,25 @@ export class BetRejected extends HttpError {
 }
 
 /**
- * Placing and settling bets - the one place in the app where two players' money
- * and one shared round meet.
- *
- * Neither mutation takes a lock, and three things together mean none is needed
- * against a player firing two sockets at once:
- *
- *  1. **`transactionSync` cannot yield.** The callback's return type refuses a promise, so
- *     an `async` one is a type error rather than a transaction that commits
- *     before its first `await` resumes. Inside one process, read-check-write is
- *     atomic by construction - there is no point at which a second request can
- *     interleave, because JavaScript is not going to run one.
- *  2. **The debit is guarded in SQL**, `WHERE balance_cents >= ?`, so an
- *     overdraft is impossible even against the other process.
- *  3. **`game_bet_round_user_demo_index` is unique**, so the second of two bets
- *     racing from *different* processes fails on the constraint - the one case a
- *     lock genuinely covered, without a round trip.
- *
- * The loser of that race gets the real answer, "you already have an active bet in
- * this round", rather than a retry prompt for something that was never going to
- * succeed.
+ * Placing and settling bets - the one place two players' money and one shared
+ * round meet. No lock is taken and none is needed; CLAUDE.md, "There is no
+ * advisory lock", is the argument, and the three legs are `transactionSync`, the
+ * SQL-guarded debit and the unique index below.
  */
 export class GameBetService {
   /**
-   * `game_bet_round_user_demo_index`, as SQLite words a violation of it.
-   *
-   * **The columns, not the index name.** This used to match
-   * `'game_bet_round_user_demo_index'`, which no message ever contains: a
-   * `SQLITE_CONSTRAINT_UNIQUE` from bun:sqlite reads `UNIQUE constraint failed:
-   * game_bet.round_id, game_bet.user_id, game_bet.is_demo` and names the indexed
-   * columns, in index order, never the index. So the predicate below was always
-   * false and the one case the index exists to cover - the double bet arriving on
-   * two processes - reached the player as a raw 500 instead of an answer. The
-   * money was never at risk, because the transaction rolled the debit back either
-   * way; the answer was.
+   * `game_bet_round_user_demo_index`, **as the columns, not the index name**:
+   * bun:sqlite words a violation as `UNIQUE constraint failed: game_bet.round_id,
+   * …` and never names the index. Matching on the name made the predicate always
+   * false, so a cross-process double bet reached the player as a raw 500.
    */
   static readonly #DUPLICATE_BET_COLUMNS =
     'game_bet.round_id, game_bet.user_id, game_bet.is_demo';
 
   /**
-   * The unique index refusing a second bet, as opposed to any other constraint.
-   *
-   * The constraint is identified rather than just the code, because a
-   * `SQLITE_CONSTRAINT_UNIQUE` from anywhere else in this transaction is a bug and
-   * should not be reported to a player as "you already bet".
+   * The constraint is identified, not just the code: a `SQLITE_CONSTRAINT_UNIQUE`
+   * from anywhere else in this transaction is a bug, and must not be reported to a
+   * player as "you already bet".
    */
   static #isDuplicateBet(error: unknown): boolean {
     return (
@@ -169,9 +144,8 @@ export class GameBetService {
         return bet;
       });
     } catch (error) {
-      // The cross-process race, arriving as the unique index refusing the second
-      // insert. The transaction has already rolled back, so the debit went with
-      // it - there is nothing to compensate, only a message to translate.
+      // The cross-process race. The transaction already rolled back and took the
+      // debit with it, so there is nothing to compensate - only a message.
       if (GameBetService.#isDuplicateBet(error))
         throw new BetRejected(GameBetService.#alreadyBet(isDemo));
       throw error;
@@ -179,12 +153,9 @@ export class GameBetService {
   }
 
   /**
-   * Close a bet at `multiplierX100` and pay it out.
-   *
-   * The multiplier is a parameter rather than something read here, and that is
-   * deliberate: the caller captures it from the engine **synchronously**, before
-   * anything can await, so a player is paid the number that was on their screen
-   * rather than whatever it had climbed to by the time the write landed.
+   * The multiplier is a parameter, not read here: the caller captures it from the
+   * engine **synchronously**, so a player is paid the number that was on their
+   * screen rather than whatever it had climbed to by the time the write landed.
    */
   cashOut(
     userId: string,

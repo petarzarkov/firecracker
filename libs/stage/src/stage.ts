@@ -13,23 +13,17 @@ import { haloTexture, softDotTexture } from './textures.js';
 import type { Stage, StageOptions, StagePhase, StagePoint } from './types.js';
 
 /**
- * The round, assembled. **The stage drives itself:**
- *
- * It owns the ticker and pulls from {@link StageOptions.sample} rather than being
- * pushed at, which is what keeps the whole animation off React: the client's
- * sampler reads a mutable ref the socket writes to, and no frame of a round
- * causes a render. It also detects its own transitions - the crash burst, the
- * volley, the reset between rounds - so the component holds no `useRef`
- * bookkeeping about what has already fired.
+ * The round, assembled. **The stage drives itself:** it owns the ticker and pulls
+ * from {@link StageOptions.sample} rather than being pushed at, which keeps the
+ * animation off React entirely - no frame of a round causes a render. It detects
+ * its own transitions too, so the component holds no bookkeeping about what has
+ * already fired.
  */
 
 /**
- * Room for the axis labels on the left, and for the rocket on the right.
- *
- * The curve's leading edge is always the plot's right edge, so the rocket sitting
- * on it needs half its own width of margin or it is drawn half off the canvas -
- * which is exactly what a 15px inset did. The trail spawns there too, and had
- * been flying straight out of frame.
+ * Room for the axis labels left, and for the rocket right. The curve's leading edge
+ * is always the plot's right edge, so the rocket on it needs half its own width or
+ * it draws off the canvas - and the trail spawns there too.
  */
 const INSETS: Insets = { left: 40, right: 62, top: 20, bottom: 28 };
 
@@ -43,13 +37,9 @@ const BLAST_SIZE = [40, 340] as const;
 const BACKGROUND = 0x0a0a0a;
 
 /**
- * How long to wait for a renderer before giving up.
- *
- * `Application.init()` can **hang without resolving or throwing** when the
- * browser has no usable GPU - reproduced with a five-line PIXI page under
- * ANGLE/SwiftShader, where it never settles and logs nothing. Left alone that is
- * the worst failure this scene has: a black rectangle where the round should be,
- * and no clue in the console. A rejection at least reaches the caller's `catch`.
+ * `Application.init()` can **hang without resolving or throwing** when the browser
+ * has no usable GPU, leaving a black rectangle and nothing in the console. A
+ * rejection at least reaches the caller's `catch`.
  */
 const INIT_TIMEOUT_MS = 10_000;
 
@@ -57,12 +47,9 @@ const INIT_TIMEOUT_MS = 10_000;
 const GLOW_SPAN = 0.64;
 
 /**
- * The largest frame step the simulations are asked to take.
- *
- * A backgrounded tab, a garbage collection or a slow first frame can hand the
- * ticker a delta of many frames at once, and every velocity here is integrated
- * by multiplication - so an unclamped step teleports the whole trail across the
- * plot in one frame. Two frames of catch-up is enough to hide a hitch.
+ * A backgrounded tab or a slow first frame hands the ticker many frames at once,
+ * and every velocity here is integrated by multiplication - so an unclamped step
+ * teleports the trail across the plot.
  */
 const MAX_DELTA = 2;
 
@@ -141,14 +128,8 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
   flash.tint = palette.FLASH;
   flash.alpha = 0;
 
-  /**
-   * The explosion itself: a hot disc that expands and fades where the rocket
-   * was.
-   *
-   * It used to be a `💥` in the DOM, centred in the chart box - so the rocket
-   * blew up in the middle of the screen no matter where it had climbed to, which
-   * on a good round was nowhere near it.
-   */
+  // A hot disc that expands and fades where the rocket actually was, rather than
+  // in the middle of the chart box.
   const blast = new Sprite(halo);
   blast.anchor.set(0.5);
   blast.alpha = 0;
@@ -179,10 +160,9 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
   let blastY = 0;
   let blastLeft = 0;
   /**
-   * The crash burst is armed on the transition and spent on the next frame,
-   * because only the frame knows where the tip ended up. Armed rather than fired
-   * immediately is also what stops it repeating for every frame of the crashed
-   * phase, which is the bookkeeping the component used to hold in a ref.
+   * Armed on the transition, spent on the next frame - only the frame knows where
+   * the tip ended up, and arming is also what stops it repeating for every frame of
+   * the crashed phase.
    */
   let burstPending = false;
 
@@ -206,9 +186,8 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
     }
     if (phase === 'running') {
       fireworks.clear();
-      // The fuse stays lit - `wick.flame` takes over from `wick.glow` and grows
-      // with the round. Dimming it here is what left the rocket flying with an
-      // unlit fuse for the whole climb.
+      // No `wick.dim()` here: `wick.flame` takes over from `wick.glow` and grows
+      // with the round, and dimming left the rocket climbing with an unlit fuse.
     }
     if (phase === 'crashed') {
       flashLeft = FLASH_FRAMES;
@@ -243,16 +222,10 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
     if (running) scale.follow(multiplier);
 
     /**
-     * Where the round is *now*, not where the last tick left it.
-     *
-     * The server ticks ten times a second; the caller's clock interpolates
-     * between them. Everything on the leading edge - the curve's last segment,
-     * the rocket, the wash, the trail - hangs off this, which is the difference
-     * between a line that grows and a line that steps.
-     *
-     * Past the crash the head stops moving: `elapsed` keeps climbing from the
-     * client's clock, and a tip that kept travelling after the explosion would
-     * draw a round that did not happen.
+     * Where the round is *now*: the server ticks ten times a second and the
+     * caller's clock interpolates between them, which is the difference between a
+     * line that grows and one that steps. Past the crash the head stops moving, or
+     * it would draw a round that did not happen.
      */
     const last = points[points.length - 1];
     const head: StagePoint = (() => {
@@ -260,16 +233,9 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
         return last ?? { elapsed: 0, multiplier: 1 };
       }
       const at = Math.max(elapsed, last.elapsed);
-      /**
-       * Read off the curve rather than from `multiplier`.
-       *
-       * `sample().multiplier` is what the player would be paid, and the server
-       * pays in whole hundredths - so it climbs in 0.01 steps, about eight
-       * pixels. The line stopped stepping once it was sampled from `curveAt`,
-       * but everything hanging off the head - the rocket, the flame, the wash -
-       * was still riding the rounded value and still twitching upward ten times
-       * a second.
-       */
+      // Off the curve, not from `multiplier`: the payable value moves in whole
+      // hundredths, about eight pixels, so anything riding it twitches upward ten
+      // times a second even once the line itself is smooth.
       return { elapsed: at, multiplier: curveAt?.(at) ?? multiplier };
     })();
 
@@ -326,15 +292,9 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
     }
 
     if (running) {
-      /**
-       * Kept on the canvas.
-       *
-       * The sprite is centred on the tip, so a round near its ceiling - a 68x
-       * with the axis at 100 - puts half a firecracker above the top edge. The
-       * curve's tip stays exactly where it belongs; only the drawing of the
-       * rocket is nudged down to stay whole, which reads as it levelling off
-       * rather than as a clipped sprite.
-       */
+      // The sprite is centred on the tip, so a round near the axis ceiling puts
+      // half a firecracker off the top edge. Only the *drawing* is nudged down -
+      // the curve's tip stays where it belongs - which reads as levelling off.
       const restY = Math.max(tipY, ROCKET_MARGIN_Y);
       const slope = slopeAt(
         points,
@@ -357,10 +317,8 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
       burstPending = false;
     }
 
-    /**
-     * Jumpers leave from wherever the rocket is, which is the point: the round
-     * is still climbing and somebody has just stepped off it.
-     */
+    // Jumpers leave from wherever the rocket is - the round is still climbing and
+    // somebody has just stepped off it.
     for (const cashOut of options.takeCashOuts?.() ?? []) {
       parachutes.drop(cashOut, rocket.x, rocket.y);
     }

@@ -208,11 +208,9 @@ export class FilesService {
   }
 
   /**
-   * A key that escapes the root is the caller's fault; a bucket that will not
-   * answer is not. `@dunx/infra/files` raises a typed error for each of the three
-   * conditions it can distinguish, and everything else is a 503 - "the store is not
-   * reachable" is the only thing an unrecognised throw from a storage backend can
-   * mean, and it is the same contract the cache and queue routes keep.
+   * A key that escapes the root is the caller's fault; a bucket that will not answer
+   * is not. `@dunx/infra/files` types the three conditions it can distinguish, and
+   * everything else is a 503 - the same contract the cache and queue routes keep.
    */
   private storageError(error: unknown, context: string): HttpError {
     if (error instanceof HttpError) return error;

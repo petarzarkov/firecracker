@@ -26,16 +26,11 @@ export const CHAT_HISTORY_MAX = 50;
 export type { ChatLine };
 
 /**
- * The lobby's chat scrollback, in Redis.
+ * The lobby's scrollback, as a capped Redis list - `rpush` then `ltrim` - so the cap
+ * is the data structure rather than a periodic sweep.
  *
- * A capped list - `rpush` then `ltrim` to the last {@link CHAT_HISTORY_MAX} - which is
- * the right shape for the newest N of a write-heavy, read-once-per-connection stream:
- * the cap is enforced by the data structure rather than by a periodic sweep.
- *
- * **Not SQLite.** That file is opened by two processes and carries the bet path, so a
- * high-frequency, low-value write puts lobby chatter in contention with settling
- * money. Losing the scrollback if Redis is flushed is the accepted trade: chat is not
- * a record, a round is, and that is what the database holds.
+ * **Not SQLite**: that file is opened by two processes and carries the bet path, so
+ * lobby chatter would contend with settling money. Chat is not a record, a round is.
  */
 export class ChatService {
   constructor(
@@ -45,10 +40,8 @@ export class ChatService {
   ) {}
 
   /**
-   * Say one line in the lobby: broadcast it, then keep it.
-   *
-   * **Broadcast first.** Everyone watching has the line, and a failed write then
-   * costs the scrollback rather than the message.
+   * **Broadcast first**, then keep it: everyone watching has the line, so a failed
+   * write costs the scrollback rather than the message.
    */
   say(author: Pick<ChatLine, 'username' | 'picture'>, message: string): void {
     const line: ChatLine = {
@@ -87,11 +80,8 @@ export class ChatService {
   }
 
   /**
-   * Append a line and trim to the cap.
-   *
    * `ltrim(-MAX, -1)` keeps the **last** MAX, which is what `rpush` appends to.
-   * Fire-and-forget past the log: a chat line failing to persist must not fail the
-   * send, because the line has already been broadcast to everyone watching.
+   * Fire-and-forget: the line has already been broadcast.
    */
   record(line: ChatLine): void {
     void this.redis

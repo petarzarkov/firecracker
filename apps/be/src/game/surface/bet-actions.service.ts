@@ -18,15 +18,12 @@ import { GameBetService } from '../betting/game-bet.service.js';
 import type { SocketPlayer } from './socket-auth.service.js';
 
 /**
- * What placing a bet and cashing out actually mean.
- *
- * The phase gate, the debit, the entropy contribution, the auto-cashout registration
- * and the two frames each publishes. Not the gateway's, because money that only a
- * browser can exercise is money nobody checks: every case in
+ * What placing a bet and cashing out actually mean. Not the gateway's, because money
+ * only a browser can exercise is money nobody checks - every case in
  * `bet-actions.service.test.ts` is a bug that shipped once.
  *
- * Every path returns an **ack**, never a throw. A socket handler has no error
- * mapper behind it, so a refusal that throws reaches the player as nothing at all.
+ * Every path returns an **ack**, never a throw: a socket handler has no error mapper
+ * behind it, so a refusal that throws reaches the player as nothing at all.
  */
 export class BetActionsService {
   constructor(
@@ -116,11 +113,9 @@ export class BetActionsService {
   }
 
   /**
-   * **Synchronous, and that is the point.** `currentMultiplierX100` is a read of
-   * the engine's clock, and it is taken once, at entry, before anything else can
-   * happen. Re-reading it after a write - or making this `async` and reading it
-   * after the first `await` - would pay whatever the curve had climbed to in the
-   * meantime rather than what the player saw when they clicked.
+   * **Synchronous, and that is the point.** The engine's clock is read once, at
+   * entry: re-reading after a write - or making this `async` - pays whatever the
+   * curve climbed to since, rather than what the player saw when they clicked.
    */
   cashOut(player: SocketPlayer | null, data: unknown): CashOutAckPayload {
     if (player === null) {
@@ -139,16 +134,10 @@ export class BetActionsService {
     }
 
     /**
-     * Which wallet, decided by the **bet**, not by the client.
-     *
-     * `BetPanel` sends a bare `socket.emit('cashOut')` with no payload, so
-     * defaulting to real money here meant looking for a bet that did not exist
-     * and rejecting every demo cash-out - silently, because a rejection is an ack
-     * rather than an error. That shipped, and only a browser caught it.
-     *
-     * Reading the bet row also survives a reconnect, cannot drift from the database,
-     * and is right when a player holds bets in both modes - none of which a flag on
-     * the socket manages.
+     * Which wallet, decided by the **bet**, not by the client. `BetPanel` sends
+     * `cashOut` with no payload, so defaulting to real money rejected every demo
+     * cash-out - silently, because a rejection is an ack. Reading the row also
+     * survives a reconnect and is right when a player holds bets in both modes.
      */
     const requested =
       typeof data === 'object' && data !== null && 'isDemo' in data

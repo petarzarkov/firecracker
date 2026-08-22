@@ -27,12 +27,7 @@ export const PLAYER_CHAT_EVENTS = Object.freeze({
   SYSTEM_MESSAGE: 'playerChatSystemMessage',
 } as const);
 
-/**
- * The caller, sent once on `connected`.
- *
- * The `{ payload }` envelope is the client's shape, kept because renaming it would
- * mean editing React for no gain.
- */
+/** The caller, sent once on `connected`. The envelope is the client's own shape. */
 export interface ConnectedPayload {
   readonly payload: {
     readonly id: string;
@@ -43,15 +38,11 @@ export interface ConnectedPayload {
 }
 
 /**
- * One line of lobby chat - live on `message`, and replayed on `chatHistory`.
- *
- * The two are the same type on purpose. They diverged once: history was sent as
- * `username` while the client read `senderName`, and the chat panel crashed on
- * render.
+ * One line of lobby chat - live on `message`, replayed on `chatHistory`, and the
+ * same type for both on purpose: they diverged once, history sending `username`
+ * where the client read `senderName`, and the panel crashed on render.
  *
  * `timestamp` is an ISO string, because that is what survives `JSON.stringify`.
- * Typing it as `Date` describes the server's local variable rather than the frame
- * the browser receives.
  */
 export interface ChatLine {
   readonly username: string;
@@ -62,14 +53,10 @@ export interface ChatLine {
 }
 
 /**
- * What became of one `chatMessage`.
- *
- * A separate name from the message that asked for it, and that is the whole reason
- * this exists: dunx answers `@OnMessage('x')` with the handler's return value under
- * the name `x`, so the gateway's rejections went out as `chatMessage` frames and no
- * client has ever registered a listener for one. "Login required to chat" and the
- * 1000-character refusal both reached the browser and were dropped there - the
- * input cleared and nothing happened.
+ * What became of one `chatMessage`, under a name of its own - which is the whole
+ * reason it exists. dunx answers `@OnMessage('x')` under `x`, so returning an ack
+ * sent it as a `chatMessage` frame no client listens for, and every rejection was
+ * dropped in the browser.
  */
 export interface ChatAckPayload {
   /** Present when the line went out. */
@@ -102,11 +89,9 @@ export interface PlayerChatSystemPayload {
 }
 
 /**
- * What a notification is about.
- *
- * Its own wire value rather than the name of the job that produced it: a job name
- * is the server talking to itself, and a name a browser can read is a name somebody
- * will send. So `user.registered` stays server-side and this is what crosses.
+ * Its own wire value rather than the job name that produced it: a job name is the
+ * server talking to itself, and a name a browser can read is one somebody will
+ * send.
  */
 export const NotificationKind = Object.freeze({
   USER_REGISTERED: 'userRegistered',
@@ -116,14 +101,10 @@ export type NotificationKind =
   (typeof NotificationKind)[keyof typeof NotificationKind];
 
 /**
- * One notice, sent to a user's own topic or to the admin room.
- *
- * The text is written **by the publisher**, because a browser cannot be expected to
- * know what a job meant. It is also the whole reason this type exists: the four
- * publishes it replaces carried `{userId,email,name}`, `{userId,email}`,
- * `{email,role}` and `{userId,reason}` under one event name - four shapes for one
- * frame, which is what an unchecked `Record<string, unknown>` permits - and nothing
- * on the client read any of them.
+ * One notice, sent to a user's own topic or to the admin room. The text is written
+ * **by the publisher**, because a browser cannot know what a job meant - and the
+ * four publishes this replaced carried four different shapes under one event name,
+ * which is what an unchecked `Record<string, unknown>` permits.
  */
 export interface NotificationPayload {
   readonly kind: NotificationKind;
@@ -132,11 +113,9 @@ export interface NotificationPayload {
 }
 
 /**
- * Every server-sent event that is not the game's, with the payload it carries.
- *
- * The counterpart of `GamePayloads`, and it did not exist: these six went out
- * through a publisher that takes `unknown`, which is the hole all four historical
- * drift bugs came through.
+ * Every server-sent event that is not the game's. The counterpart of
+ * `GamePayloads`; before it, these six went out through a publisher taking
+ * `unknown`, which is the hole every drift bug came through.
  */
 export interface SocketPayloads {
   readonly [SOCKET_EVENTS.CONNECTED]: ConnectedPayload;
@@ -149,21 +128,17 @@ export interface SocketPayloads {
 }
 
 /**
- * The body of a `chatMessage`.
- *
- * The server also accepts a bare string, because both shapes were once on the
- * wire. This is the one a client should send.
+ * The body of a `chatMessage`. The server also accepts a bare string, because both
+ * shapes were once on the wire; this is the one a client should send.
  */
 export interface ChatMessageBody {
   readonly message: string;
 }
 
 /**
- * The body of a `joinPlayerChat`: a room to rejoin, or somebody to open one with.
- *
- * At least one is needed and the server refuses a frame with neither. An **empty
- * string reads as absent** - the client sends `targetUserId: ''` alongside a
- * `roomId` when it reconnects, and a user whose id is `""` does not exist.
+ * A room to rejoin, or somebody to open one with; the server refuses a frame with
+ * neither. An **empty string reads as absent**, because the client sends
+ * `targetUserId: ''` beside a `roomId` when it reconnects.
  */
 export interface JoinPlayerChatMessage {
   readonly roomId?: string | undefined;

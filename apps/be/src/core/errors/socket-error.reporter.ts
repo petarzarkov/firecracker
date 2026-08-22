@@ -10,30 +10,20 @@ import {
 import { ErrorMapper } from './error-mapper.js';
 
 /**
- * What `onError` is on the HTTP side, for the socket: the one place a handler's
- * exception becomes a structured entry, graded by what the error turned out to be.
+ * What `onError` is on the HTTP side, for the socket.
  *
- * It is a `SocketMiddleware` and **not** `SocketOptions.onError`, which is the seam
- * that looks right and is not. `onError` is a plain function in the options object
- * `HttpFactory.create` is *called with*, so it exists before the container does and
- * can never reach the app's `Logger` - the best it could do is `console.error`,
- * which is the hole this closes. A middleware is resolved from the container, so it
- * injects the same logger every other line in the process goes through.
+ * A `SocketMiddleware` and **not** `SocketOptions.onError`, which is the seam that
+ * looks right and is not: `onError` is a plain function in the options object
+ * `HttpFactory.create` is called with, so it exists before the container and can
+ * never reach the app's `Logger`. A middleware is resolved from the container.
  *
- * Without it a socket exception is silent in production. `@dunx/http` replaces its
- * `console.error` default with a no-op as soon as any socket middleware exists, and
- * `SocketLoggingMiddleware`'s own failure entry is configured down to `debug` here so
- * that one failure is not counted twice - so at `LOG_LEVEL=info` nothing else writes.
- *
- * It rethrows, always. Answering the frame instead would leave the caller waiting on
- * an ack the handler never sent, and every handler in this gateway sends its own.
+ * It rethrows, always - answering the frame would leave the caller waiting on an ack
+ * the handler never sent.
  */
 export class SocketErrorReporter implements SocketMiddleware {
   /**
-   * The declaration `@dunx/http` 2.2.1 looks for at boot. Nothing warns today because
-   * `SocketLoggingMiddleware` also sets it, but this class is the one that actually
-   * reports: turn `socketLogging` off and the warning would fire while errors were
-   * still being logged, which is a lie in the more dangerous direction.
+   * dunx silences its `console.error` fallback as soon as any socket middleware
+   * exists, whether or not one reports. This is the class that actually does.
    */
   readonly reportsErrors = true;
 
@@ -46,9 +36,8 @@ export class SocketErrorReporter implements SocketMiddleware {
   }
 
   /**
-   * The payload is not in here, deliberately: this fires on the frames most likely
-   * to be malformed, and a chat body or a bet is the last thing to copy into a log
-   * line because it failed.
+   * No payload, deliberately: this fires on the frames most likely to be malformed,
+   * and a chat body or a bet is the last thing to copy into a log line.
    */
   #report(error: unknown, frame: SocketFrame, ctx: SocketContext): void {
     const status =
@@ -64,9 +53,8 @@ export class SocketErrorReporter implements SocketMiddleware {
       err: error,
     };
 
-    // A rejected cursor or a unique violation is the caller's doing, and a socket
-    // that cannot reach Redis is ours. Paging on the first would train an operator
-    // to ignore the second.
+    // A rejected cursor is the caller's doing; a socket that cannot reach Redis is
+    // ours. Paging on the first trains an operator to ignore the second.
     if (status < HttpStatusCode.INTERNAL_SERVER_ERROR) {
       this.logger.warn('socket handler failed', entry);
       return;

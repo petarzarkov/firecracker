@@ -6,13 +6,9 @@ import { CurrentUser, type Caller } from './services/current-user.service.js';
 import { ProfilePictureService } from './services/profile-picture.service.js';
 
 /**
- * What the session actually resolved to, which is the one endpoint every client
- * of a Better Auth service needs and better-auth does not provide in the app's own
- * shape.
- *
- * Nothing here is handed a user: `CurrentUser` reads the principal out of
- * `AuthContext`, so a service two hops from the request sees the caller without it
- * being threaded through a signature.
+ * What the session resolved to, in the app's own shape - the one endpoint every
+ * client needs and better-auth does not provide. Nothing here is handed a user:
+ * `CurrentUser` reads the principal out of `AuthContext`.
  */
 @ApiDoc({
   tags: ['profile'],
@@ -46,16 +42,10 @@ export class ProfileController {
   }
 
   /**
-   * Point `users.image` at an object the caller uploaded, or at a URL they chose.
-   *
-   * No `@Throttle`. The bytes went through `POST /api/files`, which is where
-   * `UPLOAD_MAX_BYTES` and the configured limit already apply; this is a column
-   * write, and a literal here could only restate the default - which is a no-op
-   * that no environment can then raise.
-   *
+   * Point `users.image` at an uploaded object or a chosen URL. No `@Throttle`: the
+   * bytes already went through `POST /api/files`, and this is a column write.
    * `input.req.headers` is passed on because better-auth's `updateUser` needs the
-   * caller's session to update it, and answers with the cookie that keeps its
-   * cached copy in step.
+   * session, and answers with the cookie that keeps its cached copy in step.
    */
   @ApiDoc({ tags: ['profile'], summary: 'Set the caller’s avatar' })
   @Post('/avatar', setAvatar)

@@ -16,19 +16,13 @@ import { GameRoundService } from './game-round.service.js';
 import type { GameBetService } from '../betting/game-bet.service.js';
 
 /**
- * The fairness guarantee at the one moment it can be broken silently.
+ * The fairness guarantee at the one moment it can be broken silently: a failed
+ * Redis read used to fall back to `{}`, which `Fairness.combine` turns into a
+ * constant, so the round drew from the server seed alone and recorded itself as
+ * provably fair in a row identical to an idle lobby's.
  *
- * The crash point is drawn at launch from `serverSeed:clientSeed:nonce`. The client
- * seeds live in Redis, and a failed read used to fall back to `{}` - which
- * `Fairness.combine` turns into the constant `'firecracker'`. The round then drew
- * from the server seed alone, a value committed at creation and computable by the
- * house in advance, and recorded itself as provably fair. The record was identical
- * to an idle lobby's, so nothing afterwards could tell the two apart.
- *
- * `fairness/fairness.test.ts` covers the values. This file covers the **order** they
- * are produced in, which is the half that only exists once there is a round row to
- * watch: committed and undrawn at creation, drawn from the pool at the launch, and
- * never the other way round.
+ * `fairness.test.ts` covers the values; this covers the **order** they are produced
+ * in, which only exists once there is a round row to watch.
  */
 let connection: SyncSqliteConnection<AppSchema>;
 let rounds: GameRoundRepository;
@@ -136,14 +130,10 @@ describe('launching a round with a healthy Redis', () => {
 });
 
 /**
- * The four stages, asserted as a sequence rather than as four values.
- *
- * Nothing checked this before, and it is the property `CLAUDE.md` says is not
- * negotiable: the commitment exists before anyone bets, the crash point does not
- * exist until the window shuts, and when it appears it is the draw over the seeds
- * that were actually collected. A reordering that drew at creation, or that folded
- * the pool from the wrong input, still produces a plausible round row - so only
- * recomputing the number by hand catches it.
+ * The four stages as a sequence rather than four values: the commitment exists
+ * before anyone bets, the crash point does not exist until the window shuts, and
+ * when it appears it is the draw over the seeds actually collected. A reordering
+ * still produces a plausible round row, so only recomputing the number catches it.
  */
 describe('the order a round is built in', () => {
   test('committed and undrawn at creation, drawn from the pool at the launch', async () => {
@@ -194,11 +184,10 @@ describe('the order a round is built in', () => {
 });
 
 /**
- * Three places enqueue the schedule job and only one of them can scope a `jobId` to
- * a round, so the loop stays single by guarding on state. Two boots used to mean two
- * rounds. The guard lives in `GameJobs.schedule`, not in `createNextRound` - a method
- * named create should create, and `game.spec.ts` legitimately wants a fresh round per
- * test - so what is asserted here is the read the handler guards on.
+ * Three places enqueue the schedule job and only one can scope a `jobId` to a round,
+ * so the loop stays single by guarding on state. The guard is in `GameJobs.schedule`
+ * rather than `createNextRound` - a method named create should create - so what is
+ * asserted here is the read the handler guards on.
  */
 describe('scheduling the next round', () => {
   test('currentRound sees a live round, so the handler can refuse', async () => {

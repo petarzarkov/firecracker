@@ -39,23 +39,15 @@ export interface QueueSummary {
 }
 
 /**
- * What Bull Board shows, as JSON: job counts per queue, one job's state and result,
- * retry and drain, admin-only. Four calls on bullmq's own `Queue`.
+ * What Bull Board shows, as JSON, admin-only. A holding position until
+ * `@dunx/dashboard` is a dependency here, which would delete this file outright.
  *
- * A holding position. `@dunx/dashboard` serves the real bull-board and would delete
- * this file and `QueueUnavailableMiddleware` outright, at the cost of four packages
- * this app does not depend on and re-pointing the route assertions in `queues.spec.ts`.
- *
- * `getWorkers()` is deliberately absent. bullmq matches workers by client name
+ * `getWorkers()` is deliberately absent: bullmq matches workers by client name
  * through `CLIENT LIST` and its Bun adapter never names a connection, so it returns
- * an empty list while workers are demonstrably draining jobs. A `workers` field here
- * would be confidently wrong; job counts moving is the signal that works.
+ * an empty list while workers are demonstrably draining jobs.
  *
- * Every route degrades: with no Redis these answer 503 in single-digit milliseconds
- * rather than hanging, which is what makes the whole app bootable with nothing
- * running. Nothing here does that translation - `QueueUnavailableMiddleware` is on
- * this module's `middleware` list, so it wraps every route below and the handlers
- * are left saying only what they do.
+ * The 503-with-no-Redis translation is `QueueUnavailableMiddleware`'s, on this
+ * module's `middleware` list, so the handlers say only what they do.
  */
 @ApiDoc({
   tags: ['queues'],

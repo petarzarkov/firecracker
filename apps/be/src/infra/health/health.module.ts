@@ -72,24 +72,13 @@ const health = HealthModule.forRootAsync({
 });
 
 /**
- * Liveness, readiness and build info.
- *
- * `@dunx/http`'s probes, which get two things right that a hand-rolled envelope
- * mostly does not: a check that times out is `unknown` rather than `down`, and the
- * checks run concurrently and bounded rather than awaiting one after another and
- * hanging on a Redis that went quiet instead of failing.
- *
- * `critical: false` is the `degraded` bucket. Only the database can fail readiness.
+ * Liveness, readiness and build info. `critical: false` is the `degraded` bucket -
+ * only the database can fail readiness.
  *
  * `Readiness` implements `OnBeforeShutdown`, which runs while the server is still
- * accepting - an `onShutdown` hook runs after `server.stop()`, so a probe answering
- * from there answers on a closed socket. (The phase was `OnDrain` in 2.1.0 and was
- * renamed in 2.1.1: `@dunx/http` already had an unrelated `@OnDrain()` websocket
- * decorator.) Liveness keeps passing while draining, because a pod shutting down does
- * not need killing.
- *
- * Decorated: the probes are the same in every process that serves HTTP, so there was
- * never an argument to pass, and a factory only risked a second scope.
+ * accepting: an `onShutdown` hook runs after `server.stop()`, so a probe answering
+ * from there answers on a closed socket. Liveness keeps passing while draining,
+ * because a pod shutting down does not need killing.
  */
 @Module({
   imports: [health],

@@ -4,38 +4,18 @@ import { QueueRunner } from '@dunx/infra/queue';
 /**
  * Stops consuming while the server is **still up**.
  *
- * `QueueRunner` stops the workers in `onShutdown`, and `HttpApplication.shutdown()`
- * runs the container's teardown *after* `server.stop()`. Between those two the
- * workers are still live, so a delayed job coming due in that window starts against
- * a `PubSub` that no longer has a server - which is not theoretical:
- *
- * ```
- * ^C
- * socket closed (1006)                     ← server.stop()
- * Stopping queue workers before teardown   ← QueueRunner.onShutdown
- * game round created                       ← a job started anyway
- * Job failed game.round.schedule: PubSub has no server yet
- * ```
- *
- * `onBeforeShutdown` is the phase for exactly this - "stop taking new work while
- * still serving" - so stopping here closes the window: `stop()` waits out whatever is
- * mid-flight, and everything it waits for still has a server to publish through.
- *
- * `QueueRunner.onShutdown` calls `stop()` again during teardown. `QueueConsumer.stop`
- * memoises on `#stopping`, so the second call returns the same promise.
- *
- * The drain phase runs every hook concurrently, so this overlaps
- * `HEALTH_DRAIN_DELAY_MS` rather than adding to it.
+ * `QueueRunner` stops workers in `onShutdown`, which runs after `server.stop()` - so
+ * a delayed job coming due in that window starts against a `PubSub` with no server.
+ * Draining here closes it: `stop()` waits out what is mid-flight, and everything it
+ * waits for can still publish. The second `stop()` during teardown is a no-op, and
+ * drain hooks run concurrently, so this overlaps `HEALTH_DRAIN_DELAY_MS`.
  */
 export class QueueDrain implements OnBeforeShutdown {
   constructor(
     /**
-     * `AppRef`, not `QueueRunner`, and the difference is scope. `QueueModule` binds
-     * the runner but does not export it, so a constructor parameter here is a boot
-     * error - the container resolves an injection site through the declaring module's
-     * visible set. `app.get` goes through the root, where a `global: true` module's
-     * bindings are reachable. Same late-resolution trick `QueueRunner` uses for the
-     * handlers it cannot name up front.
+     * `AppRef`, not `QueueRunner`: `QueueModule` binds the runner without exporting
+     * it, so a constructor parameter here is a boot error. `app.get` resolves
+     * through the root, where a `global: true` module's bindings are reachable.
      */
     private readonly ref: AppRef,
     private readonly logger: Logger,
@@ -48,8 +28,7 @@ export class QueueDrain implements OnBeforeShutdown {
       consumer = this.ref.current.get(QueueRunner).consumer;
     } catch (error) {
       // Never throw out of a drain hook: `App.drain()` runs them under one
-      // `Promise.all`, so a rejection here would fail the whole shutdown over a
-      // consumer that may not even exist.
+      // `Promise.all`, so a rejection fails the whole shutdown.
       this.logger.warn('could not reach the queue runner to drain it', {
         reason: (error as Error).message,
       });

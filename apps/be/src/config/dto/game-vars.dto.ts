@@ -2,9 +2,7 @@ import { z } from 'zod';
 
 /**
  * The crash game's tunables. Environment variables rather than a frozen literal
- * because every one of them is a number an operator wants to change without a
- * deploy: the betting window, how fast the multiplier climbs, and what a demo wallet
- * starts with.
+ * because every one is a number an operator wants to change without a deploy.
  */
 export const gameVarsSchema = z.object({
   /** Duration of the betting window before each rocket launches. */
@@ -41,21 +39,15 @@ export const gameVarsSchema = z.object({
   GAME_CASHOUT_GRACE_MS: z.coerce.number().int().min(0).default(300),
 
   /**
-   * Simulated players in the lobby.
-   *
-   * **Off by default, and cosmetic only.** A bot never touches the database, a
-   * wallet or the ledger - see `GameBotsService`. It exists so an empty lobby does
-   * not look broken, and nothing about the game's outcome depends on it.
+   * Simulated players. **Off by default, and cosmetic only** - a bot never touches
+   * the database, a wallet or the ledger. See `GameBotsService`.
    */
   GAME_BOTS_ENABLED: z.stringbool().default(false),
   GAME_BOTS_MIN_PER_ROUND: z.coerce.number().int().min(0).default(2),
   GAME_BOTS_MAX_PER_ROUND: z.coerce.number().int().min(0).default(7),
   /**
-   * How often a bot says something after a round, 0 to 1.
-   *
-   * Deliberately well under half: bot chatter is atmosphere, and a lobby where a
-   * machine comments on every single round reads as a bot lobby rather than a busy
-   * one. Needs an AI provider configured - with none, this is moot.
+   * How often a bot says something after a round, 0 to 1. Deliberately well under
+   * half: a machine commenting on every round reads as a bot lobby, not a busy one.
    */
   GAME_BOTS_CHAT_CHANCE: z.coerce.number().min(0).max(1).default(0.35),
 });

@@ -43,12 +43,9 @@ export const GAME_CLIENT_EVENTS = Object.freeze({
 export type GamePhase = 'waiting' | 'running' | 'crashed' | 'failed';
 
 /**
- * What a client may send under `GAME_CLIENT_EVENTS`, with the body each carries.
- *
- * The three `playerChat` names are in this table rather than beside the rest of the
- * chat, which is where they have always been - a client sends them on the game's
- * connection because there is only one. Their bodies are declared in `chat.ts` with
- * the rest of the chat and mapped here, so the map mirrors the table it belongs to.
+ * What a client may send under `GAME_CLIENT_EVENTS`. The three `playerChat` names
+ * are here because a client sends them on the game's connection - there is only one
+ * - while their bodies stay in `chat.ts` with the rest of the chat.
  */
 export interface GameClientPayloads {
   readonly [GAME_CLIENT_EVENTS.PLACE_BET]: PlaceBetMessage;
@@ -60,11 +57,8 @@ export interface GameClientPayloads {
 }
 
 /**
- * One player's stake, as the lobby shows it.
- *
- * `userId` is not decoration. Without it the client keyed rows on the display
- * name, so two players called the same thing collapsed into one row and a
- * cash-out could not be matched to the bet it settled.
+ * One player's stake, as the lobby shows it. `userId` is not decoration: keyed on
+ * the display name instead, two players called the same thing collapse into one row.
  */
 export interface ActiveBetView {
   readonly userId: string;
@@ -107,11 +101,9 @@ export interface GameTickPayload {
 }
 
 /**
- * The crash, with everything needed to check it.
- *
- * `algorithm` is part of the contract: the draw is `@arkv/rng` seeded from
- * `serverSeed:clientSeed:nonce`, so a verifier has to know which generator
- * produced the number.
+ * The crash, with everything needed to check it. `algorithm` is part of that: the
+ * draw is seeded from `serverSeed:clientSeed:nonce`, so a verifier has to know
+ * which generator produced the number.
  */
 export interface GameCrashedPayload {
   readonly roundId: string;
@@ -166,11 +158,8 @@ export interface WalletUpdatedPayload {
 }
 
 /**
- * The body of a `placeBet`.
- *
- * `autoCashOutAt` is a multiplier, not hundredths - it is a number a player typed.
- * The server refuses anything below 1.01 and stores the target in Redis; the
- * conversion to integer hundredths happens there.
+ * The body of a `placeBet`. `autoCashOutAt` is a multiplier, not hundredths - it is
+ * a number a player typed, and the conversion happens server-side.
  */
 export interface PlaceBetMessage {
   readonly betAmountCents: number;
@@ -179,12 +168,9 @@ export interface PlaceBetMessage {
 }
 
 /**
- * The body of a `cashOut`, which is usually nothing at all.
- *
- * `BetPanel` sends no body, and the server prefers the open bet's own mode over
- * anything a client says: defaulting to real money here once made every demo
- * cash-out fail silently. So this exists to say the field is optional and what it
- * means, not to encourage sending it.
+ * The body of a `cashOut`, which is usually nothing at all: the server prefers the
+ * open bet's own mode over anything a client says, because defaulting to real money
+ * here once made every demo cash-out fail silently.
  */
 export interface CashOutMessage {
   readonly isDemo?: boolean | undefined;

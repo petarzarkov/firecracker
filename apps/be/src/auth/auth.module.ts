@@ -18,19 +18,13 @@ import { AuthAdminSeeder } from './services/auth-admin.seeder.js';
 import { CurrentUser } from './services/current-user.service.js';
 
 /**
- * `forRootAsync` because the secret, the base URL and the database all come out
- * of the container: the config is validated there and the drizzle handle is the
- * one `DatabaseModule` already opened, so better-auth adds no second connection
- * and the app still closes exactly once.
+ * `forRootAsync` because the secret, base URL and database come out of the
+ * container - better-auth reuses the handle `DatabaseModule` opened, so there is no
+ * second connection. The mount is the second, **synchronous** argument because the
+ * route table is built before any factory runs.
  *
- * The second, **synchronous** argument is the mount. Under
- * `setGlobalPrefix('api')` the handler is a route at `/auth` while better-auth
- * matches `/api/auth`, so the two are different strings for one URL and the
- * route table is built before any factory has run.
- *
- * The return is annotated `BetterAuthOptions` rather than inferred: detached from
- * the call, nothing gives `sendResetPassword`'s `{ user, url }` a contextual type,
- * and inferring it means `any`.
+ * Annotated rather than inferred: detached from the call, nothing gives
+ * `sendResetPassword`'s `{ user, url }` a contextual type and it infers as `any`.
  */
 const options = {
   useFactory: (
@@ -49,16 +43,12 @@ const options = {
       emailAndPassword: {
         ...base.emailAndPassword,
         /**
-         * Without this, `POST /api/auth/request-password-reset` answers 400
-         * with "Reset password isn't enabled" - the endpoint exists but
-         * refuses. So the client's "Forgot password?" flow is only real
-         * because this is here.
+         * Without this the reset endpoint exists but answers 400, so the client's
+         * "Forgot password?" flow is only real because this is here.
          *
-         * `url` is better-auth's own one-time link, already carrying the token
-         * and the `redirectTo` the client asked for. It is enqueued rather than
-         * sent inline: this runs inside the HTTP request, and a slow provider
-         * would hold the response open while a failing one would turn "check
-         * your inbox" into a 500 that confirms the address exists.
+         * Enqueued rather than sent inline: this runs inside the HTTP request, and
+         * a failing provider would turn "check your inbox" into a 500 that confirms
+         * the address exists.
          */
         sendResetPassword: async ({ user, url }) => {
           await publisher
@@ -80,16 +70,9 @@ const options = {
             });
         },
       },
-      // The mapping is not optional here, despite `drizzleDatabase`'s
-      // documentation saying "the better-auth tables being in the app's
-      // schema object is the whole requirement". The adapter looks the
-      // model up as `fullSchema['user']`, which is the **export name**
-      // in the schema barrel, not the SQL table name - and this app
-      // exports `users`, plural, like every other table it has. Without
-      // the mapping the first query is:
-      //
-      //   BetterAuthError: [# Drizzle Adapter]: The model "user" was
-      //   not found in the schema object.
+      // The mapping is required despite the adapter's docs: it looks a model up as
+      // `fullSchema['user']` - the **export name**, not the SQL table name - and
+      // this app exports `users`, plural, like every other table.
       database: drizzleDatabase(connection, {
         schema: {
           user: users,
@@ -98,16 +81,12 @@ const options = {
           verification: verifications,
         },
       }),
-      // Every path into the user table, not just the ones this app
-      // calls - which is why this is a hook and not a call site.
+      // A hook, not a call site, so it covers every path into the user table.
       databaseHooks: AuthHooks.registration(publisher, logger),
-      // An explicit opt-in, never a side effect of `REDIS_URL` being
-      // set. `redisStorage` deliberately does not soften a connection
-      // failure - a swallowed `null` from `get` would read as "no
-      // session" and sign every user out - so this is the one area that
-      // does *not* degrade, and choosing it is choosing to have Redis
-      // up. The default keeps sessions in the database, which is why a
-      // clean checkout can sign in with nothing running.
+      // An explicit opt-in, never a side effect of `REDIS_URL` being set. This is
+      // the one area that does *not* degrade: `redisStorage` will not soften a
+      // connection failure, because a swallowed `null` reads as "no session" and
+      // signs every user out. The database default is why a clean checkout works.
       ...(redisSessions ? { secondaryStorage: redisStorage(redis) } : {}),
     };
   },
@@ -121,34 +100,24 @@ const options = {
 };
 
 /**
- * Named for the feature rather than the package, so `AuthModule` still means
- * `@dunx/auth`'s. **The better-auth root and nothing else** - the profile routes and
- * the avatar proxy are `ProfileModule`'s, because neither is authentication.
+ * The better-auth root and nothing else - the profile routes and the avatar proxy
+ * are `ProfileModule`'s, because neither is authentication. Named for the feature
+ * so `AuthModule` still means `@dunx/auth`'s.
  *
- * **A decorated class rather than a `forRoot()` that takes no arguments**, so
- * `UsersModule` naming it cannot build a *second* better-auth against a second
- * session store.
- *
- * **`global: true`**, because this is a one-per-process root like `DatabaseModule`.
- * There is one by construction, so making every feature that wants `CurrentUser` name
- * it buys no boundary and imports a 90-line better-auth configuration to get one
- * service.
+ * A decorated class rather than an argument-less `forRoot()`, so a second importer
+ * cannot build a second better-auth against a second session store, and
+ * `global: true` because it is one-per-process like `DatabaseModule`.
  */
 @Module({
   global: true,
   imports: [AuthModule.forRootAsync(options, AUTH_MOUNT)],
   providers: [CurrentUser, AuthAdminSeeder],
   /**
-   * `AuthModule` re-exported **by class**, which dunx 2.2.0 resolves to the
-   * configuration on the line above - so a consumer sees `Auth`, `AuthContext` and
-   * `SessionGuard` without naming any of them, and because this module is global,
-   * the export set is what becomes globally visible. `CurrentUser` is this module's
-   * own read of that context and is what every feature actually injects. Naming the
-   * class rather than holding the `forRootAsync` return in a `const` only works
-   * because of that resolution - a scope is keyed on the reference it returned, so a
-   * second call here would name a module that is not in the graph.
-   *
-   * `AuthAdminSeeder` is not exported. It runs once at boot and has no caller.
+   * `AuthModule` **by class**, which dunx resolves to the configuration above, so a
+   * consumer sees `Auth`, `AuthContext` and `SessionGuard` without naming them.
+   * That resolution is what allows the class here instead of a `const` holding the
+   * `forRootAsync` return - a scope is keyed on the reference it returned, so a
+   * second call would name a module that is not in the graph.
    */
   exports: [AuthModule, CurrentUser],
 })

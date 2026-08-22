@@ -5,10 +5,9 @@ import { ApiClient } from '../utils/api-client.js';
 import { DbClient } from '../utils/db-client.js';
 
 /**
- * The e2e suite drives a **separate process**, started the way production starts
- * it (`bun src/main.ts`), rather than `createTestServer`. That is the only way
- * to cover `bunfig.toml`'s preload, `.env` loading, the migrations running on a
- * real file, and graceful shutdown.
+ * The suite drives a **separate process**, started the way production starts it,
+ * which is the only way to cover `bunfig.toml`'s preload, `.env` loading, migrations
+ * on a real file, and graceful shutdown.
  */
 export interface TestContext {
   readonly api: ApiClient;
@@ -23,19 +22,14 @@ let server: Subprocess | undefined;
 let context: TestContext | undefined;
 
 /**
- * What the e2e server needs to boot, as code.
- *
- * These are test fixtures, not secrets, and they used to live only in `e2e/.env` -
- * which `.gitignore` matches with its `.env` rule, so the file existed on every
- * developer machine and in no CI run. The suite passed locally and failed on the
- * runner with `API_PORT: expected number, received NaN`, because the server booted
- * with no configuration at all.
- *
- * A committed default is the fix: the suite now works from a clean clone with no
- * env file present, and `e2e/.env` still overrides when someone wants it to.
+ * What the e2e server needs to boot, as code - fixtures, not secrets. Committed
+ * because `.gitignore` matches `e2e/.env`, so it existed on every developer machine
+ * and in no CI run. `e2e/.env` still overrides.
  */
 const DEFAULTS: Record<string, string> = {
-  API_PORT: '3999',
+  // Not 3999: that is the dev server's port, so the suite and `bun run dev` would
+  // fight for it and `assertPortFree` would refuse to run at all.
+  API_PORT: '3998',
   APP_ENV: 'local',
   NODE_ENV: 'test',
   LOG_LEVEL: 'fatal',
@@ -44,17 +38,14 @@ const DEFAULTS: Record<string, string> = {
   // shared prefix this suite would pull anything else's jobs off the same Redis.
   QUEUE_PREFIX: 'firecracker-e2e',
   STORAGE_LOCAL_ROOT: './.tmp/e2e-uploads',
-  E2E_API_URL: 'http://127.0.0.1:3999/api',
+  E2E_API_URL: 'http://127.0.0.1:3998/api',
   // The credential `AuthAdminSeeder` creates at boot, and what the suite signs in
   // with. A user row inserted by hand has no `account` row and cannot sign in.
   SEED_ADMIN_EMAIL: 'admin@e2e-test.com',
   /**
-   * Throwaway OAuth credentials.
-   *
-   * A provider is only registered when **both** halves are present, so without
-   * these the social routes 404 and the suite could not tell "not configured" from
-   * "broken". They are never exchanged with a provider - the assertion stops at
-   * the authorize URL this server builds - so fake values are the honest choice.
+   * Throwaway OAuth credentials. A provider is only registered when **both** halves
+   * are present, so without these the social routes 404 and the suite could not tell
+   * "not configured" from "broken". Never exchanged with a provider.
    */
   GITHUB_OAUTH_CLIENT_ID: 'e2e-github-id',
   GITHUB_OAUTH_CLIENT_SECRET: 'e2e-github-secret',
@@ -70,13 +61,9 @@ const DEFAULTS: Record<string, string> = {
 };
 
 /**
- * `e2e/.env`, parsed here rather than inherited, and optional.
- *
- * `bun test --env-file` loads it into the **test** process, and the server is a
- * child of that process, so it only sees these values if they were exported. It
- * worked locally by accident: Bun auto-loads a root `.env`, which is gitignored,
- * so CI had none and the server booted with `API_PORT` undefined and died on
- * `expected number, received NaN`.
+ * `e2e/.env`, parsed here rather than inherited, and optional. `--env-file` loads
+ * into the **test** process, and the server is a child of it, so it would only see
+ * these if they were exported.
  */
 const e2eEnv = (): Record<string, string> => {
   const file = new URL('../.env', import.meta.url).pathname;
@@ -102,7 +89,7 @@ const ENV = { ...DEFAULTS, ...e2eEnv() };
 const DB_PATH =
   Bun.env['SQLITE_DB_PATH'] ?? ENV['SQLITE_DB_PATH'] ?? './.tmp/e2e.db';
 const API_URL =
-  Bun.env['E2E_API_URL'] ?? ENV['E2E_API_URL'] ?? 'http://127.0.0.1:3999/api';
+  Bun.env['E2E_API_URL'] ?? ENV['E2E_API_URL'] ?? 'http://127.0.0.1:3998/api';
 
 const waitForReady = async (
   url: string,
@@ -125,12 +112,9 @@ const waitForReady = async (
 };
 
 /**
- * Reads a piped stream into a buffer as it arrives.
- *
- * A `Bun.spawn` pipe nobody reads fills at 64 KiB and then blocks the child on its
- * next write, so a server that logs a line per request would hang partway through
- * the suite. Draining it also means the boot output is available to put in an
- * error message.
+ * A `Bun.spawn` pipe nobody reads fills at 64 KiB and blocks the child on its next
+ * write, so a server logging per request hangs partway through the suite. Draining
+ * also keeps the boot output available for an error message.
  */
 const drain = (
   stream: ReadableStream<Uint8Array> | undefined,
@@ -145,13 +129,10 @@ const drain = (
 };
 
 /**
- * Refuses to run against a server this suite did not start.
- *
- * `waitForReady` polls an HTTP probe, so anything already listening on the port
- * answers it - a `bun run dev` in another terminal, most likely. The suite then
- * signed in against *that* server and opened the database file **it** was
- * configured with, which surfaced as `SQLiteError: no such table: user` from a
- * helper three files away. The port is the actual problem, so it says so.
+ * Refuses to run against a server this suite did not start. `waitForReady` polls an
+ * HTTP probe, so anything already on the port answers it - and the suite would then
+ * sign in against that server and read a different database, which surfaces as
+ * `no such table: user` three files away.
  */
 const assertPortFree = async (url: string): Promise<void> => {
   const reachable = await fetch(`${url}/health/live`)

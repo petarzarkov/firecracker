@@ -10,11 +10,10 @@ import {
 } from '../schema/wallet.schema.js';
 
 /**
- * `BaseRepository`, not `CrudRepository`, and that is the invariant rather than an
- * omission: the write tier's `update(id, values)` would accept
- * `{ balanceCents: n }`, which is the JavaScript balance check CLAUDE.md forbids
- * and exactly what `debit`'s `WHERE balance_cents >= ?` exists to make
- * unexpressible. Not inheriting the method is how it stays that way.
+ * `BaseRepository`, not `CrudRepository` - an invariant rather than an omission. The
+ * write tier's `update(id, values)` would accept `{ balanceCents: n }`, which is
+ * exactly the JavaScript balance write `debit`'s `WHERE` exists to make
+ * unexpressible.
  */
 export class WalletRepository extends BaseRepository<
   typeof wallets,
@@ -31,12 +30,9 @@ export class WalletRepository extends BaseRepository<
   }
 
   /**
-   * The wallet, created at the opening balance if this is the first time we have
-   * seen this user in this mode.
-   *
-   * `onConflictDoNothing` against `wallet_user_id_is_demo_index` rather than a
-   * check-then-insert: two sockets opening at once would both pass the check, and
-   * the loser would get a unique-constraint error on a read path.
+   * `onConflictDoNothing` rather than check-then-insert: two sockets opening at once
+   * would both pass the check, and the loser would get a unique-constraint error on
+   * a read path.
    */
   getOrCreate(
     userId: string,
@@ -68,12 +64,9 @@ export class WalletRepository extends BaseRepository<
   }
 
   /**
-   * Take `amountCents` off the balance, but only if it is there.
-   *
    * The `gte` in the `WHERE` is the overdraft guard, and it is in the statement on
-   * purpose: a balance check in JavaScript followed by an update is two steps, and
-   * the guarantee has to hold against the *other process* as well as this one.
-   * Returns the updated row, or `undefined` when the funds were not there.
+   * purpose: a JavaScript check followed by an update is two steps, and the
+   * guarantee has to hold against the *other process*. `undefined` means no funds.
    */
   debit(walletId: string, amountCents: number): WalletRow | undefined {
     return this.db

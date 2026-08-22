@@ -11,18 +11,15 @@ import { GameMath } from '../game.math.js';
 import { GameRoundStatus } from '../rounds/game-round.schema.js';
 
 /**
- * How often the watcher looks for a phase change. A literal, because `@Interval` is a
- * decorator argument evaluated before the container exists - and a cosmetic poll of two
- * in-memory fields is not something an operator needs to tune.
+ * A literal, because `@Interval`'s argument is evaluated before the container
+ * exists - and a cosmetic poll of two in-memory fields needs no operator tuning.
  */
 const WATCH_INTERVAL_MS = 250;
 
 /**
- * Who the bots are told to be.
- *
- * Short, and explicitly told not to explain itself: a model given a crash-game
- * prompt with no persona writes a paragraph of gambling advice, which is both
- * off-tone and a thing a real casino should not be publishing.
+ * Explicitly told not to explain itself: a model given a crash-game prompt with no
+ * persona writes a paragraph of gambling advice, which a real casino should not be
+ * publishing.
  */
 const BOT_PERSONA =
   'You are a player in a crash-gambling lobby chat. Reply with one short, casual line - ' +
@@ -50,12 +47,7 @@ const BOT_NAMES = [
 ] as const;
 
 interface Bot {
-  /**
-   * Stable, synthetic, and never a real user id.
-   *
-   * The lobby keys rows on this, so a bot needs one - but it must not collide
-   * with a person's, and the `bot:` prefix is what makes that obvious in a log.
-   */
+  /** The `bot:` prefix keeps this from colliding with a person's id, visibly. */
   readonly userId: string;
   readonly username: string;
   readonly betAmountCents: number;
@@ -64,23 +56,16 @@ interface Bot {
 }
 
 /**
- * Simulated players, so an empty lobby does not look broken.
+ * Simulated players, so an empty lobby does not look broken. Off unless
+ * `GAME_BOTS_ENABLED=true`.
  *
- * A bot **never** touches the database, a wallet, the ledger or the client-seed
- * pool. This class has no repository and no `GameBetService` in its constructor,
- * which is the enforcement: it publishes `betPlaced` and `betCashedOut` frames and
- * that is the whole of what it can do.
+ * The absent repository and absent `GameBetService` are the enforcement: a bot
+ * publishes frames and can do nothing else. One that placed real bets would feed
+ * entropy into the crash point through the client-seed pool - the house deciding
+ * some of the players' seeds, which is what provable fairness rules out.
  *
- * That matters for more than tidiness. A bot that placed real bets would be
- * contributing entropy to the crash point through the client-seed pool, and the
- * house deciding some of the players' seeds is exactly the thing provable fairness
- * exists to rule out. Bots stay outside the fairness boundary entirely.
- *
- * The cost is that every read path comes from `game_bet` and has no bot rows in it,
- * so a player joining mid-round sees only the real bets. That inconsistency with the
- * live feed is what not writing rows buys.
- *
- * Off unless `GAME_BOTS_ENABLED=true`.
+ * The cost is that a player joining mid-round sees only the real bets, since every
+ * read path comes from `game_bet`.
  */
 export class GameBotsService implements OnInit {
   #enabled = false;
@@ -97,10 +82,7 @@ export class GameBotsService implements OnInit {
     private readonly logger: Logger,
   ) {}
 
-  /**
-   * `GAME_BOTS_ENABLED` cannot move into `@Interval`'s own `enabled` option, because a
-   * decorator argument is evaluated before the validated config exists.
-   */
+  // Read here rather than in `@Interval({ enabled })`, for the reason above.
   onInit(): void {
     const { bots } = this.config.get('game');
     this.#enabled = bots.enabled;
@@ -113,12 +95,9 @@ export class GameBotsService implements OnInit {
   }
 
   /**
-   * Polls the engine rather than hooking it.
-   *
-   * A callback registration would couple the engine to a cosmetic feature, and the
-   * engine is the one class here where an extra branch on the tick path is worth
-   * avoiding. `Overlap.SKIP` - the registry's default - matters too: `#react` fires an
-   * AI call, and a slow model must not have a second poll start behind it.
+   * Polls rather than hooks, so a cosmetic feature adds no branch to the tick path.
+   * `Overlap.SKIP` - the registry's default - matters: `#react` fires an AI call,
+   * and a slow model must not have a second poll start behind it.
    */
   @Interval(WATCH_INTERVAL_MS)
   watch(): void {
@@ -179,14 +158,9 @@ export class GameBotsService implements OnInit {
   }
 
   /**
-   * One bot says something about the round that just ended.
-   *
-   * Fire and forget, and `AIService.line` returns `null` rather than throwing, so
-   * a provider that is unconfigured, rate-limited or simply slow costs the lobby a
-   * joke and nothing else. There is no await on the game's path here at all.
-   *
-   * At most one line per round, from one bot, which is the difference between
-   * atmosphere and a wall of machine text.
+   * One line per round, from one bot - the difference between atmosphere and a wall
+   * of machine text. Fire and forget, and `AIService.line` returns `null` rather
+   * than throwing, so a slow provider costs the lobby a joke and nothing else.
    */
   #react(previous: GameRoundStatus | null): void {
     if (previous !== GameRoundStatus.RUNNING) return;

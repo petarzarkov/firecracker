@@ -11,33 +11,17 @@ import {
 } from '../schema/wallet.schema.js';
 
 /**
- * Balances and the ledger behind them.
+ * Balances and the ledger behind them, and the only wallet symbol anything outside
+ * this module may name.
  *
- * This class is the only wallet symbol anything outside this module may name. The
- * game imports no `WalletRepository`, no `wallets` table and no `WalletRow` -
- * which is what makes the guard below unroutable-around rather than merely
- * documented.
+ * Every method that moves money takes the caller's `DbHandle` as its **first and
+ * required** argument and is **synchronous**. An optional handle would default to
+ * the injected connection and commit the debit outside the bet it belongs to; an
+ * `async` one would break the `transactionSync` callback that is standing in for a
+ * lock - read-check-write is atomic only because it cannot yield.
  *
- * Every method that moves money takes the caller's transaction handle as its
- * **first and required** argument, and is **synchronous**. Both halves are
- * load-bearing:
- *
- *  - **Required, and first.** Money moves only inside somebody's transaction, and
- *    an optional handle is how that stops being true - the default quietly becomes
- *    the injected connection and the debit commits on its own, outside the bet it
- *    belongs to.
- *  - **Synchronous.** `GameBetService` calls three of these between the first and
- *    last statement of a `transactionSync` callback, whose return type refuses a
- *    promise. That refusal is the only thing standing in for a lock:
- *    read-check-write cannot interleave because it cannot yield. An `async` method
- *    here would remove that guarantee without breaking a single test.
- *
- * There is no funding path - a real wallet opens at zero and the demo wallet is
- * where the game is actually played. `WalletTransactionType.DEPOSIT` survives in the
- * enum because old ledger rows still carry it.
- *
- * Every mutation writes a ledger row beside it, which is what makes a disputed
- * balance replayable instead of arguable.
+ * There is no funding path: a real wallet opens at zero, and `DEPOSIT` survives in
+ * the enum only because old ledger rows carry it.
  */
 export class WalletService {
   constructor(
@@ -65,11 +49,9 @@ export class WalletService {
   }
 
   /**
-   * The wallet as the caller's transaction sees it.
-   *
-   * Not `getWallet`: this one does not create. A debit path that created the
-   * wallet it was about to draw on would be opening an account mid-bet, and the
-   * caller has a player-facing message for the absence.
+   * The wallet as the caller's transaction sees it. Unlike `getWallet` this does
+   * not create one: a debit path that created the wallet it was about to draw on
+   * would be opening an account mid-bet.
    */
   findWallet(
     tx: DbHandle,
@@ -80,11 +62,9 @@ export class WalletService {
   }
 
   /**
-   * Take money out, refusing rather than overdrawing.
-   *
-   * The guard is in the `UPDATE`'s `WHERE`, not here - see `WalletRepository.debit`
-   * for why a JavaScript balance check would not hold against the other process.
-   * Returns `undefined` when the funds were not there, and writes nothing.
+   * Take money out, refusing rather than overdrawing. The guard is in the `UPDATE`'s
+   * `WHERE` - see `WalletRepository.debit`. `undefined` means the funds were not
+   * there and nothing was written.
    */
   debit(
     tx: DbHandle,
@@ -120,9 +100,8 @@ export class WalletService {
     const repo = WalletRepository.over(tx);
     const updated = repo.credit(walletId, amountCents);
     if (updated === undefined) {
-      // The wallet was read inside the same transaction, so this cannot happen
-      // without the row having been deleted underneath us. Loud rather than a
-      // silent skip: a credit that vanishes is money a player is owed.
+      // Loud rather than a silent skip: a credit that vanishes is money a player
+      // is owed, and the row was read inside this same transaction.
       throw new Error(`wallet ${walletId} disappeared during a credit`);
     }
 
@@ -156,15 +135,12 @@ export class WalletService {
   }
 
   /**
-   * Put a demo wallet back to its opening balance. The one funding path that
+   * Put a demo wallet back to its opening balance - the one funding path that
    * survives, because a demo balance is not money.
    *
-   * The `transactionSync` is not ceremony for a handle the methods now demand: the
-   * reset writes a balance *and* a ledger row, and before this it wrote them with
-   * nothing around them - so an interruption between the two left a balance change
-   * with no entry explaining it, in the one table that exists to explain balance
-   * changes. Nesting is safe if a caller ever wraps this, because `bun:sqlite`
-   * branches on `Database.inTransaction` and takes a savepoint instead.
+   * The `transactionSync` is not ceremony: this writes a balance *and* a ledger
+   * row, and an interruption between them leaves a balance change with no entry
+   * explaining it. Safe to nest, since `bun:sqlite` takes a savepoint instead.
    */
   resetDemoWallet(userId: string): WalletRow {
     const wallet = this.getWallet(userId, true);

@@ -15,24 +15,18 @@ import { ErrorMapper } from './core/errors/error-mapper.js';
 import { SocketErrorReporter } from './core/errors/socket-error.reporter.js';
 
 /**
- * The `HttpOptions`, in one place, because they go to `HttpFactory.create` **and** to
- * `@dunx/testing`'s `createTestServer` - neither reads them off the container. A suite
- * that forgets them gets a server with no guards and no error mapper, which still
- * boots and still answers, so the omission is silent.
+ * One place, because these go to `HttpFactory.create` **and** to `createTestServer`
+ * - neither reads them off the container, and a suite that forgets them gets a
+ * server with no guards and no error mapper that still boots and still answers.
  */
 export class AppHttpOptions {
   static for(config: AppConfig): HttpOptions {
     return {
       middleware: AppHttpOptions.#middleware(config),
       onError: ErrorMapper.toResponseBody,
-      /**
-       * A path that matched nothing answers **404**, not the session guard's 401.
-       * `@dunx/http` defaults to `'guarded'` so a miss cannot be used to enumerate
-       * routes; this opts out because `GET /api/queue` answering `401 UNAUTHENTICATED`
-       * says "log in" when the truth is "no such route", and because `SessionGuard`
-       * puts a database round trip on every miss. The route table is in a public
-       * OpenAPI document anyway.
-       */
+      // A miss answers 404, not the guard's 401. dunx defaults to `'guarded'` to stop
+      // route enumeration; the route table is in a public OpenAPI document anyway,
+      // and guarding a miss puts a database round trip on every one.
       notFound: 'public',
       requestLogging: {
         requestBody: config.log.requestBody,
@@ -40,45 +34,19 @@ export class AppHttpOptions {
         ignore: AppHttpOptions.#probePaths(config),
       },
       websocket: { idleTimeout: 60 },
-      /**
-       * The socket's request log. `SocketLoggingMiddleware` wraps every dispatched
-       * handler the way `RequestLoggingMiddleware` wraps a route, so the frame and
-       * what it answered are one entry rather than two to correlate - and it carries
-       * `connectionId`, which is the only thing that joins a frame to the connect and
-       * the disconnect around it.
-       *
-       * Everything left at its default is left there deliberately. `debug` for a
-       * frame and for connect/disconnect, because a socket is traffic and CLAUDE.md's
-       * frequency contract puts traffic below `info`. **Payloads off**, because a
-       * chat body, a DM and a bet amount all cross this socket and `LOG_MASK_FIELDS`
-       * masks by field *name* - it cannot save a payload dumped wholesale.
-       *
-       * `gameTick` is the one event that must never reach the log. Nothing routes it
-       * today, so a client that sent one would fall through to the unclaimed-frame
-       * entry - and the tick is on a 100 ms clock, which is 864,000 lines a day per
-       * socket if that ever became true.
-       *
-       * `errorLevel` is the one default overridden. A failed frame is still recorded
-       * here, at the frame's own level, with the event on it - but the `error` entry
-       * is `SocketErrorReporter`'s, so a single failure is not two lines an operator
-       * has to notice are the same one.
-       */
       socketLogging: {
+        // The tick is on a 100 ms clock: 864,000 lines a day per socket if anything
+        // ever routed it, including the unclaimed-frame entry it falls through to.
         events: { [GAME_EVENTS.TICK]: false },
+        // The `error` entry for a failed frame is `SocketErrorReporter`'s, so
+        // demoting this one stops a single failure being two lines.
         errorLevel: LogLevel.DEBUG,
       },
-      /**
-       * Inside the logging middleware, which dunx puts outermost. It is where a
-       * socket exception becomes an entry, and the reason there is no
-       * `websocket.onError` beside it - see `SocketErrorReporter`.
-       */
+      // Inside the logging middleware, which dunx puts outermost - which is why
+      // there is no `websocket.onError` beside it. See `SocketErrorReporter`.
       socketMiddleware: [SocketErrorReporter],
-      /**
-       * Multi-node websocket fan-out.
-       * Always configured, never conditional: with no Redis it degrades to the
-       * single-process behaviour and the app still boots. It cannot read config off
-       * the container for the same reason the port cannot.
-       */
+      // Never conditional: with no Redis this degrades to single-process fan-out and
+      // the app still boots.
       relay: new RedisRelay({
         ...(config.redis.url === undefined ? {} : { url: config.redis.url }),
         connectionTimeout: config.redis.connectTimeoutMs,
@@ -91,16 +59,11 @@ export class AppHttpOptions {
   /**
    * Outermost first, after the built-in request logger.
    *
-   * **The client pair belongs here rather than in two `app.use()` calls.** `use()`
-   * appends to whatever this array declares, so every request for a hashed asset ran
-   * the whole chain first - a better-auth `getSession` and a Redis `INCR` - to serve a
-   * file off disk, and a cold page load spent its throttle budget on its
-   * own JavaScript. `SpaFallback` outside `StaticFiles`, because it rewrites a 404 and
-   * inside it the static mount answers the deep link first.
-   *
-   * Then `SessionGuard`, because everything after it wants to know who is calling: it
-   * runs the rest inside `AuthContext`, which is what lets the throttler count per
-   * user rather than per address.
+   * The client pair belongs here rather than in `app.use()`, which appends: behind
+   * the chain, serving a hashed asset off disk cost a `getSession` and a Redis
+   * `INCR`, and a cold page load spent its throttle budget on its own JavaScript.
+   * `SpaFallback` outside `StaticFiles`, or the static mount answers the deep link
+   * first. `SessionGuard` next, so the throttler can count per user.
    */
   static #middleware(config: AppConfig): readonly Ctor<Middleware>[] {
     return [

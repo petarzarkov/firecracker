@@ -34,11 +34,9 @@ export class ErrorMapper {
     const body = ErrorMapper.toErrorBody(error);
     if (body === undefined) return defaultErrorMapper(error, req);
     /**
-     * `HttpError.headers` is part of the status, not an extra: `Retry-After` and
-     * `RateLimit-*` on `ThrottleGuard`'s 429, `WWW-Authenticate` on a 401. dunx's
-     * own `errorMapper` copies them, and replacing the mapper means copying them
-     * here - a 429 whose body says "try again" and whose headers do not say when
-     * is a 429 a client cannot act on.
+     * `HttpError.headers` is part of the status, not an extra - `Retry-After` on a
+     * 429, `WWW-Authenticate` on a 401. Replacing dunx's mapper means copying them
+     * here, or a 429 says "try again" without saying when.
      */
     const headers = error instanceof HttpError ? error.headers : undefined;
     return Response.json(body, {
@@ -68,14 +66,9 @@ export class ErrorMapper {
       };
     }
     /**
-     * A cursor that did not come from `encodeCursor`, or page options outside their
-     * bounds. `@dunx/infra/pagination` raises `AppError` subclasses rather than
-     * `HttpError` on purpose - it must not depend on the web layer - so placing them
-     * is this function's job, and 400 is the answer for both: the caller sent
-     * something it made up.
-     *
-     * The message is passed through unchanged. Both are written for a client to read
-     * and neither names a column, a table or which layer rejected it.
+     * `@dunx/infra/pagination` raises `AppError` rather than `HttpError` on purpose,
+     * so it need not depend on the web layer - which makes placing them this
+     * function's job. The message passes through: neither names a column or a table.
      */
     if (error instanceof CursorError || error instanceof PageOptionsError) {
       return {

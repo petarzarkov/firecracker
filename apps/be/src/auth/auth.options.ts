@@ -11,14 +11,11 @@ import type { AppConfig } from '../config/env.validation.js';
 export const AUTH_MOUNT = '/auth';
 
 /**
- * Everything `betterAuth()` is configured with **except** the database and the
- * secondary storage, which only exist inside the container.
- *
- * Pure statics over the validated config, because there are two consumers:
- * `AuthModule.forRootAsync` adds the connection and binds the real instance, and
- * `AuthDocument.for()` builds a second, database-less instance purely to ask it for
- * its OpenAPI schema. Keeping the plugin list in one place is what stops the
- * document from describing a different API than the one that runs.
+ * Everything `betterAuth()` takes **except** the database and secondary storage,
+ * which only exist inside the container. Statics, because there are two consumers:
+ * the real instance, and the database-less one `AuthDocument.for()` builds to ask
+ * for an OpenAPI schema - one plugin list is what stops the document describing a
+ * different API than the one that runs.
  */
 export class AuthOptions {
   /** The mount *after* the global prefix - see {@link AUTH_MOUNT}. */
@@ -45,9 +42,8 @@ export class AuthOptions {
         enabled: true,
         minPasswordLength: 8,
         maxPasswordLength: 64,
-        // What `AuthModule` would apply anyway - named here so it is visible.
-        // better-auth's own default is a pure-JavaScript scrypt; this is
-        // `Bun.password`'s native bcrypt.
+        // `Bun.password`'s native bcrypt, where better-auth defaults to a
+        // pure-JavaScript scrypt. What `AuthModule` applies anyway, said out loud.
         password: bunPassword,
       },
       session: {
@@ -70,17 +66,13 @@ export class AuthOptions {
         // ban and impersonation.
         admin(),
         /**
-         * "Try Demo" - a real user row with no credential behind it.
+         * "Try Demo". Not a nicety: a demo wallet is per-user, so `wallet.user_id`
+         * needs a row to point at - playing without signing up is an *account* that
+         * happens to be anonymous. Watching, which needs no wallet, is the case
+         * that needs no session at all.
          *
-         * It is not a nicety for a crash game. A demo wallet is per-user, so
-         * `wallet.user_id` needs a row to point at - "play without signing up" is
-         * therefore an *account* that happens to be anonymous, not the absence of
-         * one. A spectator with no session can watch, and that is a different thing:
-         * watching needs no wallet.
-         *
-         * `emailDomainName` is what a linked account is given when an anonymous
-         * player later signs up properly, so it must be a domain we own rather than
-         * the default `example.com`.
+         * `emailDomainName` is what a later sign-up links against, so it has to be
+         * a domain we own rather than the default `example.com`.
          */
         anonymous({ emailDomainName: 'demo.firecracker.local' }),
         // `Authorization: Bearer <token>` instead of a cookie, which is what a
@@ -91,12 +83,9 @@ export class AuthOptions {
         // stops better-auth mounting a second explorer page next to dunx's.
         openAPI({ disableDefaultReference: true }),
       ],
-      // `satisfies` rather than a `: BetterAuthOptions` return annotation, and it is
-      // load-bearing twice over. An annotation widens `plugins` to
-      // `BetterAuthPlugin[]`, and `betterAuth()` infers the endpoints on `api` from
-      // that tuple - so the widened form produces an instance with no
-      // `generateOpenAPISchema`, which `betterAuthDocument` then rejects at compile
-      // time under TypeScript's weak-type rule.
+      // `satisfies`, not a return annotation: an annotation widens `plugins` to
+      // `BetterAuthPlugin[]`, and `betterAuth()` infers `api` from that tuple - so
+      // the widened form yields an instance with no `generateOpenAPISchema`.
     } satisfies BetterAuthOptions;
   }
 }

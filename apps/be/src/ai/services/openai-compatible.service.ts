@@ -25,29 +25,21 @@ export interface OpenAICompatibleOptions {
 }
 
 /**
- * Any provider exposing an OpenAI-compatible `/chat/completions` - Groq,
- * OpenRouter, and most things that advertise "OpenAI-compatible".
+ * Any provider exposing an OpenAI-compatible `/chat/completions`. Plain REST through
+ * `@dunx/http/client`, so no SDK and no new dependency: one HTTP shape covers every
+ * provider that speaks it.
  *
- * Plain REST through `@dunx/http/client`, which already layers a per-attempt
- * timeout, retry with backoff that honours `Retry-After`, and request-id
- * propagation on top of `fetch`. So there is no SDK here and no new dependency:
- * one HTTP shape covers every provider that speaks it.
- *
- * Structured output asks for `response_format: { type: 'json_object' }` rather
- * than the strict `json_schema` mode, which most Groq models reject outright.
- * `json_object` guarantees syntactically valid JSON but says nothing about field
- * names, so the schema is handed to the model in the prompt and the reply is
- * Zod-parsed. The validation is the guarantee; the mode is a hint.
+ * Structured output uses `response_format: { type: 'json_object' }` rather than the
+ * strict `json_schema` mode most Groq models reject. `json_object` promises valid
+ * JSON and nothing about field names, so the schema goes in the prompt and the reply
+ * is Zod-parsed: the validation is the guarantee, the mode is a hint.
  */
 export abstract class OpenAICompatibleService extends BaseProviderService {
   /**
-   * The **named** client, reached with `inject()` in a field initialiser.
-   *
-   * A named client is bound to a `Token`, and a token has no type name for
-   * `@dunx/transform` to record - so it cannot be a constructor parameter. That is
-   * the documented shape, and this app needs it: `NotificationsModule` already binds
-   * an unnamed `HttpService` for the email webhook, and two modules binding the same
-   * class is a duplicate rather than two clients.
+   * The **named** client, via `inject()` in a field initialiser: a named client is
+   * bound to a `Token`, which has no type name for `@dunx/transform` to record, so
+   * it cannot be a constructor parameter. Needed here because `NotificationsModule`
+   * already binds an unnamed `HttpService` for the email webhook.
    */
   protected readonly http = inject(httpClient(AI_HTTP_CLIENT));
 

@@ -19,12 +19,9 @@ import {
 } from '../test-support/namespace.js';
 
 /**
- * Uploads over the real `LocalStorage` backend, into a temp directory that is
- * removed afterwards. Nothing external is needed: `Bun.file`, `Bun.write`,
- * `Bun.Glob` and `Bun.Image` are the runtime.
- *
- * The same suite against S3 is one environment change (`STORAGE_DRIVER=s3`), which
- * is the whole point of injecting the abstract `Storage`.
+ * Uploads over the real `LocalStorage` backend, into a temp directory removed
+ * afterwards. The same suite against S3 is one environment change, which is the
+ * point of injecting the abstract `Storage`.
  */
 let server: TestServer;
 let root: string;
@@ -245,10 +242,8 @@ describe('@dunx/infra/images over Bun.Image', () => {
 
 describe('the thumbnail job', () => {
   /**
-   * A source that is not there can never succeed, so it must not consume the retry
-   * budget. Without `UnrecoverableError` this logged the same `FileNotFoundError`
-   * three times over an exponential backoff - six lines, since a sandboxed handler
-   * reports in the child and again in the parent.
+   * A source that is not there can never succeed, so it must not spend the retry
+   * budget - without `UnrecoverableError` the same failure was logged six times.
    */
   test('a missing source fails unrecoverably rather than retrying', async () => {
     const media = server.app.get(MediaJobs);
@@ -278,11 +273,9 @@ describe('the thumbnail job', () => {
   });
 
   /**
-   * The render outlives the row it was for - a source still readable, an id that no
-   * longer names anything, which is what a file deleted mid-encode looks like from
-   * in here. A player replacing an avatar seconds after uploading it is the way to
-   * get there: the delete takes the thumbnail *the row names*, and this one was not
-   * on the row yet.
+   * The render outlives the row it was for, which is what a file deleted mid-encode
+   * looks like from in here: the delete takes the thumbnail *the row names*, and
+   * this one was not on the row yet.
    */
   test('a thumbnail whose file vanished is deleted rather than orphaned', async () => {
     const uploaded = await upload(png(), adminToken);

@@ -1,16 +1,10 @@
 /**
- * The HTTP bodies the client reads and the one it writes, as interfaces.
- *
- * The **schemas** stay on the server. They are zod, they carry `.meta({ id })` for
- * the OpenAPI document, and sharing them would put zod in the browser bundle for
- * the privilege of validating a response this app just sent itself. So these are a
- * parallel declaration - and `apps/be/src/game/dto/game.dto.test.ts` asserts the
- * two are assignable in both directions, which is the part that stops them parting
- * ways.
- *
- * It has already happened once. `PlayerHistory` declared a `crashPoint` on its own
- * row type and rendered `(crashPoint ?? 0).toFixed(2)`; no route had ever sent the
- * field, so every lost bet showed as a crash at zero.
+ * The HTTP bodies the client reads and the one it writes, as interfaces. The
+ * **schemas** stay on the server: they are zod and carry `.meta({ id })` for the
+ * OpenAPI document, and sharing them would put zod in the browser bundle. So these
+ * are a parallel declaration, and `game.dto.test.ts` asserts the two are assignable
+ * both ways - without which `crashPoint` was declared and rendered by a client no
+ * route ever sent it to.
  */
 import type { GameBetStatus } from './enums.js';
 
@@ -31,13 +25,10 @@ export interface Page<T> {
 }
 
 /**
- * One of the caller's own bets, as `GET /api/game/my-bets` returns it.
- *
- * `cashedOutAt` and `payoutCents` are `null` rather than absent until the bet
- * settles - the column is nullable and the mapper passes it through. `crashPoint`
- * is genuinely absent instead, and only appears once that round has crashed:
- * `crash_point_x100` is written when the round starts running, so sending it any
- * earlier would hand a player the outcome of a round they still have money in.
+ * One of the caller's own bets. `cashedOutAt` and `payoutCents` are `null` until it
+ * settles, because the columns are nullable; `crashPoint` is genuinely **absent**
+ * until that round has crashed, since sending it earlier hands a player the outcome
+ * of a round they still have money in.
  */
 export interface GameBetView {
   readonly id: string;
@@ -59,15 +50,11 @@ export interface TrendingAvatars {
 }
 
 /**
- * One stored object, as `POST /api/files` answers with it.
+ * One stored object. The client only reads `id`, but the whole row is declared -
+ * a partial copy of a response is how a field silently means two things.
  *
- * The client reads `id` and nothing else - it hands it straight back to
- * `POST /api/profile/avatar` - but the whole row is declared, because a partial
- * copy of a response is how a field silently means two things.
- *
- * `thumbnailKey` is `null` on the way out of the upload and stays that way until
- * the `media` queue's child has rendered one. Do not wait for it: the avatar route
- * serves the original until it appears.
+ * `thumbnailKey` is `null` until the `media` queue's child has rendered one. Do not
+ * wait for it: the avatar route serves the original until it appears.
  */
 export interface UploadedFile {
   readonly id: string;
@@ -84,12 +71,9 @@ export interface UploadedFile {
 }
 
 /**
- * The body of `POST /api/profile/avatar`: where the new avatar comes from.
- *
- * A union, so "both" and "neither" cannot be sent. `fileId` is an object the
- * caller uploaded and the server checks they own it; `url` is what the trending
- * grid and the custom-URL field have always produced, and what sign-up writes
- * through better-auth.
+ * Where a new avatar comes from. A union, so "both" and "neither" cannot be sent:
+ * `fileId` is an object the caller uploaded and the server checks they own it,
+ * `url` is what the trending grid and the custom-URL field produce.
  */
 export type AvatarSource =
   | { readonly fileId: string }

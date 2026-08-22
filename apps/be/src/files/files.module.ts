@@ -15,32 +15,17 @@ export interface FilesModuleOptions {
 }
 
 /**
- * `Storage`, `Images` and `JobPublisher` come from `StorageModule`,
- * `ImagesConfigModule` and `QueuesModule`, which are `global: true` - one of each
- * per process, built by `foundation()`, so there is nothing to import.
+ * **`global: true`**, because `forRoot()` returns a new object per call and this one
+ * is already called twice - once per graph - so importing it a third time would put
+ * a second `FilesController` on the same paths.
  *
- * `CurrentUser` comes from the `global: true` `AccountsModule`, which is in the
- * serving graph and deliberately not in a job child's - so the `controllers: false`
- * branch is still what keeps better-auth out of the worker: `FilesController` is the
- * only thing here that reads a caller, and it is not built there.
- *
- * **`global: true`.** An avatar is an uploaded object, so `ProfileModule` writes
- * one through `FilesService` rather than reaching past it to `Storage`. Global
- * rather than imported there because `forRoot()` returns a new object per call and
- * this one is already called twice - once per graph - so a third call would be a
- * second scope with a second `FilesController` on the same paths.
- *
- * **The exports are `FilesService` and what it is built from**, which is not
+ * **The exports are `FilesService` and what it is built from**, not
  * belt-and-braces: dunx resolves a provider's constructor arguments in the scope
- * that *asked* for it, not in the one that declared it. Export the service alone
- * and whichever module happens to be constructed first decides whether it works -
- * `ProfileModule` is ordered ahead of this one in `AppModule`, and it fails at boot
- * naming `FilesRepository`. Everything else `FilesService` takes - `Storage`,
- * `Images`, `JobPublisher`, config and the logger - is already global.
+ * that *asked* for it, so exporting the service alone lets whichever module is
+ * constructed first decide whether it works.
  *
- * `MediaJobs` is here rather than in a worker-only module, because the worker
- * imports this same module and that is where its handler is discovered. It is not
- * exported: a handler is reached by the queue, never by a caller.
+ * `MediaJobs` is here because the worker imports this same module and that is where
+ * its handler is discovered. It is not exported - a handler is reached by the queue.
  */
 export class FilesFeatureModule {
   static forRoot(options: FilesModuleOptions = {}): DynamicModule {

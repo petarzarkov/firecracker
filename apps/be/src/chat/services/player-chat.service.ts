@@ -14,26 +14,15 @@ import { PlayerDirectory } from '../repos/player-directory.repository.js';
 const ROOM_TTL_SECONDS = 24 * 60 * 60;
 
 /**
- * One-to-one chat between two players. The socket is still `GameGateway`'s, because
- * dunx mounts one gateway per path and the app has one connection - a transport fact
- * rather than an ownership one.
+ * One-to-one chat between two players; the socket stays `GameGateway`'s because the
+ * app has one connection.
  *
- * `roomId` is a hash of the two user ids **sorted**, so Ada messaging Grace and
- * Grace messaging Ada produce the same room without either of them having to
- * discover the other's. That is what makes `join` idempotent and what removes the
- * "who creates it" race entirely - there is nothing to create.
+ * `roomId` is a hash of the two user ids **sorted**, so both sides compute the same
+ * one and there is nothing to create and no race about who creates it. Unsorted
+ * would give the pair two rooms, each talking into one the other was not in.
  *
- * Sorted, specifically: unsorted would give the pair two rooms depending on who
- * spoke first, and they would each be talking into a room the other was not in.
- *
- * Membership lives in **Redis**, not on the socket and not in a JavaScript map. A
- * player closes a tab and comes back, a web process restarts, eventually there is
- * more than one node - all three are the same requirement, that the room outlives the
- * connection.
- *
- * Messages themselves are **not** stored. This is a lobby side-channel, not a
- * messaging product: history lives in the open tab and nowhere else, which is also
- * the honest answer to "where is my chat log" being "there isn't one".
+ * Membership is in Redis so the room outlives the connection; messages are not
+ * stored at all - this is a lobby side-channel, not a messaging product.
  */
 export class PlayerChatService {
   constructor(
@@ -54,10 +43,8 @@ export class PlayerChatService {
   }
 
   /**
-   * Open (or re-open) the room between two players and return it.
-   *
-   * Returns `null` when the target does not exist, which the gateway turns into an
-   * error frame rather than a room the other side will never join.
+   * `null` when the target does not exist, which the gateway turns into an error
+   * frame rather than a room the other side will never join.
    */
   async open(
     callerId: string,

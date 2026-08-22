@@ -42,16 +42,12 @@ import {
 } from './socket-auth.service.js';
 
 /**
- * The one socket. Chat, notifications and the game all arrive here.
+ * The one socket. Chat, notifications and the game all arrive here, because dunx
+ * mounts a gateway as a route and a second class would be a second connection to
+ * authenticate. Everything here is transport: subscribe, parse, delegate, send.
  *
- * One class because one connection - dunx mounts a gateway as a route, so a second
- * class is a second path and a second upgrade to authenticate. The only way to make
- * it smaller is to keep every `@OnX` here and move the bodies out, so what is left
- * is transport: subscribe, parse, delegate, send.
- *
- * The upgrade never refuses an anonymous caller - see `SocketAuthService` for why.
- * A spectator gets `context.player === null`, and every handler that spends money
- * checks it.
+ * A spectator gets `context.player === null` - the upgrade never refuses an
+ * anonymous caller - and every handler that spends money checks it.
  */
 @Gateway('/ws')
 export class GameGateway {
@@ -70,18 +66,14 @@ export class GameGateway {
   ) {}
 
   /**
-   * Wires the engine's per-tick auto-cashout callback.
+   * Wires the engine's per-tick auto-cashout callback. The engine must not do this
+   * itself: injecting `AutoCashOutService` would give the clock a path to the
+   * wallet, where today its only game dependency is `GameRoundRepository`.
    *
-   * The engine cannot do this itself, and must not: injecting `AutoCashOutService`
-   * would give the clock a path to `GameBetService` and through it to the wallet,
-   * where today its only game dependency is `GameRoundRepository`.
-   *
-   * It is registered *after* the engine's own `onInit` has run its boot recovery,
-   * because providers construct in dependency order - so a round that was
-   * mid-flight resumes ticking a moment before this sweep is armed. Survivable
-   * rather than overlooked: the engine reads the handler per tick, and `sweep`
-   * claims each entry with `hdel` before it pays, so the cost is a couple of ticks
-   * of precision and never a double payout.
+   * Armed a moment after boot recovery resumes a mid-flight round, since providers
+   * construct in dependency order. Survivable, not overlooked: `sweep` claims each
+   * entry with `hdel` before paying, so the cost is ticks of precision, never a
+   * double payout.
    */
   onInit(): void {
     this.engine.registerAutoCashOutHandler((roundId, multiplierX100) => {
@@ -107,10 +99,9 @@ export class GameGateway {
   }
 
   /**
-   * Subscribing is per-socket, which is the half that has to stay here; the frames
-   * a new client is owed are a projection, so they come from `GameStateService`.
-   * They go straight down this socket rather than being published - the round as
-   * this client sees it, its own scrollback, its own identity and its own balance.
+   * Subscribing is per-socket and stays here; the frames a new client is owed are a
+   * projection from `GameStateService`. They go straight down this socket rather
+   * than being published - they are this client's own identity and balance.
    */
   @OnOpen()
   async opened(socket: Socket<GameSocketContext>): Promise<void> {
@@ -132,22 +123,11 @@ export class GameGateway {
   }
 
   /**
-   * Send one frame to one socket, under a name of our choosing, with the payload
-   * checked against that name.
+   * One frame, under a name of our choosing, payload checked against that name.
    *
-   * This exists because of a sharp edge worth stating: dunx replies to
-   * `@OnMessage('x')` by sending the handler's **return value back under `x`**. So
-   * `placeBet` returning an ack would reach the client as `{"event":"placeBet"}`,
-   * and the client listens for `betAck`. The names differ on purpose - a request
-   * and its acknowledgement are not the same event - so every handler here sends
-   * explicitly and returns nothing.
-   *
-   * An e2e test caught this. Without it every ack in the UI would have been
-   * silently dropped, which looks exactly like a bet that did nothing.
-   *
-   * `ServerPayloads` is the merged map from `@firecracker/contracts`: this is the
-   * one socket the game, the chat and the rooms all ride, so a frame leaving here
-   * can be any of them.
+   * dunx replies to `@OnMessage('x')` by sending the handler's **return value back
+   * under `x`**, so a returned ack would reach the client as `{"event":"placeBet"}`
+   * while it listens for `betAck`. Every handler here sends and returns nothing.
    */
   #send<E extends keyof ServerPayloads>(
     socket: Socket<GameSocketContext>,
@@ -214,12 +194,9 @@ export class GameGateway {
   }
 
   /**
-   * Open a one-to-one room with another player and subscribe this socket to it.
-   *
-   * Idempotent by construction: the room id is a hash of the two user ids sorted,
-   * so both sides compute the same one and "create" and "join" are the same
-   * operation. `roomId` is accepted for a client re-joining a room it already
-   * knows about - a reconnect - and `targetUserId` for opening a new one.
+   * Idempotent by construction: the room id is a hash of the two sorted user ids,
+   * so both sides compute the same one and "create" and "join" are one operation.
+   * `roomId` is a reconnect, `targetUserId` opens a new room.
    */
   @OnMessage(GAME_CLIENT_EVENTS.JOIN_PLAYER_CHAT)
   async joinPlayerChat(
@@ -249,12 +226,11 @@ export class GameGateway {
       return;
     }
 
-    // Subscribing is per-socket, which is why this lives in the gateway and not
-    // in the service: the service owns the room, the gateway owns the connection.
+    // The service owns the room, the gateway owns the connection.
     socket.subscribe(playerChatTopic(room.roomId));
 
-    // To this socket: the room it now belongs to. Telling the other participant
-    // is the service's, because it goes to their own topic rather than a socket.
+    // Telling the *other* participant is the service's, because that goes to their
+    // topic rather than to a socket.
     this.#send(socket, PLAYER_CHAT_EVENTS.ROOM_JOINED, room);
     this.playerChat.joined(room, player.userId, player.username);
   }
@@ -270,9 +246,8 @@ export class GameGateway {
     const request = GameMessages.parsePlayerMessage(data);
     if (request === null) return;
 
-    // `send` re-checks membership against Redis rather than trusting that this
-    // socket subscribed - the subscription is a client-side fact, and a room id
-    // is a hash of two user ids rather than a secret.
+    // `send` re-checks membership rather than trusting the subscription: that is a
+    // client-side fact, and a room id is a hash of two user ids, not a secret.
     await this.playerChat.send(request.roomId, player.userId, request.message);
   }
 
@@ -289,10 +264,9 @@ export class GameGateway {
   }
 
   /**
-   * The ack goes out under `chatAck`, explicitly, like every other handler here.
-   * Returning it instead sent it back as a `chatMessage` - the name the client had
-   * just used to ask - so both rejections below were dropped in the browser and a
-   * spectator typing into the lobby saw the input clear and nothing else.
+   * `chatAck`, explicitly. Returning it sent it back under `chatMessage` instead,
+   * so both rejections below were dropped in the browser and a spectator typing
+   * into the lobby saw the input clear and nothing else.
    */
   @OnMessage(CLIENT_EVENTS.CHAT_MESSAGE)
   globalChat(data: unknown, socket: Socket<GameSocketContext>): void {
@@ -316,10 +290,8 @@ export class GameGateway {
   }
 
   /**
-   * No log line here. `SocketLoggingMiddleware` wraps `@OnClose` even for a gateway
-   * that declares none, and its entry carries the `connectionId` and the connection's
-   * duration - which this one could not - so a second one would be the same event
-   * written twice.
+   * No log line: `SocketLoggingMiddleware` already writes one carrying the
+   * `connectionId` and the connection's duration, which this could not.
    */
   @OnClose()
   closed(): void {
@@ -328,10 +300,8 @@ export class GameGateway {
   }
 
   /**
-   * Subscribers on **this node**. Bun counts its own sockets and cannot count
-   * another process's, so with more than one web node this is a per-node figure
-   * rather than a global one. Single-node today; worth remembering before the
-   * `app` service is ever scaled.
+   * Subscribers on **this node**: Bun cannot count another process's sockets, so
+   * this becomes a per-node figure the moment `app` is scaled past one replica.
    */
   #broadcastUserCount(): void {
     publishSocket(

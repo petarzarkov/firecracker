@@ -12,11 +12,8 @@ import { GameBetService } from '../betting/game-bet.service.js';
 import { GameRoundService } from '../rounds/game-round.service.js';
 
 /**
- * One frame, with its payload checked against its name.
- *
- * A mapped type rather than `{ event: string; data: unknown }`, because the whole
- * point of `@firecracker/contracts` is that a name and a shape travel together -
- * and the four frames below are the ones a client sees before it has sent anything.
+ * One frame, with its payload checked against its name - a mapped type rather than
+ * `{ event: string; data: unknown }`, because a name and a shape travel together.
  */
 export type SocketFrame = {
   [E in keyof ServerPayloads]: {
@@ -26,13 +23,9 @@ export type SocketFrame = {
 }[keyof ServerPayloads];
 
 /**
- * The lobby's read model: one object describing the whole game as it stands, and
- * the frames a socket is owed the moment it opens.
- *
- * A projection rather than transport - it composes the engine's in-memory clock with
- * the database's round and bets, and nothing about it needs a socket. What it does
- * *not* own is subscription: that is per-connection, so the `socket.subscribe` calls
- * stay in the gateway.
+ * The lobby's read model: the engine's in-memory clock composed with the database's
+ * round and bets. A projection, not transport - subscription is per-connection and
+ * stays in the gateway.
  */
 export class GameStateService {
   constructor(
@@ -44,19 +37,15 @@ export class GameStateService {
   ) {}
 
   /**
-   * Everything a client is sent on connect, in order, and addressed to it alone.
-   *
-   * Published to nobody: this is one client's own view of the round, its own
-   * scrollback, its own identity and its own balance.
+   * Everything a client is sent on connect, in order. Published to nobody: this is
+   * its own view of the round, its own identity and its own balance.
    */
   async connectFrames(
     player: SocketPlayer | null,
   ): Promise<readonly SocketFrame[]> {
     const frames: SocketFrame[] = [
       { event: GAME_EVENTS.ROUND_STATE, data: this.snapshot() },
-      // A player who reloads mid-round should not find an empty chat window - see
-      // `ChatService`, which keeps this in Redis rather than in the database the
-      // bet path is writing to.
+      // A player who reloads mid-round should not find an empty chat window.
       { event: EVENTS.CHAT_HISTORY, data: await this.chat.history() },
     ];
 
@@ -64,9 +53,7 @@ export class GameStateService {
 
     return [
       ...frames,
-      // `{ payload }` because that is the envelope the client's `updateUser`
-      // already destructures. The wire shape is the client's to dictate; there is
-      // no reason to rename it here and edit React for the privilege.
+      // `{ payload }` is the envelope the client's `updateUser` destructures.
       {
         event: EVENTS.CONNECTED,
         data: {
@@ -100,9 +87,8 @@ export class GameStateService {
       phase,
       roundId: round?.id ?? null,
       seedHash: round?.seedHash ?? null,
-      // Spread rather than assigned: `exactOptionalPropertyTypes` separates an
-      // absent key from an explicit `undefined`, and the payload declares the
-      // former.
+      // Spread rather than assigned: the payload declares an absent key, which
+      // `exactOptionalPropertyTypes` separates from an explicit `undefined`.
       ...(round === undefined ? {} : { nonce: round.nonce }),
       recentCrashes: GameView.recentCrashes(this.rounds.getRecentCrashes(15)),
       activeBets:

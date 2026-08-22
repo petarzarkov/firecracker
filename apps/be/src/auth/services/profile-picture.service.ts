@@ -9,11 +9,9 @@ import type { AvatarSource } from '../dto/profile.dto.js';
 import { CurrentUser } from './current-user.service.js';
 
 /**
- * How long a browser may hold an avatar. Not `immutable`, even though the file id
- * in the URL never points at different bytes twice over: the thumbnail lands a
- * moment *after* the upload, from another process, and until it does this route
- * answers with the original. Five minutes is how long a client may keep the larger
- * of the two.
+ * Not `immutable`, despite the id naming fixed bytes: the thumbnail lands a moment
+ * *after* the upload, from another process, and until it does this route answers
+ * with the original.
  */
 const CACHE_SECONDS = 300;
 
@@ -21,20 +19,14 @@ const CACHE_SECONDS = 300;
 const THUMBNAIL_TYPE = 'image/webp';
 
 /**
- * The caller's profile picture: choosing one, and serving one.
+ * The caller's profile picture: choosing one, and serving one. It lands in
+ * `users.image`, the field the rest of the app already reads, as a URL back to this
+ * service; the object itself stays in `Storage`.
  *
- * `users.image` is the field the rest of the app already reads - the socket sends
- * it as `picture` on `connected` and on every chat line - so an uploaded avatar has
- * to end up in that column rather than beside it. What goes in is a URL back to
- * this service, and the object itself stays in `Storage`.
- *
- * The write goes through **better-auth's own `updateUser`** rather than
- * `UsersRepository.update`, and the `set-cookie` it answers with is forwarded.
- * `cookieCache` is enabled with a five-minute window, so a column written behind
- * better-auth's back leaves the browser holding a session that still names the old
- * picture - and the socket rewrites the client's store from that session on every
- * connect, which would put the old avatar back a moment after the new one was
- * chosen.
+ * The write goes through **better-auth's own `updateUser`** and forwards the
+ * `set-cookie`. With `cookieCache` on, a column written behind better-auth's back
+ * leaves the browser holding a session naming the old picture - which the socket
+ * would then write back over the new one on the next connect.
  */
 export class ProfilePictureService {
   readonly #base: string;
@@ -87,14 +79,12 @@ export class ProfilePictureService {
   }
 
   /**
-   * The bytes, for anybody - the lobby's chat carries a sender's avatar, and a
-   * spectator reads the chat.
+   * The bytes, for anybody - a spectator reads the chat, and chat carries avatars.
    *
-   * Public, but not a public read of arbitrary storage: an object is served here
-   * **exactly while its owner has it set as their avatar**, which is the moment
-   * they made it public and the only thing this route may infer from an id. That
-   * is why it reads the owner's row rather than trusting the `avatars` prefix in
-   * the key, which is grouping and has never been a permission.
+   * Public, but not a public read of arbitrary storage: an object is served
+   * **exactly while its owner has it set as their avatar**. Hence the read of the
+   * owner's row rather than the `avatars` key prefix, which is grouping and has
+   * never been a permission.
    */
   async bytes(fileId: string): Promise<Response> {
     const row = this.files.find(fileId);
@@ -157,13 +147,9 @@ export class ProfilePictureService {
   }
 
   /**
-   * A replaced avatar takes its object with it: the row, the bytes and the
-   * thumbnail are deleted, and `FilesService.remove` is what records it. Keeping
-   * them would grow storage by one image per change with nothing that ever reads
-   * them again - the URL is gone from the only column that named it.
-   *
-   * A URL this service did not mint - a BetterTTV emote, or the custom-URL field -
-   * owns no object, so there is nothing to delete.
+   * A replaced avatar takes its row, bytes and thumbnail with it - keeping them
+   * grows storage by an image per change that nothing can reach again. A URL this
+   * service did not mint owns no object, so there is nothing to delete.
    */
   async #discard(previous: string | null, userId: string): Promise<void> {
     const fileId = this.#idIn(previous);

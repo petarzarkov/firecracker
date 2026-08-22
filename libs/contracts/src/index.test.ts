@@ -13,13 +13,9 @@ import {
 } from './index.js';
 
 /**
- * There is **one** socket. The game, the lobby chat and the direct-message rooms
- * all ride it, which is what makes the event name the only routing there is - and
- * why two of them being equal is not a style problem but a silently shadowed
- * handler on a connection carrying somebody's money.
- *
- * Three separate files declared these names before this package existed. Nothing
- * compared them.
+ * There is **one** socket, so the event name is the only routing there is - and two
+ * of them being equal is a silently shadowed handler on a connection carrying
+ * somebody's money, not a style problem.
  */
 const serverSent = [GAME_EVENTS, SOCKET_EVENTS, PLAYER_CHAT_EVENTS];
 const clientSent = [GAME_CLIENT_EVENTS, SOCKET_CLIENT_EVENTS];

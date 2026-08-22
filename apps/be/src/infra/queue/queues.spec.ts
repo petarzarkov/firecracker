@@ -8,19 +8,10 @@ import { TestSession } from '../../test-support/session.js';
 import { JOBS, QUEUES } from '../../notifications/events/events.js';
 
 /**
- * Publish here, consume in a **forked child**.
- *
- * There is no worker entrypoint to spawn: `notifications` and `media` are
- * `background`, so bullmq forks `src/jobs.processor.ts` from this very test server -
- * `consume` is on here, unlike every other spec, which is the whole subject. The
- * result is computed in another process and read back through Redis, which is the
- * mechanism the deployed app uses.
- *
- * Broker assertions are skipped when Redis is unreachable, because `bun test` has to
- * pass on a machine with nothing running; the degraded side is in `redis.spec.ts`.
- *
- * Jobs go through `JobPublisher` rather than the routes, so this asserts the queue
- * rather than an HTTP shape wrapped around it.
+ * Publish here, consume in a **forked child**: `notifications` and `media` are
+ * `background`, so bullmq forks `src/jobs.processor.ts` from this test server, and
+ * `consume` is on here where every other spec turns it off. Broker assertions skip
+ * when Redis is unreachable, since `bun test` must pass with nothing running.
  */
 const PREFIX = `test-${crypto.randomUUID()}`;
 const DB_PATH = `./.tmp/queue-spec-${crypto.randomUUID()}.db`;
@@ -95,9 +86,8 @@ beforeAll(async () => {
   server = await createTestServer({
     modules: [AppModule.forRoot({ source, logLevel: 'fatal' })],
     prefix: 'api',
-    // The same options production passes, `SessionGuard` included - which is what
-    // makes the authorization assertions below meaningful. A suite that omitted
-    // them would get a server with no guards that still boots and still answers.
+    // The same options production passes, `SessionGuard` included - without them
+    // the authorization assertions below would pass against no guards at all.
     ...AppHttpOptions.for(EnvConfig.validate(source)),
     requestLogging: false,
   });
@@ -162,14 +152,9 @@ describe('the queue routes', () => {
   });
 
   /**
-   * A miss is a **404**, not the session guard's 401.
-   *
-   * `@dunx/http` defaults to `notFound: 'guarded'`, which gives an unmatched path no
-   * route metadata so a global guard refuses it - and `SessionGuard` runs for misses
-   * too, since global middleware sits in front of the not-found fallback. That turned
-   * every typo into `401 UNAUTHENTICATED`, which says "log in" when the truth is "no
-   * such route". `notFound: 'public'` in http.options.ts is what makes this a 404, and
-   * this test is what stops that setting being dropped.
+   * A miss is a **404**, not the session guard's 401. dunx defaults to
+   * `notFound: 'guarded'`, which turns every typo into `401 UNAUTHENTICATED`;
+   * `notFound: 'public'` is what changes it, and this is what keeps it set.
    */
   test('an unmatched path is a 404, not the guard\u2019s 401', async () => {
     const { status, body } = await server.json<{ error: string }>('api/queue');
@@ -211,19 +196,12 @@ describe('publish here, consume in a forked child', () => {
 });
 
 /**
- * The other sandboxed queue, and the one whose handler does real work.
- *
- * A WebP encode is CPU-bound, so `MediaJobs.thumbnail` is `background: true` and
- * bullmq forks `src/jobs.processor.ts` for `media` as well - that fork is what the
- * avatar feature's thumbnails come out of.
- *
- * The source key is deliberately one that is not there. A spec's config is an
- * in-memory literal and **a literal cannot cross a fork** (see `jobs.processor.ts`),
- * so the child reads `Bun.env` and resolves a different `STORAGE_LOCAL_ROOT` than
- * this server did - there is no temp directory both processes can be pointed at
- * without mutating the environment every other suite reads. What the missing key
- * proves is the part that is in doubt: the frame reached `MediaJobs` in another
- * process, and came back through Redis in that handler's own words.
+ * The other sandboxed queue. The source key is deliberately one that is not there:
+ * a spec's config is an in-memory literal and **a literal cannot cross a fork**, so
+ * the child resolves a different `STORAGE_LOCAL_ROOT` and no temp directory can be
+ * shared without mutating the environment. The missing key still proves the part in
+ * doubt - the frame reached `MediaJobs` in another process and came back through
+ * Redis in that handler's own words.
  */
 describe('the media queue, forked for the same reason', () => {
   test('a thumbnail job is dispatched to MediaJobs in a child', async () => {
@@ -246,14 +224,10 @@ describe('the media queue, forked for the same reason', () => {
 
 /**
  * **Last in the file, and it has to be**: `drain()` is memoised and irreversible, so
- * nothing after it would consume.
- *
- * The ordering this pins is what a `ctrl-c` exposed. `QueueRunner` stops the workers
- * in `onShutdown`, and `HttpApplication.shutdown()` runs the container's teardown
- * *after* `server.stop()` - so a delayed job coming due in between started against a
- * `PubSub` that no longer had a server, failed, and was retried into a duplicate
- * round. `QueueDrain` moves the stop into `onBeforeShutdown`, which runs while the
- * server is still answering.
+ * nothing after it would consume. What it pins is that `QueueDrain` stops the
+ * workers in `onBeforeShutdown` - while the server still answers - rather than in
+ * `onShutdown`, which runs after `server.stop()` and left a delayed job failing into
+ * a duplicate round.
  */
 describe('draining', () => {
   test('stops consuming while the routes still answer', async () => {

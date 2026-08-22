@@ -1,16 +1,11 @@
 /**
  * The Redis namespaces a suite must not share with anything else.
  *
- * Every spec already took its own `THROTTLE_PREFIX` and none took its own
- * `QUEUE_PREFIX`, so six suites enqueued into the **running application's**
- * queues. `QUEUE_CONSUME: 'false'` stops a suite consuming, not producing: the
- * engine enqueues a round at `onInit`, a sign-up enqueues a welcome email, an
- * upload enqueues a thumbnail. The jobs stayed, and the next `bun run dev`
- * inherited them - 500 failed thumbnails pointing at temp directories the suite
- * had already deleted, and 61 delayed `game-round-start` jobs.
- *
- * `WS_RELAY_CHANNEL` for the same reason: a suite publishing on the shared
- * channel fans its frames out through whatever server is listening on it.
+ * `QUEUE_CONSUME: 'false'` stops a suite *consuming*, not *producing* - the engine
+ * enqueues a round at `onInit`, a sign-up enqueues an email, an upload enqueues a
+ * thumbnail - so on the default prefix the next `bun run dev` inherited the lot.
+ * `WS_RELAY_CHANNEL` for the same reason: a suite on the shared channel fans its
+ * frames out through whatever server is listening.
  *
  * One id across all three, so a leftover key says which run left it.
  */
@@ -34,15 +29,12 @@ export const testNamespace = (): TestNamespace => {
 };
 
 /**
- * Deletes the keys this process's namespaces left behind.
+ * Deletes the keys this process's namespaces left behind, from `afterAll`. A fresh
+ * uuid per run turns shared litter into private litter otherwise: bullmq's `meta`
+ * and `stalled-check` keys carry no TTL.
  *
- * Isolating the suites stopped them writing into the application's namespace, but
- * a fresh uuid per run turns shared litter into private litter: bullmq's `meta`
- * and `stalled-check` keys carry no TTL, so every run left about 170 keys in a
- * Redis that outlives it. Called from a suite's `afterAll`.
- *
- * Best effort by design. An absent Redis is the normal case for a unit run, and a
- * suite must not fail because it could not tidy up.
+ * Best effort - an absent Redis is normal for a unit run, and a suite must not fail
+ * because it could not tidy up.
  */
 export const dropTestNamespaces = async (url?: string): Promise<void> => {
   if (handedOut.size === 0) return;

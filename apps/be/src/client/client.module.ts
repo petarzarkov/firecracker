@@ -13,12 +13,10 @@ import { join } from 'node:path';
 import { AppConfigService } from '../config/app.config.service.js';
 
 /**
- * Serves the built client, and answers a deep link with `index.html`.
- *
- * `@dunx/http`'s `StaticModule` covers the file serving; what it deliberately does
- * not do is the SPA rewrite, on the reasoning that a middleware which owns "what a
- * 404 means" for paths it did not mount is a middleware that will eventually swallow
- * a real one. So the rewrite is here, in the app, where the exclusions are known.
+ * Answers a deep link with `index.html`. `StaticModule` serves the files but
+ * deliberately not this: a middleware owning "what a 404 means" for paths it did
+ * not mount will eventually swallow a real one, so the rewrite lives here where the
+ * exclusions are known.
  */
 export class SpaFallback implements Middleware {
   readonly #index: string;
@@ -32,21 +30,12 @@ export class SpaFallback implements Middleware {
   /**
    * Rewrites an **unmatched GET that wanted HTML** to `index.html`.
    *
-   * A miss arrives as a *throw*, not as a 404 response: `@dunx/http` raises
-   * `HttpError(404)` from its innermost fallback and `compose` propagates it. An
-   * earlier version of this method did `(await next()).status === 404`, which never
-   * ran, so deep links never worked - and worse, it rewrote 404s a route had
-   * *returned*, the one case the conditions below exist to protect.
-   *
-   * `UNMATCHED` is the difference. No real route sets it and every miss does, so
-   * gating on it is what keeps a route's own "no such record" intact. The other
-   * three conditions each hold something too:
-   *
-   *  - GET only, so a POST to a typo is not answered with a page.
-   *  - Outside `/api` and `/ws`, so a mistyped API path answers 404 as JSON rather
-   *    than handing a client 200 and a pile of HTML to parse.
-   *  - Only when the caller accepts HTML, so `fetch('/nope')` and `curl` get the
-   *    404 they asked for while a browser address bar gets the app.
+   * A miss arrives as a *throw*, not a 404 response - inspecting `(await
+   * next()).status` never ran at all, and rewrote 404s a route had *returned*.
+   * `UNMATCHED` is the difference: no real route sets it and every miss does, which
+   * is what keeps a route's own "no such record" intact. GET only, so a POST to a
+   * typo is not answered with a page; outside `/api` and `/ws`, so a mistyped API
+   * path stays JSON; and only when the caller accepts HTML, so `curl` gets its 404.
    */
   async handle(
     req: BunRequest,
@@ -87,10 +76,9 @@ export class SpaFallback implements Middleware {
 }
 
 /**
- * Registered only when `CLIENT_DIST` is set, which is the deployed shape: the
- * Docker image builds `apps/fe` and copies its `dist` in beside the server. In
- * development the client is served by Vite on its own port and this module is
- * absent entirely, so nothing here can shadow an API route while you work.
+ * Registered only when `CLIENT_DIST` is set - the deployed shape. In development
+ * Vite serves the client and this module is absent entirely, so nothing here can
+ * shadow an API route.
  */
 export class ClientModule {
   static forRoot(dist: string): DynamicModule {

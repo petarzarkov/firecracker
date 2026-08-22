@@ -15,22 +15,20 @@ import { GameRoundRepository } from './game-round.repository.js';
 import { GameRoundService } from './game-round.service.js';
 
 /**
- * Fails rounds that stalled, refunds what was riding on them, and restarts the loop if
+ * Fails stalled rounds, refunds what was riding on them, and restarts the loop if
  * nothing is alive.
  *
- * This was a `game.round.cleanup` job that rescheduled itself, plus a
- * `#bootstrapCleanup()` in the engine to start it. Both dodged a BullMQ trap in
- * opposite directions - the bootstrap needed a fixed `jobId` or ten restarts meant ten
- * loops, and the reschedule needed *no* `jobId` because a just-completed job with that
- * id is still in the completed set and deduplicates the next one. A schedule has
- * neither problem.
+ * A schedule rather than a self-rescheduling job, which dodged a bullmq trap in two
+ * directions at once: a bootstrap needs a fixed `jobId` or ten restarts mean ten
+ * loops, while a reschedule needs *no* `jobId`, because a just-completed job with
+ * that id is still in the completed set and deduplicates the next one. **Do not put
+ * it back on the queue.**
  *
- * It writes to the database directly, which it can now there is one process. What it
- * still enqueues is the **restart**, so a recovered round goes through the same
+ * The **restart** is still enqueued, so a recovered round goes through the same
  * create/bet/launch/crash ordering that is the fairness guarantee.
  *
- * `ScheduleRegistry` rather than `@Interval`, because `GAME_CLEANUP_INTERVAL_MS` is
- * validated config and a decorator argument is evaluated before the container exists.
+ * `ScheduleRegistry` rather than `@Interval`, because the interval is validated
+ * config and a decorator argument is evaluated before the container exists.
  */
 export class GameRoundWatchdog implements OnInit {
   /** Fixed, so `list()`, `trigger()` and `remove()` all name the same one thing. */

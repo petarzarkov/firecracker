@@ -17,22 +17,17 @@ import { GameRoundRepository } from '../rounds/game-round.repository.js';
 import { GAME_ENGINE_CHANNEL, type EngineCommand } from './engine.commands.js';
 
 /**
- * The clock. It holds the current round in memory, ticks the multiplier, and
- * decides the moment of the crash.
+ * The clock: the current round in memory, the multiplier ticking, and the moment
+ * of the crash.
  *
- * The tick loop must run in **exactly one** process, or a client sees the multiplier
- * stutter between two timelines. `EngineModule` is decorated and carries no static
- * factory for exactly that reason: dunx dedupes a decorated module by reference, so
- * however many modules import it there is one scope and one engine, where a
- * `forRoot()` would hand each importer its own.
+ * The tick loop must run in **exactly one** process or a client sees the multiplier
+ * stutter between two timelines, which is why `EngineModule` is decorated and
+ * carries no static factory - dunx dedupes a decorated module by reference, where a
+ * `forRoot()` would hand each importer its own engine.
  *
- * The database is the truth and this is a cache of it: everything here is
- * recoverable from `game_round` at boot, which is what `#recover` does.
- *
- * {@link CrashEngineService.registerAutoCashOutHandler} is a callback rather than an
- * injection because injecting `AutoCashOutService` would give the clock a path to
- * `GameBetService` and through it to the wallet. This class's only game dependency
- * is `GameRoundRepository`, and the callback is what keeps it that way.
+ * `game_round` is the truth and this is a cache of it, recoverable at boot by
+ * `#recover`. The auto-cashout handler is a callback rather than an injection so
+ * the clock has no path to the wallet.
  */
 export class CrashEngineService implements OnInit, OnShutdown {
   // In-memory state. The database is canonical; this is the clock's copy.
@@ -96,11 +91,9 @@ export class CrashEngineService implements OnInit, OnShutdown {
   }
 
   /**
-   * The crash multiplier, if the round crashed within the grace window.
-   *
-   * A player whose click left the browser before the crash should not be punished
-   * for their round-trip time, so a cash-out arriving just after settles at the
-   * crash point rather than being refused.
+   * The crash multiplier if the round crashed within the grace window: a player
+   * whose click left the browser before the crash should not be punished for their
+   * round-trip time.
    */
   graceMultiplierX100(): number | null {
     if (
@@ -157,11 +150,9 @@ export class CrashEngineService implements OnInit, OnShutdown {
   }
 
   /**
-   * Pick up whatever round was in flight when this process last died.
-   *
-   * Three cases, and the third is the one that matters: a round that should have
-   * crashed while we were down is crashed immediately rather than resumed, because
-   * resuming it would tick past its crash point and pay out bets that lost.
+   * Pick up whatever round was in flight when this process last died. The third
+   * case is the one that matters: a round that should have crashed while we were
+   * down is crashed rather than resumed, or it pays out bets that lost.
    */
   async #recover(): Promise<void> {
     const round = this.rounds.findCurrentRound();
@@ -296,16 +287,10 @@ export class CrashEngineService implements OnInit, OnShutdown {
   }
 
   /**
-   * Enqueue, and **never throw**.
-   *
-   * This is load-bearing, and a test caught it being wrong. `onInit` runs during
-   * boot, so an enqueue that rejects against an unreachable Redis takes the whole
-   * process down with it - which breaks the one promise the rest of this app makes
-   * about its dependencies: an absent Redis degrades a *route*, never the graph.
-   *
-   * With no broker the game does not advance, and that is the honest outcome. It
-   * is visible on `/api/service/health` as a degraded queue, and it recovers on the
-   * next boot rather than leaving a process that cannot start.
+   * Enqueue, and **never throw**. `onInit` runs during boot, so a rejection against
+   * an unreachable Redis would take the process down - breaking the promise the
+   * rest of the app keeps, that an absent Redis degrades a route and never the
+   * graph. With no broker the game stops advancing, which the health endpoint says.
    */
   async #enqueue(
     name: string,

@@ -4,12 +4,9 @@ import { z } from 'zod';
 import { pageOptionsSchema } from '../../core/pagination.dto.js';
 
 /**
- * A round as a client sees it.
- *
- * `crashPoint` and `seed` are **optional on purpose**: they are absent until the
- * round has crashed. Publishing either early would hand out the outcome while
- * bets are still open, so the mapper omits them rather than the route hiding them.
- * `seedHash` is present from the start - that is the commitment.
+ * `crashPoint` and `seed` are **optional on purpose**: absent until the round has
+ * crashed, because publishing either early hands out the outcome while bets are
+ * open. `seedHash` is present from the start - that is the commitment.
  */
 export const GameRound = z
   .object({
@@ -37,12 +34,9 @@ export const CurrentRound = GameRound.extend({
 export type CurrentRound = z.infer<typeof CurrentRound>;
 
 /**
- * A stake as its owner sees it.
- *
- * `crashPoint` is the round's, not the bet's, and it is optional for the same
- * reason it is optional on `GameRound`: it appears once that round has crashed and
- * not a moment earlier. The history panel renders it on every row that is not a
- * win, so a missing one showed as `x0.00x` for months - see `listByUser`.
+ * `crashPoint` is the round's, not the bet's, and optional for the same reason. The
+ * history panel renders it on every row that is not a win, so a missing one showed
+ * as `x0.00x` for months.
  */
 export const GameBet = z
   .object({
@@ -61,12 +55,9 @@ export const GameBet = z
 export type GameBet = z.infer<typeof GameBet>;
 
 /**
- * Everything needed to check a round independently.
- *
- * `rngSeed` is the exact string handed to the generator, spelled out rather than
- * left for the caller to reassemble - the format is part of the fairness contract,
- * and a verifier that builds it slightly differently gets a different number and
- * concludes we cheated.
+ * Everything needed to check a round independently. `rngSeed` is spelled out rather
+ * than left for the caller to reassemble: a verifier that builds it slightly
+ * differently gets a different number and concludes we cheated.
  */
 export const RoundVerification = z
   .object({

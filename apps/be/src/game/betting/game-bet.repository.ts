@@ -17,12 +17,10 @@ export interface BetWithPlayer extends GameBetRow {
 }
 
 /**
- * A bet with the multiplier its round exploded at.
- *
- * `null` while that round is anything but CRASHED, which is not the same as "not
- * drawn yet": `crash_point_x100` is written at the transition to RUNNING, so a read
- * that did not filter on the status would hand a player the outcome of the round
- * they are currently betting in.
+ * A bet with the multiplier its round exploded at. `null` for any round that is not
+ * CRASHED, which is not the same as "not drawn yet" - `crash_point_x100` is written
+ * at the transition to RUNNING, so an unfiltered read hands a player the outcome of
+ * the round they are still betting in.
  */
 export interface BetWithCrash extends GameBetRow {
   readonly crashPointX100: number | null;
@@ -55,15 +53,10 @@ export class GameBetRepository extends CrudRepository<
   }
 
   /**
-   * The player's open bet in this round, whichever wallet it is against.
-   *
-   * A cash-out should not need the client to say which mode it is in - the bet row
-   * already knows, and unlike a flag on the socket it survives a reconnect and
-   * cannot drift from the database.
-   *
-   * A player *can* hold one bet per mode in a round - the unique index is per
-   * mode - so this returns the newest, and the caller may still pass an explicit
-   * mode to disambiguate.
+   * The player's open bet, whichever wallet it is against - a cash-out should not
+   * need the client to say, since the row already knows and survives a reconnect.
+   * A player can hold one bet per mode, so this returns the newest and a caller may
+   * still pass an explicit mode.
    */
   findActiveByRoundAndUserAnyMode(
     roundId: string,
@@ -97,10 +90,8 @@ export class GameBetRepository extends CrudRepository<
   }
 
   /**
-   * Every bet in a round with its player's name, for the lobby list.
-   *
-   * One join rather than a per-row lookup: this runs on every socket connect, so it
-   * is on the hot path for a player opening the page mid-round.
+   * The lobby list. One join rather than a per-row lookup, because this runs on
+   * every socket connect.
    */
   findByRoundWithPlayers(roundId: string): BetWithPlayer[] {
     const rows = this.db
@@ -112,10 +103,8 @@ export class GameBetRepository extends CrudRepository<
 
     return rows.map(({ bet, user }) => ({
       ...bet,
-      // The rule lives in `PlayerDirectory`, which is chat's - a static rather than
-      // a query, so this join stays one statement. Two copies of it would mean one
-      // player with two names, depending on whether you read the bet list or a
-      // message header.
+      // A static rather than a query, so this join stays one statement. Two copies
+      // of the rule would give one player two names.
       playerName: PlayerDirectory.displayName(user),
     }));
   }
@@ -140,16 +129,10 @@ export class GameBetRepository extends CrudRepository<
   }
 
   /**
-   * The player's own history, with the crash point of every round that has one.
-   *
-   * Two statements rather than the join `findByRoundWithPlayers` uses, and that is
-   * `paginate`'s shape rather than a preference: the keyset seek runs over
-   * `game_bet` alone - its cursor is a `created_at`/`id` pair from that table - and
-   * there is no hook to widen the select. So a page is read, then the rounds behind
-   * it, which is one `IN` bounded by `take`.
-   *
-   * "MY BETS" renders the crash multiplier on every row that is not a win. Without
-   * this, every loss rendered `x0.00x` - a crash point the game cannot produce.
+   * The player's own history. Two statements rather than a join because that is
+   * `paginate`'s shape - the keyset cursor is a `created_at`/`id` pair from
+   * `game_bet` alone, with no hook to widen the select - so the rounds behind a page
+   * are one `IN` bounded by `take`.
    */
   listByUser(userId: string, options: PageOptions): Page<BetWithCrash> {
     const page = this.page(options, eq(gameBets.userId, userId));
@@ -157,11 +140,9 @@ export class GameBetRepository extends CrudRepository<
   }
 
   /**
-   * The crash points for a page of bets - **only** from rounds that have crashed.
-   *
    * The status filter is the fairness rule, in SQL: a RUNNING round already holds
-   * its `crash_point_x100`, so selecting it unconditionally would tell a player
-   * where the rocket stops while their bet is still open.
+   * its `crash_point_x100`, so an unconditional select tells a player where the
+   * rocket stops while their bet is open.
    */
   #withCrashPoints(bets: readonly GameBetRow[]): BetWithCrash[] {
     if (bets.length === 0) return [];
