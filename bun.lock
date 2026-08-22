@@ -18,12 +18,12 @@
       "version": "0.1.0",
       "dependencies": {
         "@arkv/rng": "^0.8.2",
-        "@dunx/auth": "^2.4.0",
-        "@dunx/core": "^2.4.0",
-        "@dunx/http": "^2.4.0",
-        "@dunx/infra": "^2.4.0",
-        "@dunx/openapi": "^2.4.0",
-        "@dunx/transform": "^2.4.0",
+        "@dunx/auth": "^2.5.0",
+        "@dunx/core": "^2.5.0",
+        "@dunx/http": "^2.5.0",
+        "@dunx/infra": "^2.5.0",
+        "@dunx/openapi": "^2.5.0",
+        "@dunx/transform": "^2.5.0",
         "@firecracker/contracts": "workspace:*",
         "@google/genai": "^2.17.1",
         "better-auth": "^1.6.25",
@@ -33,7 +33,7 @@
         "zod": "^4.4.3",
       },
       "devDependencies": {
-        "@dunx/testing": "^2.4.0",
+        "@dunx/testing": "^2.5.0",
         "@types/bun": "^1.4.0",
         "drizzle-kit": "^0.31.10",
         "typescript": "^7.0.2",
@@ -159,19 +159,19 @@
 
     "@drizzle-team/brocli": ["@drizzle-team/brocli@0.10.2", "", {}, "sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w=="],
 
-    "@dunx/auth": ["@dunx/auth@2.4.0", "", { "peerDependencies": { "@dunx/core": "^2.4.0", "@dunx/http": "^2.4.0", "@types/bun": ">=1.3.0", "better-auth": "^1.6.25", "drizzle-orm": "^0.45.2" }, "optionalPeers": ["@types/bun", "drizzle-orm"] }, "sha512-9DHVVPdyXfIbYpt0vdieB3amx/fc1uSOEDl/mGRxeMZYtPsZMqda9wMe6hpTlSwtbh2C9j1sRYPR9/ODz5p5HA=="],
+    "@dunx/auth": ["@dunx/auth@2.5.0", "", { "peerDependencies": { "@dunx/core": "^2.5.0", "@dunx/http": "^2.5.0", "@types/bun": ">=1.3.0", "better-auth": "^1.6.25", "drizzle-orm": "^0.45.2" }, "optionalPeers": ["@types/bun", "drizzle-orm"] }, "sha512-Y5SidGp2BP2T78Xbj01cSH2y55eETpLK7FbR2lzM7Exm5lNMg042HHKSqNQlB0aNU3DDL/LzTmsgPHImDdB8vQ=="],
 
-    "@dunx/core": ["@dunx/core@2.4.0", "", {}, "sha512-A5WVXeWhl6/CHvnaYx6zJfpqcGwynRLcam9ZjS4vhLhz7Ckb3GfMGhWj+IOBPXXJcFGOb666Sry2+iATsbxp6w=="],
+    "@dunx/core": ["@dunx/core@2.5.0", "", {}, "sha512-lVwc1Dn5cvEARWMQapJERZ1MjsepxQXBkrtwPuI3DjzLTMDHjgpAo6asxa+80V/hUFUlic6xDfGPPKUiR9NtYg=="],
 
-    "@dunx/http": ["@dunx/http@2.4.0", "", { "dependencies": { "@arkv/shared": "^0.8.0" }, "peerDependencies": { "@dunx/core": "^2.4.0", "@types/bun": ">=1.3.0" }, "optionalPeers": ["@types/bun"] }, "sha512-NhuhwH8/4I+xcT+Wom9C0Dvii9NbACLy+hdljeuh4xQgh+rpyqzDtBILguag5vsh/9kh11+x5w8iAnnrjay2gw=="],
+    "@dunx/http": ["@dunx/http@2.5.0", "", { "dependencies": { "@arkv/shared": "^0.8.0" }, "peerDependencies": { "@dunx/core": "^2.5.0", "@types/bun": ">=1.3.0" }, "optionalPeers": ["@types/bun"] }, "sha512-kJTbApn83D+Himc/syg0IUHQPqKKsN7fpvHe4IN7BcIcsfzFA+Cm+Z7HF+4Z1/7/bwcriznH7P028Q4LbG+iCA=="],
 
-    "@dunx/infra": ["@dunx/infra@2.4.0", "", { "dependencies": { "@arkv/logger": "^0.10.2", "@arkv/timezones": "^0.0.2" }, "peerDependencies": { "@dunx/core": "^2.4.0", "@types/bun": ">=1.3.0", "bullmq": "^6.0.5", "drizzle-orm": "^0.45.2", "ioredis": ">=5.0.0" }, "optionalPeers": ["@types/bun", "bullmq", "drizzle-orm", "ioredis"] }, "sha512-VYtYh9FWPbivAPFeeFXMPK2Fc9PQNVXSbRni3yEPlaYsylvKy5YYLPKmmW/R9VuTTNJk/pX2kJy4VItPgfrykA=="],
+    "@dunx/infra": ["@dunx/infra@2.5.0", "", { "dependencies": { "@arkv/logger": "^0.10.2", "@arkv/timezones": "^0.0.2" }, "peerDependencies": { "@dunx/core": "^2.5.0", "@types/bun": ">=1.3.0", "bullmq": "^6.0.5", "drizzle-orm": "^0.45.2", "ioredis": ">=5.0.0" }, "optionalPeers": ["@types/bun", "bullmq", "drizzle-orm", "ioredis"] }, "sha512-pbucvdFxBzwWFL16oTFISLEsshCuLKH+wnjWzV4Ir9Og7jMkZX8ug9TdQGVQJ4ePPpd+RWffcHhOn7aLcNyNow=="],
 
-    "@dunx/openapi": ["@dunx/openapi@2.4.0", "", { "dependencies": { "swagger-ui-dist": "^5.32.14" }, "peerDependencies": { "@dunx/core": "^2.4.0", "@dunx/http": "^2.4.0", "@types/bun": ">=1.3.0", "zod": "^4" }, "optionalPeers": ["@types/bun", "zod"], "bin": { "dunx-openapi": "dist/cli.js" } }, "sha512-08Tmk/9eZTEzmEUs625YFpnOM0DCXwv81FZK9JcEeRxZRyRM6oDA7LaVW8Mk3WlKF+dc0BRLKkMRKspuzKzLkw=="],
+    "@dunx/openapi": ["@dunx/openapi@2.5.0", "", { "dependencies": { "swagger-ui-dist": "^5.32.14" }, "peerDependencies": { "@dunx/core": "^2.5.0", "@dunx/http": "^2.5.0", "@types/bun": ">=1.3.0", "zod": "^4" }, "optionalPeers": ["@types/bun", "zod"], "bin": { "dunx-openapi": "dist/cli.js" } }, "sha512-1fBKhDXcYGHfw21KfIQUA2wc0YTVmZxbbfivk7KvjBWO3zw4W1I6ptGfWmNA0cUCDUbVioM3RQT1Fo3dQWrXeg=="],
 
-    "@dunx/testing": ["@dunx/testing@2.4.0", "", { "peerDependencies": { "@dunx/core": "^2.4.0", "@dunx/http": "^2.4.0", "@types/bun": ">=1.3.0" }, "optionalPeers": ["@types/bun"] }, "sha512-zBI/fRnT34cpMWX8m2WEttAXG89nzG1QDHUqlNG06engUG0x1ohFvJkFFoLk5tUEZ00Ok6Il9rwQqtr8ZDDmTQ=="],
+    "@dunx/testing": ["@dunx/testing@2.5.0", "", { "peerDependencies": { "@dunx/core": "^2.5.0", "@dunx/http": "^2.5.0", "@types/bun": ">=1.3.0" }, "optionalPeers": ["@types/bun"] }, "sha512-uwhuua420ywpo8k7tdnOZODxy5WXQbDnAzK9XDiz7bOJAG2WIi24MI17L9oyqA/X5xwRDzJNly5i3a+gFzZX3Q=="],
 
-    "@dunx/transform": ["@dunx/transform@2.4.0", "", { "dependencies": { "oxc-parser": "0.142.0" }, "peerDependencies": { "@types/bun": ">=1.3.0" }, "optionalPeers": ["@types/bun"] }, "sha512-DS+p3oCuynoyOdMqvxXOiGroIiWVEHCnbN8yKWYmVXv6vx4vnJxQqHf23a4Zi2RzfaB+DNy4C3cBA0m2TGXjiA=="],
+    "@dunx/transform": ["@dunx/transform@2.5.0", "", { "dependencies": { "oxc-parser": "0.142.0" }, "peerDependencies": { "@types/bun": ">=1.3.0" }, "optionalPeers": ["@types/bun"] }, "sha512-598Aw6Fr22LZQO+W8A/4BUqaayVeY5xrJ2eP2CgH/LK3L0+rjzdjoTJg1ONAR5PxdE9yl0SKEBG/irUbAL9hqA=="],
 
     "@emnapi/core": ["@emnapi/core@1.11.2", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.2", "tslib": "^2.4.0" } }, "sha512-TC8MkTuZUtcTSiFeuC0ksCh9QIJ5+F21MvZ4Wn4ORfYaFJ/0dsiudv5tVkejgwZlwQ39jL9WWDe2lz8x0WglOA=="],
 

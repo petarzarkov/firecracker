@@ -1,14 +1,11 @@
 import { Box, Flex, Text } from '@chakra-ui/react';
-import {
-  GameBetStatus,
-  type GameBetView,
-  type Page,
-} from '@firecracker/contracts';
+import { GameBetStatus, type GameBetView } from '@firecracker/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Tooltip } from '@/components/Tooltip';
 import { Button } from '@/components/ui/Button';
 import { useAuthStore } from '@/store/authStore';
-import { apiFetch } from '@/systems/network/api';
+import { ApiError, fetchMyBets } from '@/systems/network/bets';
+import { AuthMiddleware } from '@/middleware/authMiddleware';
 import { useGameStore } from '@/store/gameStore';
 
 function fmtCents(cents: number): string {
@@ -161,21 +158,30 @@ export function PlayerHistory() {
       if (!userId) return;
       setIsLoading(true);
       try {
-        const params = new URLSearchParams({ take: '20' });
-        if (cursor) params.set('cursor', cursor);
-        const res = await apiFetch(`/api/game/my-bets?${params}`);
         // The envelope and the row both come from `@firecracker/contracts`, so a
         // field this panel reads is a field the route is declared to send. It read
         // a `crashPoint` nobody sent for months, and rendered every loss as a
         // crash at zero.
-        const page = (await res.json()) as Page<GameBetView>;
+        const page = await fetchMyBets(20, cursor);
         if (cursor) {
           setBets((prev) => [...prev, ...page.data]);
         } else {
-          setBets(page.data);
+          setBets([...page.data]);
         }
         setNextCursor(page.meta.nextCursor);
         setHasNextPage(page.meta.hasNextPage);
+      } catch (error) {
+        // A refusal must not reach the render. This panel is gated on a *persisted*
+        // user, so a browser holding a dead cookie mounts it and asks - and the old
+        // code cast the 401 body to a page, wrote `undefined` into `bets` and threw
+        // on `meta.nextCursor`, which white-screened the whole app.
+        //
+        // 401 means the cookie is no longer accepted, so ask the middleware to
+        // settle it: it clears the persisted session and the app renders signed
+        // out, rather than waiting for the next five-minute poll.
+        if (error instanceof ApiError && error.status === 401) {
+          AuthMiddleware.revalidate();
+        }
       } finally {
         setIsLoading(false);
         loadedOnce.current = true;

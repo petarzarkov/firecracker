@@ -19,6 +19,7 @@ const CHECK_INTERVAL_MS = 5 * 60 * 1000;
  */
 export class AuthMiddleware {
   static #timer: ReturnType<typeof setInterval> | null = null;
+  static #inFlight: Promise<void> | null = null;
 
   static initialize(): void {
     // Only polices a session it already knows about: an idle visitor who has never
@@ -73,6 +74,24 @@ export class AuthMiddleware {
     // Refresh what the server says - a role change or a new token from a rolled
     // session lands here rather than waiting for a reload.
     setAuth(session.token, session.user);
+  }
+
+  /**
+   * Settle the session now, because something just answered 401.
+   *
+   * The boot `#sync()` covers a stale cookie on *load*, but a route can refuse
+   * mid-session - revoked elsewhere, banned, or simply a cookie the server stopped
+   * accepting - and without this the client keeps rendering signed-in until the
+   * five-minute poll comes round.
+   *
+   * Coalesced: a page that fires three requests gets three 401s, and one answer to
+   * "am I still signed in" is enough for all of them.
+   */
+  static revalidate(): void {
+    if (AuthMiddleware.#inFlight !== null) return;
+    AuthMiddleware.#inFlight = AuthMiddleware.#sync().finally(() => {
+      AuthMiddleware.#inFlight = null;
+    });
   }
 
   /**

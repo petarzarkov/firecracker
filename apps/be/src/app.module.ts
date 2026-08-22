@@ -1,5 +1,10 @@
 import type { ConfigSource, DynamicModule, ModuleRef } from '@dunx/core';
-import { ClientAddress, RedisThrottleStore, ThrottleModule } from '@dunx/http';
+import {
+  ClientAddress,
+  CompressionModule,
+  RedisThrottleStore,
+  ThrottleModule,
+} from '@dunx/http';
 import { LoggerModule } from '@dunx/infra/logger';
 import { RedisConnection } from '@dunx/infra/redis';
 import type { BunRequest } from 'bun';
@@ -124,6 +129,9 @@ export class AppModule {
           ? [ClientModule.forRoot(clientDist)]
           : []),
         AppModule.#throttle(),
+        // Binds `Compression` without installing it; `http.options.ts` decides
+        // where in the chain it runs. HTTP-only, so not in `Foundation.for()`.
+        CompressionModule.forRoot(),
       ],
     };
   }

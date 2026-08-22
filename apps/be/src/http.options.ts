@@ -1,5 +1,6 @@
 import { SessionGuard } from '@dunx/auth';
 import {
+  Compression,
   RedisRelay,
   StaticFiles,
   ThrottleGuard,
@@ -68,9 +69,17 @@ export class AppHttpOptions {
    * `INCR`, and a cold page load spent its throttle budget on its own JavaScript.
    * `SpaFallback` outside `StaticFiles`, or the static mount answers the deep link
    * first. `SessionGuard` next, so the throttler can count per user.
+   *
+   * `Compression` ahead of all of it, which is the whole reason it is in this array
+   * rather than in the `app.use(Compression)` the docs show: `use()` appends, and
+   * from there it would sit *inside* `StaticFiles`, which answers and returns - so
+   * the client bundle, the largest thing this app serves, would never be encoded.
+   * It still runs inside dunx's request logger, so the logged status is the real
+   * one.
    */
   static #middleware(config: AppConfig): readonly Ctor<Middleware>[] {
     return [
+      Compression,
       // Only when this process serves the built client. Unset in development, where
       // Vite serves it and nothing static should be able to shadow an API route.
       ...(config.client.dist === undefined ? [] : [SpaFallback, StaticFiles]),

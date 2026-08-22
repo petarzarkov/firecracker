@@ -19,11 +19,11 @@
     "dev": "bun run --filter '*' dev",
     "dev:be": "bun run --filter 'firecracker-be' dev",
     "dev:fe": "bun run --filter 'firecracker-fe' dev",
-    "build": "bun run --filter '*' build",
+    "build": "bun run --parallel --filter '*' build",
     "start": "bun run --filter 'firecracker-be' start",
-    "test": "bun run --filter '*' test",
+    "test": "bun run --parallel --filter '*' test",
     "test:e2e": "bun run --filter 'firecracker-be' test:e2e",
-    "typecheck": "bun run --filter '*' typecheck",
+    "typecheck": "bun run --parallel --filter '*' typecheck",
     "lint": "oxlint --fix apps libs",
     "lint:check": "oxlint apps libs",
     "format": "oxfmt --write .",
@@ -49,6 +49,6 @@
     ]
   },
   "engines": {
-    "bun": ">=1.3.0"
+    "bun": ">=1.4.0"
   }
 }

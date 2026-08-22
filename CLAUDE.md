@@ -48,6 +48,22 @@ As of dunx 2.3.0 `@dunx/openapi` no longer ships an explorer of its own; as of *
 
 Since 2.3.1 the four files come off **one wildcard route** under `/api/docs`, guarded by an allow-list in `@dunx/openapi` — the package directory also holds four other builds and about 4 MB of sourcemaps, so that list is the only thing keeping the wildcard off them. `openapi.spec.ts` fetches all four over a real server and asserts that a name outside the list 404s, so neither half can rot unnoticed.
 
+### Compression is the app's to place
+
+`Bun.serve` does no content encoding, so `@dunx/http` 2.5.0 added `Compression` as
+**opt-in middleware the app positions itself** — an app that never registers it has
+no branch in the request path.
+
+It goes **first in `AppHttpOptions.#middleware()`**, not in the `app.use(Compression)`
+the docs show: `use()` appends, so from there it would sit _inside_ `StaticFiles`,
+which answers and returns — and the client bundle, the largest thing this app serves,
+would never be encoded. It still runs inside dunx's request logger, so the logged
+status is the real one.
+
+`zstd` first, then `gzip`, over a 1024-byte threshold — all defaults.
+`compression.spec.ts` asserts the wire through `node:http` rather than `fetch`,
+because `fetch` decodes transparently and can never show the encoded size.
+
 ---
 
 ## Writing dunx code
