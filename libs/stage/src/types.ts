@@ -33,10 +33,23 @@ export interface StageSample {
    * samples.
    */
   readonly curveAt?: ((elapsedMs: number) => number) | undefined;
+  /**
+   * Milliseconds left of the betting window, `null` outside one. The rocket is
+   * parked for the whole of that window and the wait is the longest thing a player
+   * looks at, so this is what turns a static sprite into a launch it can strain
+   * toward - see `tensionAt`.
+   */
+  readonly waitingLeft?: number | null | undefined;
 }
 
 /** Called once per frame. Must be cheap - it is on the render path. */
 export type StageSampler = () => StageSample;
+
+/** Somebody bought a seat. The counterpart to {@link StageCashOut}. */
+export interface StageBoarding {
+  readonly name: string;
+  readonly betAmountCents: number;
+}
 
 /** Somebody got out. */
 export interface StageCashOut {
@@ -59,12 +72,20 @@ export interface StageOptions {
   readonly rocketUrl?: string;
   /** The parachutist sprite, for players who cash out. */
   readonly parachutistUrl?: string;
+  /** The boarding sprite, for players who bet during the betting window. */
+  readonly boarderUrl?: string;
   /**
    * Cash-outs since the last frame, **consumed** by the call. An event, not a
    * state, so it cannot ride {@link StageSampler} - which is read every frame and
    * would replay the same jump sixty times a second.
    */
   readonly takeCashOuts?: (() => readonly StageCashOut[]) | undefined;
+  /**
+   * Bets placed since the last frame, **consumed** by the call. An event for the
+   * same reason {@link takeCashOuts} is: a bet is a moment, and the roster it joins
+   * is already a state the caller renders in the DOM.
+   */
+  readonly takeBoardings?: (() => readonly StageBoarding[]) | undefined;
 }
 
 export interface Stage {

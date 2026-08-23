@@ -23,6 +23,13 @@ export const STAR = 0xffffff;
 /** What a cash-out's label is written in: legible over a lit plot, not white. */
 export const CASHOUT_TEXT = 0xffe2b0;
 
+/**
+ * A boarding player's name, dimmer than {@link CASHOUT_TEXT} on purpose: a name
+ * flying up to the rocket is somebody spending money and a canopy is somebody
+ * winning it, and the second is the one that should catch an eye first.
+ */
+export const BOARDING_TEXT = 0xe0cdb2;
+
 export const FLASH = 0xff4444;
 
 /**

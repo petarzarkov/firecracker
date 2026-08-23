@@ -43,11 +43,25 @@ export const liveRef: {
    * and the render loop reads, and neither goes through React.
    */
   cashOuts: CashOutFx[];
+  /**
+   * Bets the chart has not flown to the rocket yet. A queue for the same reason
+   * {@link cashOuts} is one: boarding is a moment, and the roster it joins is
+   * already state the panels render.
+   */
+  boardings: BoardingFx[];
+  /**
+   * When the betting window closes, as the render loop wants it - a number it can
+   * subtract from `Date.now()` on a frame, rather than the `Date` React holds.
+   * `null` outside a window. It is what the rocket's pre-launch strain runs on.
+   */
+  waitingEndsAtMs: number | null;
 } = {
   multiplier: 1.0,
   chartPoints: [],
   roundStartedAtMs: null,
   cashOuts: [],
+  boardings: [],
+  waitingEndsAtMs: null,
 };
 
 /** A cash-out, as the chart wants to draw it. */
@@ -57,10 +71,22 @@ export interface CashOutFx {
   payoutCents: number;
 }
 
+/** A bet, as the chart wants to draw it: somebody climbing aboard. */
+export interface BoardingFx {
+  name: string;
+  betAmountCents: number;
+}
+
 /** Hands over everything queued and empties the queue. */
 export function takeCashOuts(): readonly CashOutFx[] {
   if (liveRef.cashOuts.length === 0) return [];
   return liveRef.cashOuts.splice(0, liveRef.cashOuts.length);
+}
+
+/** The same, for players joining the round. */
+export function takeBoardings(): readonly BoardingFx[] {
+  if (liveRef.boardings.length === 0) return [];
+  return liveRef.boardings.splice(0, liveRef.boardings.length);
 }
 
 /** Multiplier divisor — must match GAME.MULTIPLIER_DIVISOR on the server. */
@@ -198,6 +224,10 @@ export const useGameStore = create<GameState & GameActions>()(
         liveRef.roundStartedAtMs = null;
       }
       liveRef.multiplier = payload.multiplier ?? 1.0;
+      liveRef.waitingEndsAtMs =
+        payload.phase === 'WAITING'
+          ? (payload.waitingEndsAt?.getTime() ?? null)
+          : null;
 
       set((state) => {
         state.phase = payload.phase;
@@ -228,17 +258,21 @@ export const useGameStore = create<GameState & GameActions>()(
           liveRef.multiplier = 1.0;
           liveRef.roundStartedAtMs = null;
           liveRef.cashOuts.length = 0;
+          liveRef.boardings.length = 0;
+          liveRef.waitingEndsAtMs = payload.waitingEndsAt?.getTime() ?? null;
           state.waitingEndsAt = payload.waitingEndsAt ?? null;
           state.multiplier = 1.0;
           state.activeBets = [];
           state.myBet = null;
         } else if (payload.phase === 'RUNNING') {
+          liveRef.waitingEndsAtMs = null;
           liveRef.chartPoints = [{ elapsed: 0, multiplier: 1.0 }];
           liveRef.multiplier = 1.0;
           liveRef.roundStartedAtMs = Date.now();
           state.startedAt = payload.startedAt ?? null;
         } else if (payload.phase === 'CRASHED') {
           liveRef.roundStartedAtMs = null;
+          liveRef.waitingEndsAtMs = null;
         }
       });
     },

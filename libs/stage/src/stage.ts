@@ -1,10 +1,11 @@
 import { Application, Container, Graphics, Sprite, type Ticker } from 'pixi.js';
+import { createBoarders } from './layers/boarding.js';
 import { createCurve } from './layers/curve.js';
 import { createEmbers } from './layers/embers.js';
 import { createFireworks } from './layers/fireworks.js';
 import { createGrid } from './layers/grid.js';
 import { createParachutes } from './layers/parachutes.js';
-import { createRocket } from './layers/rocket.js';
+import { createRocket, tensionAt } from './layers/rocket.js';
 import { createStarfield } from './layers/starfield.js';
 import { createWick } from './layers/wick.js';
 import * as palette from './palette.js';
@@ -177,6 +178,7 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
   const fireworks = createFireworks(dot);
   const rocket = await createRocket(options.rocketUrl);
   const parachutes = await createParachutes(options.parachutistUrl);
+  const boarders = await createBoarders(dot, options.boarderUrl);
 
   // The tip wash and the crash flash: two full-bleed halo sprites under
   // everything, tinted per frame. Cheaper than the radial gradients they replace
@@ -227,6 +229,9 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
     embers.view,
     wick.view,
     rocket.view,
+    // Over the rocket: they are climbing into the near side of it, and the last
+    // thing a boarder does is disappear behind the hull's own silhouette.
+    boarders.view,
     fireworks.view,
     // Over everything: a cash-out is the thing a player most wants to see, and
     // it carries text that has to stay legible against a lit plot.
@@ -271,6 +276,7 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
       shock.clear();
       rocket.hide();
       parachutes.clear();
+      boarders.clear();
       scale.reset();
       curve.clear();
       embers.clear();
@@ -280,6 +286,16 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
     }
     if (phase === 'running') {
       fireworks.clear();
+      /**
+       * The doors close at the launch.
+       *
+       * A boarder is drawn by easing from where it started toward the rocket's
+       * *current* position, so the rocket leaving the middle of the plot for the
+       * curve's tip drags anybody still climbing sideways with it - a jump of a
+       * good fraction of the plot on one frame. Anyone in the air when the round
+       * starts is simply aboard.
+       */
+      boarders.clear();
       // No `wick.dim()` here: `wick.flame` takes over from `wick.glow` and grows
       // with the round, and dimming left the rocket climbing with an unlit fuse.
     }
@@ -309,7 +325,8 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
     const delta = Math.min(rawDelta, MAX_DELTA);
     scale.resize(width, height);
 
-    const { phase, multiplier, elapsed, points, curveAt } = sample();
+    const { phase, multiplier, elapsed, points, curveAt, waitingLeft } =
+      sample();
     if (phase !== previousPhase) {
       if (phase === 'crashed') crashedAt = multiplier;
       enter(phase);
@@ -478,14 +495,17 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
         (at, span) => scale.x(at, span),
         (m) => scale.y(m),
       );
-      rocket.place(tipX, restY, slope, true, delta);
+      rocket.place(tipX, restY, slope, delta);
       wick.flame(rocket.wickX, rocket.wickY, multiplier, rocket.angle, delta);
       // The trail comes off the curve, not the nudged sprite.
       embers.trail(tipX, tipY, multiplier, delta);
     } else if (phase === 'waiting' || phase === 'idle') {
-      // Parked mid-plot with the fuse lit, which is what the countdown is about.
-      rocket.place(width / 2, height / 2, 0, false, delta);
-      wick.glow(rocket.wickX, rocket.wickY);
+      // Held mid-plot with the fuse burning down, straining harder the closer the
+      // launch gets - which is what the countdown over it is about. `idle` rather
+      // than `place`: the whole point is that it does not sit still.
+      const tension = phase === 'waiting' ? tensionAt(waitingLeft) : 0;
+      rocket.idle(width / 2, height / 2, tension, delta);
+      wick.glow(rocket.wickX, rocket.wickY, tension, delta);
     } else if (crashed) {
       // Nothing places it any more - it is falling under its own momentum.
       rocket.tumble(delta);
@@ -495,6 +515,15 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
       embers.burst(blastX, blastY, crashedAt);
       burstPending = false;
     }
+
+    // Boarders fly to wherever the rocket is *this* frame, which during the
+    // window is a moving target - it hovers, and it lurches every time one of
+    // them lands.
+    for (const boarding of options.takeBoardings?.() ?? []) {
+      boarders.board(boarding, rocket.x, height);
+    }
+    const aboard = boarders.advance(delta, rocket.x, rocket.y);
+    if (aboard > 0) rocket.recoil(aboard);
 
     // Jumpers leave from wherever the rocket is - the round is still climbing and
     // somebody has just stepped off it.

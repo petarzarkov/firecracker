@@ -14,6 +14,21 @@ const CAPACITY = 96;
 const IDLE_HALO = 44;
 const IDLE_CORE = 15;
 
+/**
+ * The fuse burning down through the betting window.
+ *
+ * It used to be one unchanging pair of discs for the whole countdown, which says
+ * "lit" and never says "about to go". Now it swells and throws sparks as the launch
+ * approaches - the same signal the rocket's rumble gives, on the part of it a player
+ * is already watching.
+ */
+const IDLE_PULSE_RATE = 0.06;
+const IDLE_PULSE = 0.16;
+/** How much bigger the flame gets by the end of the window. */
+const TENSION_GROWTH = 1.5;
+/** Sparks per frame at full tension. None at all until the fuse is really going. */
+const TENSION_SPARKS = 5;
+
 /** How far the flame grows once burning. The fuse stays lit the whole way up. */
 const FLAME_HALO = [72, 240] as const;
 const FLAME_CORE = [26, 92] as const;
@@ -44,8 +59,11 @@ const DRAG = 0.93;
 
 export interface Wick {
   readonly view: Container;
-  /** The halo, for a fuse that is lit but not yet flying. */
-  glow(x: number, y: number): void;
+  /**
+   * The halo, for a fuse that is lit but not yet flying. `tension` is the launch
+   * approaching - see `tensionAt` in the rocket layer.
+   */
+  glow(x: number, y: number, tension: number, delta: number): void;
   /**
    * The fuse burning in flight: a flame that grows and whitens with the round,
    * and throws sparks at a rate to match.
@@ -102,18 +120,47 @@ export const createWick = (texture: Texture, halo: Texture): Wick => {
 
   const pool: MotePool = createMotePool(CAPACITY, texture);
 
+  /** The idle pulse's phase, so the fuse breathes rather than sitting still. */
+  let idleAt = 0;
+
   view.addChild(plume, outer, core, pool.view);
 
   return {
     view,
 
-    glow(x, y): void {
+    glow(x, y, tension, delta): void {
+      idleAt += IDLE_PULSE_RATE * delta;
+      // A pulse rather than a flicker: the flicker in `flame` sells a jet being
+      // driven, and this is a fuse burning at its own pace.
+      const pulse = 1 + Math.sin(idleAt) * IDLE_PULSE;
+      const grow = pulse * (1 + TENSION_GROWTH * tension);
+
       plume.alpha = 0;
-      place(x, y, IDLE_HALO, IDLE_CORE);
+      place(x, y, IDLE_HALO * grow, IDLE_CORE * grow);
       outer.tint = palette.WICK_HALO;
-      outer.alpha = 0.55;
+      outer.alpha = 0.55 + 0.35 * tension;
       core.tint = palette.WICK_CORE;
       core.alpha = 0.95;
+
+      // Squared, so the fuse spits only in the last seconds instead of drizzling
+      // sparks through the whole window.
+      const count = Math.round(TENSION_SPARKS * tension ** 2 * delta);
+      for (let i = 0; i < count; i++) {
+        const angle = -Math.PI / 2 + (Math.random() - 0.5) * 1.6;
+        const speed = Math.random() * 1.4 + 0.5;
+        pool.spawn({
+          x: x + (Math.random() - 0.5) * 6,
+          y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: Math.floor(Math.random() * 12) + 8,
+          size: Math.random() * 1.1 + 0.4,
+          tint:
+            palette.WICK_SPARKS[
+              Math.floor(Math.random() * palette.WICK_SPARKS.length)
+            ] ?? palette.WICK_HALO,
+        });
+      }
     },
 
     flame(x, y, multiplier, angle, delta): void {

@@ -5,6 +5,7 @@ import {
   getLiveMultiplier,
   liveRef,
   multiplierAt,
+  takeBoardings,
   takeCashOuts,
   useGameStore,
 } from '@/store/gameStore';
@@ -21,8 +22,8 @@ const STAGE_PHASE = {
 /**
  * The round, drawn by `@firecracker/stage`, with the readouts left in the DOM.
  *
- * Everything drawn - grid, axis labels, curve, starfield, rocket, sparks, embers and
- * fireworks - is a PIXI scene in its own workspace. What stays in the DOM is the text
+ * Everything drawn - grid, axis labels, curve, starfield, rocket, sparks, embers,
+ * boarding players and fireworks - is a PIXI scene in its own workspace. What stays in the DOM is the text
  * a person reads rather than watches: the multiplier, the countdown and the crash
  * result.
  *
@@ -78,6 +79,14 @@ export function CrashChart() {
       // The unrounded curve, so the line is limited by pixels rather than by the
       // hundredths the server pays in. See `multiplierAt`.
       curveAt: multiplierAt,
+      // From `liveRef` rather than the `Date` in the store, for the same reason
+      // everything else here is: the countdown drives the rocket's pre-launch
+      // strain on every frame, and the DOM readout beside it re-renders once a
+      // second off its own interval.
+      waitingLeft:
+        liveRef.waitingEndsAtMs === null
+          ? null
+          : liveRef.waitingEndsAtMs - Date.now(),
     });
 
     /**
@@ -96,8 +105,10 @@ export function CrashChart() {
               container,
               sample,
               takeCashOuts,
+              takeBoardings,
               rocketUrl: '/sprites/firecracker.svg',
               parachutistUrl: '/sprites/parachutist.svg',
+              boarderUrl: '/sprites/boarder.svg',
             }),
       )
       .catch((error: unknown) => {
@@ -144,6 +155,28 @@ export function CrashChart() {
       {/* The stage creates its own canvas in here — see `StageOptions`. */}
       <Box ref={boxRef} position="absolute" inset={0} />
 
+      {/*
+        The countdown sits high, not in the middle.
+
+        Centred, it printed straight over the rocket - which was tolerable while the
+        rocket was a still image behind it and is not now that it hovers, strains and
+        has players flying into it. `visual/screens/app-lobby.png` is where that was
+        obvious; nothing in the DOM overlaps, so no layout test could have said so.
+      */}
+      {phase === 'WAITING' && (
+        <Box
+          position="absolute"
+          top="12%"
+          left={0}
+          right={0}
+          textAlign="center"
+          pointerEvents="none"
+          userSelect="none"
+        >
+          <CountdownDisplay />
+        </Box>
+      )}
+
       <VStack
         position="absolute"
         inset={0}
@@ -159,7 +192,6 @@ export function CrashChart() {
               Loading...
             </Text>
           )}
-          {phase === 'WAITING' && <CountdownDisplay />}
 
           {phase === 'RUNNING' && (
             <Box

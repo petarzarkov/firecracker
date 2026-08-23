@@ -137,6 +137,13 @@ export function useGameSocket() {
 
     // Player list updates — deferred so they don't block RAF/setInterval
     socket.on(GAME_EVENTS.BET_PLACED, (data: BetPlacedPayload) => {
+      // Queued before the store work, and outside the transition, for the same
+      // reason a cash-out is: the chart flies the player up to the rocket on the
+      // frame the news arrived rather than after React has caught up.
+      liveRef.boardings.push({
+        name: data.username,
+        betAmountCents: data.betAmountCents,
+      });
       startTransition(() => {
         addBet(
           {

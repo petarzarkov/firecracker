@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 112" width="72" height="112">
+  <!--
+    A player climbing aboard during the betting window.
+
+    The counterpart to `parachutist.svg`: that one is how a player leaves, this is
+    how they arrive. Drawn flying rather than walking because the rocket is parked
+    mid-plot with nothing under it - a figure running in from the bottom edge would
+    be running on air - so they come up on a thruster of their own and disappear
+    into the hull.
+
+    **Light on purpose.** The first draft dressed the figure in the same browns as
+    the parachutist's suit, which works there because it hangs under a bright canopy
+    twice its size. Alone against a #0a0a0a plot at 50 pixels tall it was a dark
+    smudge with a flame under it - a screenshot is the only way that gets noticed,
+    and `visual/screens/boarding-climbing.png` is where it was. The suit carries the
+    silhouette now and the dark parts are detail on top of it.
+
+    Pointing up, and anchored on its centre: the stage rotates it toward wherever
+    it is going, so anything the artwork leans on its own fights that. The flame is
+    at the bottom for the same reason - it is the trailing edge of the climb.
+  -->
+  <defs>
+    <linearGradient id="boarderSuit" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8e8175"/>
+      <stop offset="0.4" stop-color="#e9dfd2"/>
+      <stop offset="1" stop-color="#9c8f82"/>
+    </linearGradient>
+    <linearGradient id="boarderHelmet" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fbf5ec"/>
+      <stop offset="1" stop-color="#a99c8e"/>
+    </linearGradient>
+    <linearGradient id="visor" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffd27a"/>
+      <stop offset="1" stop-color="#ff7420"/>
+    </linearGradient>
+    <linearGradient id="thrust" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff6ec"/>
+      <stop offset="0.35" stop-color="#ffd232"/>
+      <stop offset="0.72" stop-color="#ff7420"/>
+      <stop offset="1" stop-color="#ff2400" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- The thruster's jet, behind everything so the pack sits on top of it. -->
+  <path d="M27 80 L36 112 L45 80 Z" fill="url(#thrust)"/>
+
+  <!-- Pack, dark against the suit so the two do not merge into one shape. -->
+  <rect x="23" y="50" width="26" height="30" rx="7" fill="#2a231d"/>
+  <rect x="27" y="72" width="7" height="9" rx="3.5" fill="#ffb347"/>
+  <rect x="38" y="72" width="7" height="9" rx="3.5" fill="#ffb347"/>
+
+  <!-- Arms, reaching up for the hatch. That is the whole pose. -->
+  <g stroke="#d6cabb" stroke-width="8" stroke-linecap="round">
+    <path d="M27 46 L17 27"/>
+    <path d="M45 46 L55 27"/>
+  </g>
+
+  <!-- Body. -->
+  <path d="M26 38 h20 a7 7 0 0 1 7 7 v22 a11 11 0 0 1 -11 11 h-12 a11 11 0 0 1 -11 -11 v-22 a7 7 0 0 1 7 -7 Z"
+        fill="url(#boarderSuit)"/>
+  <!-- Harness straps: the one dark line that says "suit" rather than "blob". -->
+  <g stroke="#4a3f35" stroke-width="3" opacity="0.75">
+    <path d="M27 50 L45 50"/>
+    <path d="M36 40 L36 74"/>
+  </g>
+
+  <!-- Legs, tucked under the climb rather than dangling. -->
+  <g stroke="#b3a698" stroke-width="9" stroke-linecap="round">
+    <path d="M31 76 L27 88"/>
+    <path d="M41 76 L45 88"/>
+  </g>
+
+  <!-- Helmet: a light dome with the lobby's fire ramp in the visor. -->
+  <circle cx="36" cy="24" r="17" fill="url(#boarderHelmet)"/>
+  <path d="M22 21 a15 14 0 0 1 28 0 a15 15 0 0 1 -28 0 Z" fill="url(#visor)"/>
+  <path d="M26 16 a12 12 0 0 1 11 -6 L29 25 Z" fill="#ffffff" opacity="0.45"/>
+</svg>

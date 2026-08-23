@@ -25,6 +25,62 @@ const MAX_TILT = 0.55;
 const TILT_EASE = 0.12;
 
 /**
+ * The wait, which is the longest thing a player watches.
+ *
+ * The rocket used to be *placed* during the betting window - one `place()` call
+ * with the same arguments every frame - so for the whole countdown the screen held
+ * a still image with a lit fuse on it. Twenty seconds of nothing is where a lobby
+ * loses people.
+ *
+ * So it hovers: a slow bob and a sway that never quite repeat together, and then a
+ * strain that builds over the last seconds into a rumble and a lift. The
+ * countdown's numbers are in the DOM over the top - this is what makes them mean
+ * something before they run out.
+ */
+const IDLE_BOB = 7;
+const IDLE_BOB_RATE = 0.041;
+const IDLE_SWAY = 0.06;
+/**
+ * Deliberately not a multiple of {@link IDLE_BOB_RATE}: two harmonics beat against
+ * each other and the hover never looks like a loop, which a single sine does within
+ * about two seconds.
+ */
+const IDLE_SWAY_RATE = 0.023;
+
+/** How long before the launch the rocket starts straining, in milliseconds. */
+const TENSION_MS = 4000;
+
+/** The rumble at full tension, in pixels of jitter. */
+const RUMBLE = 3.4;
+
+/** How far it strains upward off its resting point, in pixels. */
+const TENSION_LIFT = 18;
+
+/**
+ * The lurch as somebody climbs aboard, as a spring: a shove down, and a settle. A
+ * one-frame offset is a glitch, and an eased dip-and-return needs a timer per
+ * boarder - a spring takes both from one impulse, and two boarders landing together
+ * simply push it harder.
+ */
+const BOARD_KICK = 1.5;
+const BOARD_STIFFNESS = 0.055;
+const BOARD_DAMPING = 0.16;
+/** Past this the spring is at rest, and left there rather than ringing forever. */
+const BOARD_REST = 0.05;
+
+/**
+ * How hard the rocket is straining, `0` early in the window and `1` at the launch.
+ *
+ * Squared where it is used rather than here: this is the shape of the wait, and the
+ * fuse reads it too.
+ */
+export const tensionAt = (msLeft: number | null | undefined): number => {
+  if (msLeft === null || msLeft === undefined) return 0;
+  if (msLeft <= 0) return 1;
+  return Math.max(0, Math.min(1, 1 - msLeft / TENSION_MS));
+};
+
+/**
  * The wreck, after the fuse runs out.
  *
  * The rocket used to be `hide()`den on the frame the round crashed, so the thing a
@@ -50,13 +106,15 @@ const TUMBLE_MIN_SCALE = 0.55;
 export interface Rocket {
   readonly view: Container;
   /** Point it at `(x, y)`, leaning by `slope` (dy/dx of the curve, screen space). */
-  place(
-    x: number,
-    y: number,
-    slope: number,
-    running: boolean,
-    delta: number,
-  ): void;
+  place(x: number, y: number, slope: number, delta: number): void;
+  /**
+   * Hold it over `(x, y)` while the round is still taking bets, straining by
+   * `tension` - see {@link tensionAt}. It draws itself somewhere near that point
+   * rather than on it, which is the whole difference from {@link place}.
+   */
+  idle(x: number, y: number, tension: number, delta: number): void;
+  /** Somebody got in. `count` is how many landed on this frame. */
+  recoil(count: number): void;
   /**
    * Blow it off the curve. It keeps drawing itself from here - through
    * {@link tumble} - rather than being placed, until the tumble runs out.
@@ -109,10 +167,47 @@ export const createRocket = async (url?: string): Promise<Rocket> => {
   let drawnX = 0;
   let drawnY = 0;
 
+  let bobAt = 0;
+  let swayAt = 0;
+  /** The boarding spring: how far it is shoved down, and how fast. */
+  let dip = 0;
+  let dipV = 0;
+
   let tumbleLeft = 0;
   let tumbleVx = 0;
   let tumbleVy = 0;
   let tumbleSpin = 0;
+
+  /**
+   * Draws it at `(x, y)` and puts the fuse where the artwork says it is. The climb
+   * and the hover differ in *where* they put it and in nothing else, and the fuse
+   * offsets are the half that is easy to update in one place and forget in the
+   * other.
+   */
+  const draw = (x: number, y: number, height: number, alpha: number): void => {
+    drawnX = x;
+    drawnY = y;
+    const width = height * aspect;
+
+    if (sprite !== null) {
+      sprite.visible = true;
+      sprite.x = x;
+      sprite.y = y;
+      sprite.rotation = tilt;
+      sprite.width = width;
+      sprite.height = height;
+      sprite.alpha = alpha;
+    }
+
+    // The offsets are fractions of each dimension, and they rotate with the
+    // sprite - or the sparks would detach from the fuse the moment it leans.
+    const ox = WICK_OFFSET_X * width;
+    const oy = WICK_OFFSET_Y * height;
+    const cos = Math.cos(tilt);
+    const sin = Math.sin(tilt);
+    wickX = x + ox * cos - oy * sin;
+    wickY = y + ox * sin + oy * cos;
+  };
 
   return {
     view,
@@ -133,12 +228,7 @@ export const createRocket = async (url?: string): Promise<Rocket> => {
       return drawnY;
     },
 
-    place(x, y, slope, running, delta): void {
-      drawnX = x;
-      drawnY = y;
-      const height = running ? RUNNING_HEIGHT : WAITING_HEIGHT;
-      const width = height * aspect;
-
+    place(x, y, slope, delta): void {
       /**
        * `atan`, not `atan2`: the tilt is a lean, not a heading - following the curve
        * exactly would have it lying on its side by the time the round went vertical.
@@ -148,24 +238,51 @@ export const createRocket = async (url?: string): Promise<Rocket> => {
       const wanted = Math.max(-MAX_TILT, Math.min(MAX_TILT, Math.atan(-slope)));
       tilt += (wanted - tilt) * Math.min(1, TILT_EASE * delta);
 
-      if (sprite !== null) {
-        sprite.visible = true;
-        sprite.x = x;
-        sprite.y = y;
-        sprite.rotation = tilt;
-        sprite.width = width;
-        sprite.height = height;
-        sprite.alpha = running ? 1 : 0.85;
+      draw(x, y, RUNNING_HEIGHT, 1);
+    },
+
+    idle(x, y, tension, delta): void {
+      bobAt += IDLE_BOB_RATE * delta;
+      swayAt += IDLE_SWAY_RATE * delta;
+
+      // Stepped every frame rather than only while somebody is boarding: this is
+      // what carries the last lurch back to rest.
+      dipV += (-BOARD_STIFFNESS * dip - BOARD_DAMPING * dipV) * delta;
+      dip += dipV * delta;
+      if (Math.abs(dip) < BOARD_REST && Math.abs(dipV) < BOARD_REST) {
+        dip = 0;
+        dipV = 0;
       }
 
-      // The offsets are fractions of each dimension, and they rotate with the
-      // sprite - or the sparks would detach from the fuse the moment it leans.
-      const ox = WICK_OFFSET_X * width;
-      const oy = WICK_OFFSET_Y * height;
-      const cos = Math.cos(tilt);
-      const sin = Math.sin(tilt);
-      wickX = x + ox * cos - oy * sin;
-      wickY = y + ox * sin + oy * cos;
+      // Squared, so the whole build-up happens in the last second or so of the
+      // window rather than creeping across all of it.
+      const strain = tension ** 2;
+      // The hover flattens as the strain takes over: it is being held down now,
+      // not floating.
+      const bob = Math.sin(bobAt) * IDLE_BOB * (1 - strain * 0.7);
+      const rumble = RUMBLE * strain;
+
+      // Straightening as it tenses, so the moment before a launch is the one
+      // instant in the window it is dead level.
+      const wanted = Math.sin(swayAt) * IDLE_SWAY * (1 - strain);
+      tilt += (wanted - tilt) * Math.min(1, TILT_EASE * delta);
+
+      draw(
+        x + (Math.random() - 0.5) * 2 * rumble,
+        y +
+          bob +
+          dip -
+          TENSION_LIFT * strain +
+          (Math.random() - 0.5) * 2 * rumble,
+        WAITING_HEIGHT,
+        0.85 + 0.15 * tension,
+      );
+    },
+
+    recoil(count): void {
+      // Capped: a burst of bots betting on the same frame should shove it, not
+      // launch it.
+      dipV += BOARD_KICK * Math.min(count, 3);
     },
 
     burst(): void {
@@ -208,6 +325,8 @@ export const createRocket = async (url?: string): Promise<Rocket> => {
       if (sprite !== null) sprite.visible = false;
       tilt = 0;
       tumbleLeft = 0;
+      dip = 0;
+      dipV = 0;
     },
   };
 };
