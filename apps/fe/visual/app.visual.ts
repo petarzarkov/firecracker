@@ -17,11 +17,10 @@ import { launch, openPage, shoot } from './browser.js';
  *
  * Point them somewhere else with `VISUAL_APP_URL`.
  *
- * They sign in **anonymously**, through the lobby's own "Play the demo" button. The
- * socket admits spectators but the client does not: an unauthenticated visitor gets
- * the login screen and never reaches a chart, so a spec that only loaded the page
- * would be asserting about a form. The demo account is the shortest path to the
- * thing worth looking at, and it is the path most first-time players take.
+ * A visitor who has not signed in now gets the lobby - the gateway always admitted
+ * spectators, and the client was the only thing turning a first visit into a form.
+ * To reach the controls these sign in **anonymously**, through `Sign in` and then
+ * the card's own `Play the demo`, which is the path most first-time players take.
  */
 
 const APP = process.env['VISUAL_APP_URL'] ?? 'http://localhost:5173';
@@ -47,6 +46,7 @@ const COUNTDOWN = /starting in|starting\.\.\./i;
 /** Signs in as a demo player and waits for the chart the stage draws. */
 const enterLobby = async (page: Page): Promise<void> => {
   await page.goto(APP, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: /^sign in$/i }).click();
   await page.getByRole('button', { name: /play the demo/i }).click();
   // The canvas is the stage's, so this doubles as the check that the client's
   // dynamic import of `@firecracker/stage` resolves in a real bundle.
@@ -72,9 +72,41 @@ describe('the client, in a browser', () => {
     await browser?.close();
   });
 
-  test('a visitor who has not signed in gets the login screen', async () => {
+  /**
+   * The lobby is the landing page. It used to be a login form: the whole product -
+   * the chart, the history, the other players - was behind an account, on a game
+   * whose lobby is its own advertisement.
+   */
+  test('a visitor who has not signed in still gets the game', async () => {
     const { page, complaints } = await openPage(browser, DESKTOP);
     await page.goto(APP, { waitUntil: 'networkidle' });
+    await page.waitForSelector('canvas', { timeout: 30_000 });
+    await page.waitForTimeout(SETTLE_MS);
+
+    console.log('  →', await shoot(page, 'app-spectator'));
+
+    // A real chart, and the invitation where the controls would be.
+    const canvas = await page.locator('canvas').first().boundingBox();
+    expect(canvas?.width ?? 0).toBeGreaterThan(400);
+    await expect(
+      page
+        .getByText(/you are watching/i)
+        .first()
+        .isVisible(),
+    ).resolves.toBe(true);
+    await expect(
+      page.getByRole('button', { name: /^sign in$/i }).isVisible(),
+    ).resolves.toBe(true);
+
+    expect(complaints.errors).toEqual([]);
+    await page.close();
+  });
+
+  test('and can get to the sign-in card from it', async () => {
+    const { page, complaints } = await openPage(browser, DESKTOP);
+    await page.goto(APP, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(SETTLE_MS);
+    await page.getByRole('button', { name: /^sign in$/i }).click();
 
     console.log('  →', await shoot(page, 'app-login'));
     await expect(

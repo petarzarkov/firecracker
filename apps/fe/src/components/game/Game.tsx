@@ -5,6 +5,7 @@ import { LazyChatWindow } from '@/components/ui/LazyChatWindow';
 import { CHAT_THEME } from '@/theme/chat';
 import { PlayerChatDialogue } from '@/components/ui/PlayerChatDialogue';
 import { useSocket } from '@/SocketContext';
+import { useAuthStore } from '@/store/authStore';
 import { useChatStore } from '@/store/chatStore';
 import { useGameSocket } from '@/systems/network/useGameSocket';
 import { useLayout } from '@/hooks/useWideLayout';
@@ -32,7 +33,7 @@ const MOBILE_TABS = [
  */
 const TABLET_TABS = MOBILE_TABS.filter(([value]) => value !== 'game');
 
-export function Game() {
+export function Game({ onSignIn }: { onSignIn: () => void }) {
   useGameSocket();
 
   // Only the live layout is mounted - see `useLayout` for what mounting more than
@@ -45,6 +46,7 @@ export function Game() {
    * uncontrolled tab strip gave.
    */
   const [tab, setTab] = useState(layout === 'tablet' ? 'players' : 'game');
+  const signedIn = useAuthStore((state) => state.isAuthenticated);
   const socket = useSocket();
   const { globalChat, closeGlobalChat, playerChats } = useChatStore(
     (state) => state,
@@ -120,8 +122,8 @@ export function Game() {
         </Flex>
 
         <Flex align="center" gap={{ base: 1, lg: 3 }}>
-          <WalletWidget />
-          <UserMenu />
+          {signedIn && <WalletWidget />}
+          <UserMenu onSignIn={onSignIn} />
         </Flex>
       </Flex>
 
@@ -184,7 +186,7 @@ export function Game() {
                 borderColor="gray.700"
                 p={2}
               >
-                <BetPanel />
+                <BetPanel onSignIn={onSignIn} />
               </Box>
             )}
 
@@ -236,7 +238,7 @@ export function Game() {
                   bg="gray.900"
                 >
                   <Box h="full" overflowY="auto" p={0}>
-                    <BetPanel />
+                    <BetPanel onSignIn={onSignIn} />
                   </Box>
                 </Tabs.Content>
 
@@ -279,7 +281,7 @@ export function Game() {
           {/* Center: chart + bet panel */}
           <Flex flex={1} direction="column" p={3} gap={2} overflow="hidden">
             <CrashChart />
-            <BetPanel />
+            <BetPanel onSignIn={onSignIn} />
           </Flex>
 
           {/* Right sidebar: history + players */}

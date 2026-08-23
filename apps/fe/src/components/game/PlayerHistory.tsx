@@ -335,9 +335,18 @@ export function PlayerHistory() {
           panel headed MY BETS said "No bets yet" while the player list beside it
           showed the same player's stake. The store has it; this renders it.
         */}
+        {userId === undefined && (
+          <Text fontSize="xs" color="#888" textAlign="center" mt={6} px={2}>
+            Sign in to keep a history.
+          </Text>
+        )}
+
         {myBet !== null && <LiveBetRow bet={myBet} />}
 
-        {bets.length === 0 && myBet === null && !isLoading ? (
+        {userId !== undefined &&
+        bets.length === 0 &&
+        myBet === null &&
+        !isLoading ? (
           <Text fontSize="xs" color="#888" textAlign="center" mt={6} px={2}>
             No bets yet
           </Text>

@@ -1,6 +1,7 @@
 import { Badge, Box, Flex, Image, Menu, Portal, Text } from '@chakra-ui/react';
 import { useState } from 'react';
 import { AvatarDialog } from '@/components/ui/AvatarDialog';
+import { Button } from '@/components/ui/Button';
 import { useAuthStore } from '@/store/authStore';
 import { signOut } from '@/systems/auth/auth-api';
 
@@ -15,13 +16,23 @@ function getInitials(displayName?: string | null, email?: string): string {
   return (email ?? '??').slice(0, 2).toUpperCase();
 }
 
-export function UserMenu() {
+export function UserMenu({ onSignIn }: { onSignIn?: () => void }) {
   const user = useAuthStore((state) => state.user);
   const token = useAuthStore((state) => state.token);
   const clearAuth = useAuthStore((state) => state.clearAuth);
   const [pickingAvatar, setPickingAvatar] = useState(false);
 
-  if (!user) return null;
+  /**
+   * A spectator's header. The lobby is public now, so this is the one place that
+   * says how to stop watching and start playing.
+   */
+  if (!user) {
+    return (
+      <Button size="sm" variant="fire" onClick={onSignIn} fontSize="xs">
+        Sign in
+      </Button>
+    );
+  }
 
   const initials = getInitials(user.displayName, user.email);
   const displayLabel = user.displayName ?? user.email.split('@')[0];

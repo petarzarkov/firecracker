@@ -345,7 +345,13 @@ export function CashOutBar() {
   );
 }
 
-export function BetPanel() {
+/**
+ * The controls, or an invitation to get them.
+ *
+ * A spectator sees the lobby now, so this panel has a signed-out state: the game is
+ * watchable and betting is the thing an account buys.
+ */
+export function BetPanel({ onSignIn }: { onSignIn?: () => void }) {
   const socket = useSocket();
   const phase = useGameStore((state) => state.phase);
   const myBet = useGameStore((state) => state.myBet);
@@ -467,6 +473,41 @@ export function BetPanel() {
       onPlaceBet={handlePlaceBet}
     />
   );
+
+  if (myUserId === undefined) {
+    return (
+      <Box
+        bg="gray.900"
+        borderRadius="lg"
+        border="1px solid"
+        borderColor="#3a3a3a"
+        p={{ base: 3, lg: 4 }}
+        textAlign="center"
+      >
+        <Text fontSize="sm" color="gray.300" fontFamily="mono" mb={1}>
+          You are watching
+        </Text>
+        <Text fontSize="xs" color="gray.500" mb={3}>
+          Every round here is real and every crash point is checkable. Take a
+          demo account to join one — $1,000 in play money, no email.
+        </Text>
+        <Button
+          onClick={onSignIn}
+          bg="green.600"
+          color="white"
+          fontWeight="black"
+          fontFamily="mono"
+          letterSpacing="wide"
+          width="full"
+          py={3}
+          borderRadius="lg"
+          _hover={{ bg: 'green.500' }}
+        >
+          PLAY
+        </Button>
+      </Box>
+    );
+  }
 
   return (
     <Box

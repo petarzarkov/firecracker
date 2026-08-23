@@ -173,7 +173,11 @@ const SocialButtons = ({
   );
 };
 
-export function LoginForm() {
+/**
+ * `onBack` returns to the lobby, which a visitor can now watch without an account.
+ * Absent when this is the whole page - a password reset arriving on a link, say.
+ */
+export function LoginForm({ onBack }: { onBack?: () => void }) {
   const [mode, setMode] = useState<FormMode>('login');
   const [formData, setFormData] = useState<FormData>(INITIAL_STATE);
   const [resetToken, setResetToken] = useState('');
@@ -563,6 +567,17 @@ export function LoginForm() {
                     onDemoLogin={handleDemoLogin}
                     onSocial={handleSocial}
                   />
+                  {onBack !== undefined && (
+                    <Box mt={4}>
+                      <Link
+                        color="gray.500"
+                        onClick={onBack}
+                        _hover={{ color: 'gray.300' }}
+                      >
+                        ← Back to the lobby
+                      </Link>
+                    </Box>
+                  )}
                   <Box mt={4}>
                     <Link
                       color="orange.400"

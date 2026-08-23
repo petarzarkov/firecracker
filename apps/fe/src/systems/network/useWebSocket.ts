@@ -64,15 +64,18 @@ export function useWebSocket() {
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: we need to update the user when the socket is connected
   useEffect(() => {
-    // The token is optional - see `authStore`. A cookie-authenticated session
-    // upgrades fine because the app is same-origin.
-    if (userId === undefined) {
-      setSocket((prev) => {
-        prev?.disconnect();
-        return null;
-      });
-      return;
-    }
+    /**
+     * **No sign-in required to open this.**
+     *
+     * The gateway has always admitted anonymous callers - `context.player` is
+     * `null` for a spectator and every handler that spends money checks it - and
+     * this effect refused to connect without a `userId` anyway. So the one thing
+     * gating a visitor from seeing the game was the client, and what a first-time
+     * visitor got instead of a rocket was a login form.
+     *
+     * The token is still optional for a signed-in player: a cookie-authenticated
+     * session upgrades fine because the app is same-origin.
+     */
 
     // Empty in both modes: development goes through Vite's proxy, which forwards
     // the upgrade (`ws: true`), so the origin is the same one the session cookie
@@ -158,7 +161,9 @@ export function useWebSocket() {
       });
 
       newSocket.on(SOCKET_EVENTS.CONNECTED, (data: ConnectedPayload) => {
-        updateUser(data.payload);
+        // A spectator's connection carries no player, and writing one into the
+        // store would sign them in as nobody.
+        if (data.payload?.id !== undefined) updateUser(data.payload);
       });
 
       newSocket.on('error', (error: unknown) => {
