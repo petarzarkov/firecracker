@@ -186,13 +186,18 @@ describe('the client, in a browser', () => {
       } as typeof Ctor;
     });
 
+    const built = (): Promise<number> =>
+      page.evaluate(
+        () => (globalThis as unknown as { __contexts: number }).__contexts,
+      );
+
     await page.goto(APP, { waitUntil: 'networkidle' });
     await page.waitForTimeout(SETTLE_MS);
-    expect(await page.evaluate('globalThis.__contexts')).toBe(0);
+    expect(await built()).toBe(0);
 
     await page.getByRole('button', { name: /turn sound on/i }).click();
     await page.waitForTimeout(500);
-    expect(await page.evaluate('globalThis.__contexts')).toBe(1);
+    expect(await built()).toBe(1);
 
     expect(complaints.errors).toEqual([]);
     await page.close();
