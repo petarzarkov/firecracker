@@ -32,6 +32,33 @@ const REZOOM_RATE = 0.045;
 /** The smallest multiplier the log mapping is defined for. */
 const FLOOR = 1;
 
+/**
+ * The plot height every sprite in this scene was drawn against - roughly what a
+ * desktop chart gets.
+ */
+const SPRITE_REFERENCE_HEIGHT = 560;
+
+/** How far sprites are allowed to shrink and grow from the sizes in the layers. */
+const SPRITE_ZOOM = [0.5, 1.2] as const;
+
+/**
+ * How big to draw a sprite, as a multiple of the size its layer declares.
+ *
+ * Every sprite here was a fixed pixel size - the rocket 150 tall in flight, a
+ * canopy 74 wide, a boarding player 58 - which is right on a 1440px desktop and
+ * absurd anywhere else. On a 320px phone the rocket was nearly half the plot's
+ * height and collided with the multiplier readout, and one cash-out canopy covered
+ * the axis labels; on a tall tablet the same rocket was a speck in 790 pixels of
+ * empty plot.
+ *
+ * Driven by height rather than area: the plot is much wider than it is tall at
+ * every size this app runs at, so height is what the scene is actually short of.
+ */
+export const spriteZoom = (height: number): number => {
+  const wanted = height / SPRITE_REFERENCE_HEIGHT;
+  return Math.max(SPRITE_ZOOM[0], Math.min(SPRITE_ZOOM[1], wanted));
+};
+
 export interface Insets {
   readonly left: number;
   readonly right: number;

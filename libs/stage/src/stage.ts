@@ -1,6 +1,7 @@
-import { Application, Container, Graphics, Sprite, type Ticker } from 'pixi.js';
+import { Application, Container, Sprite, type Ticker } from 'pixi.js';
 import { createBoarders } from './layers/boarding.js';
 import { createCurve } from './layers/curve.js';
+import { createDetonation, type Motion } from './layers/detonation.js';
 import { createEmbers } from './layers/embers.js';
 import { createFireworks } from './layers/fireworks.js';
 import { createGrid } from './layers/grid.js';
@@ -9,7 +10,7 @@ import { createRocket, tensionAt } from './layers/rocket.js';
 import { createStarfield } from './layers/starfield.js';
 import { createWick } from './layers/wick.js';
 import * as palette from './palette.js';
-import { createScale, type Insets } from './scale.js';
+import { createScale, type Insets, spriteZoom } from './scale.js';
 import { haloTexture, softDotTexture } from './textures.js';
 import type { Stage, StageOptions, StagePhase, StagePoint } from './types.js';
 
@@ -29,47 +30,6 @@ import type { Stage, StageOptions, StagePhase, StagePoint } from './types.js';
 const INSETS: Insets = { left: 40, right: 62, top: 20, bottom: 28 };
 
 /**
- * The crash, as a sequence rather than as a moment.
- *
- * It used to be two things on one frame - a 26-frame fireball and a `rocket.hide()`
- * - which is about four tenths of a second for the whole event, most of it spent
- * fading. The rocket was simply gone, so there was nothing to watch being destroyed,
- * and the fireball's alpha ran on the *square* of its remaining life, so it was down
- * to a quarter brightness a fifth of a second in. Together that is the "poof".
- *
- * What replaces it is staged, and the stages deliberately overlap: a white core at
- * the point of detonation, a ring leaving it, the fireball opening behind that, the
- * wreck thrown clear and tumbling, cinders arcing over, and a warm residue that
- * outlives all of it. Nothing here outruns the crashed phase: the server holds it
- * for `GAME_COOLDOWN_MS`, five seconds by default, and the longest thing below is
- * the residue at about two and a third.
- */
-
-/** The white-hot instant. Short on purpose: it is the thing the ring leaves behind. */
-const CORE_FRAMES = 14;
-const CORE_SIZE = [26, 190] as const;
-
-/** How long the fireball itself lasts, and how wide it opens. */
-const BLAST_FRAMES = 66;
-const BLAST_SIZE = [44, 470] as const;
-
-/** The pressure ring. Outruns the fireball, which is what gives the blast a scale. */
-const SHOCK_FRAMES = 40;
-const SHOCK_RADIUS = 430;
-const SHOCK_WIDTH = 7;
-
-/** How long the screen stays washed red after a crash, in frames. */
-const FLASH_FRAMES = 78;
-
-/** The residue: swells as the fireball dies, then goes. */
-const AFTERGLOW_FRAMES = 140;
-const AFTERGLOW_SIZE = [240, 540] as const;
-
-/** The kick, in pixels of whole-scene displacement, and how long it rings for. */
-const SHAKE_FRAMES = 26;
-const SHAKE_MAX = 8;
-
-/**
  * How long the fireworks wait.
  *
  * They used to launch on the crash frame, so six shells climbed *through* the
@@ -79,6 +39,18 @@ const SHAKE_MAX = 8;
 const FIREWORKS_DELAY = 46;
 
 const BACKGROUND = 0x0a0a0a;
+
+/**
+ * What a crash does to somebody who has asked for less motion.
+ *
+ * `prefers-reduced-motion` appeared nowhere in this scene, and a crash fires a
+ * full-screen red wash and shakes the whole plot for 26 frames - which is the exact
+ * pair that motion and photosensitivity guidance asks you to gate. The fireball
+ * stays: it is local, it is the event, and removing it would leave a round that
+ * simply stopped. The screen-wide parts go.
+ */
+const REDUCED = { flash: 0.12, shake: 0 } as const;
+const FULL = { flash: 0.55, shake: 8 } as const;
 
 /**
  * `Application.init()` can **hang without resolving or throwing** when the browser
@@ -166,6 +138,13 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
   const observer = new ResizeObserver(() => app.resize());
   observer.observe(container);
 
+  const calmQuery = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
+  let motion: Motion = calmQuery?.matches === true ? REDUCED : FULL;
+  const onMotionChange = (): void => {
+    motion = calmQuery?.matches === true ? REDUCED : FULL;
+  };
+  calmQuery?.addEventListener('change', onMotionChange);
+
   const dot = softDotTexture();
   const halo = haloTexture();
 
@@ -180,52 +159,28 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
   const parachutes = await createParachutes(options.parachutistUrl);
   const boarders = await createBoarders(dot, options.boarderUrl);
 
-  // The tip wash and the crash flash: two full-bleed halo sprites under
-  // everything, tinted per frame. Cheaper than the radial gradients they replace
-  // and, being sprites, they can be moved rather than redrawn.
+  /**
+   * The tip wash: a full-bleed halo sprite under everything, tinted per frame.
+   * Cheaper than the radial gradient it replaces and, being a sprite, it can be
+   * moved rather than redrawn.
+   */
   const wash = new Sprite(halo);
   wash.anchor.set(0.5);
   wash.alpha = 0;
 
-  // The residue, under the plot with the other ambient light.
-  const afterglow = new Sprite(halo);
-  afterglow.anchor.set(0.5);
-  afterglow.tint = palette.AFTERGLOW;
-  afterglow.alpha = 0;
-
-  const flash = new Sprite(halo);
-  flash.anchor.set(0.5);
-  flash.tint = palette.FLASH;
-  flash.alpha = 0;
-
-  // A hot disc that expands and fades where the rocket actually was, rather than
-  // in the middle of the chart box.
-  const blast = new Sprite(halo);
-  blast.anchor.set(0.5);
-  blast.alpha = 0;
-
-  // The white centre of it, and the ring leaving that centre.
-  const core = new Sprite(halo);
-  core.anchor.set(0.5);
-  core.tint = palette.BLAST_CORE;
-  core.alpha = 0;
-
-  const shock = new Graphics();
+  const detonation = createDetonation(halo);
 
   const world = new Container();
   world.addChild(
     wash,
-    flash,
-    afterglow,
+    detonation.under,
     starfield.view,
     grid.view,
     curve.view,
     // Over the plot, not under it. The fireball used to sit beneath the gridlines
     // and the curve, which is right for ambient light and wrong for the one thing
     // on screen that is supposed to be violent.
-    blast,
-    shock,
-    core,
+    detonation.over,
     embers.view,
     wick.view,
     rocket.view,
@@ -240,16 +195,10 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
   app.stage.addChild(world);
 
   let previousPhase: StagePhase | null = null;
-  let flashLeft = 0;
   let crashedAt = 1;
-  /** Where the rocket was when it went. The blast and the flash centre here. */
+  /** Where the rocket was when it went. The embers burst from here too. */
   let blastX = 0;
   let blastY = 0;
-  let blastLeft = 0;
-  let coreLeft = 0;
-  let shockLeft = 0;
-  let afterglowLeft = 0;
-  let shakeLeft = 0;
   let fireworksIn = 0;
   /**
    * Armed on the transition, spent on the next frame - only the frame knows where
@@ -267,13 +216,8 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
     if (phase === 'waiting' || phase === 'idle') {
       // A fresh round: drop the last one's debris and put the axis back.
       burstPending = false;
-      blastLeft = 0;
-      coreLeft = 0;
-      shockLeft = 0;
-      afterglowLeft = 0;
-      shakeLeft = 0;
       fireworksIn = 0;
-      shock.clear();
+      detonation.clear();
       rocket.hide();
       parachutes.clear();
       boarders.clear();
@@ -282,7 +226,6 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
       embers.clear();
       wick.clear();
       fireworks.clear();
-      flashLeft = 0;
     }
     if (phase === 'running') {
       fireworks.clear();
@@ -300,17 +243,12 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
       // with the round, and dimming left the rocket climbing with an unlit fuse.
     }
     if (phase === 'crashed') {
-      flashLeft = FLASH_FRAMES;
       burstPending = true;
       // Captured before the rocket is thrown: this is the last place a player saw
       // it under power, which is where they expect the explosion.
       blastX = rocket.x;
       blastY = rocket.y;
-      blastLeft = BLAST_FRAMES;
-      coreLeft = CORE_FRAMES;
-      shockLeft = SHOCK_FRAMES;
-      afterglowLeft = AFTERGLOW_FRAMES;
-      shakeLeft = SHAKE_FRAMES;
+      detonation.fire(blastX, blastY);
       fireworksIn = FIREWORKS_DELAY;
       wick.dim();
       // Thrown, not hidden. See `TUMBLE_FRAMES` in the rocket layer.
@@ -335,6 +273,9 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
 
     const running = phase === 'running';
     const crashed = phase === 'crashed';
+    // Every sprite in this scene is sized against a desktop plot; this is what
+    // keeps the rocket off the multiplier readout on a 320px phone.
+    const zoom = spriteZoom(scale.plot.height);
     if (running) scale.follow(multiplier);
 
     /**
@@ -378,103 +319,9 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
       wash.alpha = 0;
     }
 
-    if (flashLeft > 0) {
-      flash.x = blastX;
-      flash.y = blastY;
-      flash.width = Math.max(width, height) * 2.4;
-      flash.height = flash.width;
-      flash.alpha = (flashLeft / FLASH_FRAMES) ** 1.3 * 0.55;
-      flashLeft -= delta;
-    } else {
-      flash.alpha = 0;
-    }
-
-    if (blastLeft > 0) {
-      const age = 1 - blastLeft / BLAST_FRAMES;
-      const size =
-        BLAST_SIZE[0] + (BLAST_SIZE[1] - BLAST_SIZE[0]) * Math.sqrt(age);
-      blast.x = blastX;
-      blast.y = blastY;
-      blast.width = size;
-      blast.height = size;
-      blast.tint = palette.blastTintFor(age);
-      /**
-       * An attack, then a decay - not a decay alone.
-       *
-       * Starting at full brightness makes it a flashbulb: the brightest frame is
-       * the first one, before it has opened to any size, so what a player sees is a
-       * dot and then a fade. Ramping over the first tenth means the peak lands
-       * where the fireball is actually big.
-       */
-      blast.alpha = Math.min(1, age / 0.1) * (1 - age) ** 1.4;
-      blastLeft -= delta;
-    } else {
-      blast.alpha = 0;
-    }
-
-    if (coreLeft > 0) {
-      const remaining = coreLeft / CORE_FRAMES;
-      const size =
-        CORE_SIZE[0] + (CORE_SIZE[1] - CORE_SIZE[0]) * Math.sqrt(1 - remaining);
-      core.x = blastX;
-      core.y = blastY;
-      core.width = size;
-      core.height = size;
-      core.alpha = remaining ** 0.6;
-      coreLeft -= delta;
-    } else {
-      core.alpha = 0;
-    }
-
-    if (shockLeft > 0) {
-      // Cubic ease-out: the ring leaves at speed and settles, which is the whole
-      // reason it reads as pressure rather than as a growing circle.
-      const age = 1 - shockLeft / SHOCK_FRAMES;
-      const radius = 18 + SHOCK_RADIUS * (1 - (1 - age) ** 3);
-      shock.clear();
-      shock.circle(blastX, blastY, radius).stroke({
-        width: Math.max(1, SHOCK_WIDTH * (1 - age)),
-        color: palette.SHOCKWAVE,
-        alpha: (1 - age) ** 1.4 * 0.8,
-      });
-      shockLeft -= delta;
-      if (shockLeft <= 0) shock.clear();
-    }
-
-    if (afterglowLeft > 0) {
-      // Swells and subsides rather than fading from full, so it arrives as the
-      // fireball leaves instead of being another thing decaying alongside it.
-      const age = 1 - afterglowLeft / AFTERGLOW_FRAMES;
-      const size =
-        AFTERGLOW_SIZE[0] + (AFTERGLOW_SIZE[1] - AFTERGLOW_SIZE[0]) * age;
-      afterglow.x = blastX;
-      afterglow.y = blastY;
-      afterglow.width = size;
-      afterglow.height = size;
-      afterglow.alpha = Math.sin(Math.PI * age) * 0.3;
-      afterglowLeft -= delta;
-    } else {
-      afterglow.alpha = 0;
-    }
-
-    /**
-     * The kick, applied to the whole scene.
-     *
-     * Re-rolled every frame rather than eased along a path: a smooth displacement
-     * reads as the chart sliding, and jitter is what reads as an impact. Squared,
-     * so it is violent for a handful of frames and then simply over - and zeroed
-     * exactly, because a scene left a third of a pixel off centre never recovers.
-     */
-    if (shakeLeft > 0) {
-      const power = SHAKE_MAX * (shakeLeft / SHAKE_FRAMES) ** 2;
-      world.x = (Math.random() - 0.5) * 2 * power;
-      world.y = (Math.random() - 0.5) * 2 * power;
-      shakeLeft -= delta;
-      if (shakeLeft <= 0) {
-        world.x = 0;
-        world.y = 0;
-      }
-    }
+    const shake = detonation.advance(delta, width, height, motion);
+    world.x = shake.x;
+    world.y = shake.y;
 
     if (fireworksIn > 0) {
       fireworksIn -= delta;
@@ -488,15 +335,22 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
       // The sprite is centred on the tip, so a round near the axis ceiling puts
       // half a firecracker off the top edge. Only the *drawing* is nudged down -
       // the curve's tip stays where it belongs - which reads as levelling off.
-      const restY = Math.max(tipY, ROCKET_MARGIN_Y);
+      const restY = Math.max(tipY, ROCKET_MARGIN_Y * zoom);
       const slope = slopeAt(
         points,
         head,
         (at, span) => scale.x(at, span),
         (m) => scale.y(m),
       );
-      rocket.place(tipX, restY, slope, delta);
-      wick.flame(rocket.wickX, rocket.wickY, multiplier, rocket.angle, delta);
+      rocket.place(tipX, restY, slope, delta, zoom);
+      wick.flame(
+        rocket.wickX,
+        rocket.wickY,
+        multiplier,
+        rocket.angle,
+        delta,
+        zoom,
+      );
       // The trail comes off the curve, not the nudged sprite.
       embers.trail(tipX, tipY, multiplier, delta);
     } else if (phase === 'waiting' || phase === 'idle') {
@@ -504,8 +358,8 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
       // launch gets - which is what the countdown over it is about. `idle` rather
       // than `place`: the whole point is that it does not sit still.
       const tension = phase === 'waiting' ? tensionAt(waitingLeft) : 0;
-      rocket.idle(width / 2, height / 2, tension, delta);
-      wick.glow(rocket.wickX, rocket.wickY, tension, delta);
+      rocket.idle(width / 2, height / 2, tension, delta, zoom);
+      wick.glow(rocket.wickX, rocket.wickY, tension, delta, zoom);
     } else if (crashed) {
       // Nothing places it any more - it is falling under its own momentum.
       rocket.tumble(delta);
@@ -520,7 +374,7 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
     // window is a moving target - it hovers, and it lurches every time one of
     // them lands.
     for (const boarding of options.takeBoardings?.() ?? []) {
-      boarders.board(boarding, rocket.x, height);
+      boarders.board(boarding, rocket.x, height, zoom);
     }
     const aboard = boarders.advance(delta, rocket.x, rocket.y);
     if (aboard > 0) rocket.recoil(aboard);
@@ -528,7 +382,7 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
     // Jumpers leave from wherever the rocket is - the round is still climbing and
     // somebody has just stepped off it.
     for (const cashOut of options.takeCashOuts?.() ?? []) {
-      parachutes.drop(cashOut, rocket.x, rocket.y);
+      parachutes.drop(cashOut, rocket.x, rocket.y, zoom);
     }
     parachutes.advance(delta, width, height);
 
@@ -545,6 +399,7 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
   return {
     destroy(): void {
       observer.disconnect();
+      calmQuery?.removeEventListener('change', onMotionChange);
       app.ticker.remove(onTick);
       // `removeView` takes the canvas out of the DOM with it. The stage made
       // that element, so the stage is what cleans it up.

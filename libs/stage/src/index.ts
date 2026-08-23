@@ -14,7 +14,7 @@
  * ```
  */
 export { createStage } from './stage.js';
-export { ceilingFor, createScale, gridFor } from './scale.js';
+export { ceilingFor, createScale, gridFor, spriteZoom } from './scale.js';
 export type { Insets, Plot, Scale } from './scale.js';
 export type {
   Stage,

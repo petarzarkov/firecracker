@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { ceilingFor, createScale, gridFor, type Insets } from './scale.js';
+import {
+  ceilingFor,
+  createScale,
+  gridFor,
+  type Insets,
+  spriteZoom,
+} from './scale.js';
 
 const INSETS: Insets = { left: 40, right: 15, top: 20, bottom: 28 };
 
@@ -184,5 +190,39 @@ describe('the horizontal mapping', () => {
   test('the first frame of a round does not divide by zero', () => {
     const scale = scaleAt(800, 400);
     expect(Number.isFinite(scale.x(0, 0))).toBe(true);
+  });
+});
+
+/**
+ * Every sprite here is declared at a size drawn for a desktop plot. On a 320px
+ * phone that put a rocket across half the chart and through the multiplier
+ * readout; on a 1180px tablet it was a speck in an empty sky.
+ */
+describe('the sprite zoom', () => {
+  test('a desktop plot draws the artwork at about its declared size', () => {
+    expect(spriteZoom(560)).toBeCloseTo(1, 6);
+    expect(spriteZoom(552)).toBeGreaterThan(0.95);
+  });
+
+  test('a phone shrinks it, a tall tablet grows it', () => {
+    expect(spriteZoom(318)).toBeLessThan(0.7);
+    expect(spriteZoom(790)).toBeGreaterThan(1.1);
+  });
+
+  test('it never collapses or runs away, at any size a chart can be', () => {
+    for (const height of [0, 1, 80, 163, 318, 560, 1180, 4000]) {
+      const zoom = spriteZoom(height);
+      expect(zoom).toBeGreaterThanOrEqual(0.5);
+      expect(zoom).toBeLessThanOrEqual(1.2);
+    }
+  });
+
+  test('it never shrinks as the plot grows', () => {
+    let previous = 0;
+    for (const height of [100, 200, 400, 560, 700, 900]) {
+      const zoom = spriteZoom(height);
+      expect(zoom).toBeGreaterThanOrEqual(previous);
+      previous = zoom;
+    }
   });
 });

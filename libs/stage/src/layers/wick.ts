@@ -63,7 +63,13 @@ export interface Wick {
    * The halo, for a fuse that is lit but not yet flying. `tension` is the launch
    * approaching - see `tensionAt` in the rocket layer.
    */
-  glow(x: number, y: number, tension: number, delta: number): void;
+  glow(
+    x: number,
+    y: number,
+    tension: number,
+    delta: number,
+    zoom: number,
+  ): void;
   /**
    * The fuse burning in flight: a flame that grows and whitens with the round,
    * and throws sparks at a rate to match.
@@ -77,6 +83,7 @@ export interface Wick {
     multiplier: number,
     angle: number,
     delta: number,
+    zoom: number,
   ): void;
   advance(delta: number): void;
   /** Hides the halo without clearing sparks already in the air. */
@@ -128,7 +135,7 @@ export const createWick = (texture: Texture, halo: Texture): Wick => {
   return {
     view,
 
-    glow(x, y, tension, delta): void {
+    glow(x, y, tension, delta, zoom): void {
       idleAt += IDLE_PULSE_RATE * delta;
       // A pulse rather than a flicker: the flicker in `flame` sells a jet being
       // driven, and this is a fuse burning at its own pace.
@@ -136,7 +143,7 @@ export const createWick = (texture: Texture, halo: Texture): Wick => {
       const grow = pulse * (1 + TENSION_GROWTH * tension);
 
       plume.alpha = 0;
-      place(x, y, IDLE_HALO * grow, IDLE_CORE * grow);
+      place(x, y, IDLE_HALO * grow * zoom, IDLE_CORE * grow * zoom);
       outer.tint = palette.WICK_HALO;
       outer.alpha = 0.55 + 0.35 * tension;
       core.tint = palette.WICK_CORE;
@@ -163,21 +170,21 @@ export const createWick = (texture: Texture, halo: Texture): Wick => {
       }
     },
 
-    flame(x, y, multiplier, angle, delta): void {
+    flame(x, y, multiplier, angle, delta, zoom): void {
       const heat = heatOf(multiplier);
 
       plume.x = x;
       plume.y = y;
       plume.rotation = angle;
-      plume.width = lerp(PLUME_WIDTH[0], PLUME_WIDTH[1], heat);
-      plume.height = lerp(PLUME_LENGTH[0], PLUME_LENGTH[1], heat);
+      plume.width = lerp(PLUME_WIDTH[0], PLUME_WIDTH[1], heat) * zoom;
+      plume.height = lerp(PLUME_LENGTH[0], PLUME_LENGTH[1], heat) * zoom;
       plume.tint = palette.flameFor(multiplier);
 
       place(
         x,
         y,
-        lerp(FLAME_HALO[0], FLAME_HALO[1], heat),
-        lerp(FLAME_CORE[0], FLAME_CORE[1], heat),
+        lerp(FLAME_HALO[0], FLAME_HALO[1], heat) * zoom,
+        lerp(FLAME_CORE[0], FLAME_CORE[1], heat) * zoom,
       );
 
       // Flicker, so a flame that is otherwise a pair of static discs reads as

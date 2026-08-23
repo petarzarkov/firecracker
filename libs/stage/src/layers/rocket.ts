@@ -106,13 +106,19 @@ const TUMBLE_MIN_SCALE = 0.55;
 export interface Rocket {
   readonly view: Container;
   /** Point it at `(x, y)`, leaning by `slope` (dy/dx of the curve, screen space). */
-  place(x: number, y: number, slope: number, delta: number): void;
+  place(x: number, y: number, slope: number, delta: number, zoom: number): void;
   /**
    * Hold it over `(x, y)` while the round is still taking bets, straining by
    * `tension` - see {@link tensionAt}. It draws itself somewhere near that point
    * rather than on it, which is the whole difference from {@link place}.
    */
-  idle(x: number, y: number, tension: number, delta: number): void;
+  idle(
+    x: number,
+    y: number,
+    tension: number,
+    delta: number,
+    zoom: number,
+  ): void;
   /** Somebody got in. `count` is how many landed on this frame. */
   recoil(count: number): void;
   /**
@@ -177,6 +183,8 @@ export const createRocket = async (url?: string): Promise<Rocket> => {
   let tumbleVx = 0;
   let tumbleVy = 0;
   let tumbleSpin = 0;
+  /** The size it was last drawn at, so the wreck tumbles at the size it flew. */
+  let drawnHeight = RUNNING_HEIGHT;
 
   /**
    * Draws it at `(x, y)` and puts the fuse where the artwork says it is. The climb
@@ -187,6 +195,7 @@ export const createRocket = async (url?: string): Promise<Rocket> => {
   const draw = (x: number, y: number, height: number, alpha: number): void => {
     drawnX = x;
     drawnY = y;
+    drawnHeight = height;
     const width = height * aspect;
 
     if (sprite !== null) {
@@ -228,7 +237,7 @@ export const createRocket = async (url?: string): Promise<Rocket> => {
       return drawnY;
     },
 
-    place(x, y, slope, delta): void {
+    place(x, y, slope, delta, zoom): void {
       /**
        * `atan`, not `atan2`: the tilt is a lean, not a heading - following the curve
        * exactly would have it lying on its side by the time the round went vertical.
@@ -238,10 +247,10 @@ export const createRocket = async (url?: string): Promise<Rocket> => {
       const wanted = Math.max(-MAX_TILT, Math.min(MAX_TILT, Math.atan(-slope)));
       tilt += (wanted - tilt) * Math.min(1, TILT_EASE * delta);
 
-      draw(x, y, RUNNING_HEIGHT, 1);
+      draw(x, y, RUNNING_HEIGHT * zoom, 1);
     },
 
-    idle(x, y, tension, delta): void {
+    idle(x, y, tension, delta, zoom): void {
       bobAt += IDLE_BOB_RATE * delta;
       swayAt += IDLE_SWAY_RATE * delta;
 
@@ -274,7 +283,7 @@ export const createRocket = async (url?: string): Promise<Rocket> => {
           dip -
           TENSION_LIFT * strain +
           (Math.random() - 0.5) * 2 * rumble,
-        WAITING_HEIGHT,
+        WAITING_HEIGHT * zoom,
         0.85 + 0.15 * tension,
       );
     },
@@ -313,8 +322,7 @@ export const createRocket = async (url?: string): Promise<Rocket> => {
       // rather than hanging around as a ghost over the next countdown.
       sprite.alpha = remaining ** 2;
       const height =
-        RUNNING_HEIGHT *
-        (TUMBLE_MIN_SCALE + (1 - TUMBLE_MIN_SCALE) * remaining);
+        drawnHeight * (TUMBLE_MIN_SCALE + (1 - TUMBLE_MIN_SCALE) * remaining);
       sprite.height = height;
       sprite.width = height * aspect;
 

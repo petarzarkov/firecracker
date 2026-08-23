@@ -101,7 +101,7 @@ export interface Boarders {
    * from the rocket: they launch from under the bottom edge whatever height it is
    * hovering at, and {@link advance} is what steers them to it.
    */
-  board(boarding: StageBoarding, x: number, height: number): void;
+  board(boarding: StageBoarding, x: number, height: number, zoom: number): void;
   /**
    * Advances every climb toward `(x, y)` - the rocket's **current** position, which
    * bobs and rumbles while they are in the air. Returns how many got in this frame,
@@ -116,6 +116,8 @@ const money = (cents: number): string => `$${(cents / 100).toFixed(2)}`;
 interface Boarder {
   from: Point;
   arc: number;
+  /** The size this one flies at - see `spriteZoom`. */
+  zoom: number;
   /** Frames left of the climb. `0` means the slot is free. */
   life: number;
   /** Frames before it launches. See {@link STAGGER_FRAMES}. */
@@ -163,6 +165,7 @@ export const createBoarders = async (
     boarders.push({
       from: { x: 0, y: 0 },
       arc: 0,
+      zoom: 1,
       life: 0,
       delay: 0,
       x: 0,
@@ -200,13 +203,15 @@ export const createBoarders = async (
   return {
     view,
 
-    board(boarding, x, height): void {
+    board(boarding, x, height, zoom): void {
       const boarder = claim();
       boarder.from = {
-        x: x + (Math.random() - 0.5) * SPAWN_SPREAD,
-        y: height + SPAWN_BELOW,
+        x: x + (Math.random() - 0.5) * SPAWN_SPREAD * zoom,
+        y: height + SPAWN_BELOW * zoom,
       };
-      boarder.arc = ARC[0] + Math.random() * (ARC[1] - ARC[0]);
+      boarder.arc = (ARC[0] + Math.random() * (ARC[1] - ARC[0])) * zoom;
+      boarder.zoom = zoom;
+      boarder.label.scale.set(Math.max(0.75, zoom));
       boarder.life = FLIGHT_FRAMES;
       // Zeroed before the count, or a recycled slot that was itself still queued
       // counts itself and lands behind a boarder that no longer exists.
@@ -279,7 +284,7 @@ export const createBoarders = async (
           );
           // Shrinking on the square, so it happens at the hull rather than over
           // the whole climb - which would read as flying away, not toward.
-          const scale = 1 - (1 - ARRIVE_SCALE) * progress ** 2;
+          const scale = (1 - (1 - ARRIVE_SCALE) * progress ** 2) * boarder.zoom;
           boarder.sprite.height = FIGURE_HEIGHT * scale;
           boarder.sprite.width = FIGURE_HEIGHT * aspect * scale;
           boarder.sprite.alpha = alpha;
@@ -287,7 +292,7 @@ export const createBoarders = async (
 
         boarder.label.visible = true;
         boarder.label.x = at.x;
-        boarder.label.y = at.y - FIGURE_HEIGHT * 0.55;
+        boarder.label.y = at.y - FIGURE_HEIGHT * 0.55 * boarder.zoom;
         // The name goes before the figure does: it is unreadable over the rocket
         // anyway, and labels are what collide first when several people board at
         // once - they are wider than the sprites they belong to. Held to the

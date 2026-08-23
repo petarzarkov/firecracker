@@ -35,6 +35,20 @@ drawn against the canvas's real height, so on a 652px chart the `1x` label sat
 43px below its own line and `50x` sat 82px below. `scale.ts` is now the single
 mapping both read.
 
+## Size, and how much motion
+
+Every sprite here declares a pixel size drawn against a desktop plot, and
+`spriteZoom` is what makes that survive a phone: it maps the plot's **height** to a
+factor between 0.5 and 1.2, and the four layers that draw artwork take it per frame.
+Unscaled, the rocket was half the height of a 320px chart and sat across the
+multiplier readout; on a 1180px tablet it was a speck.
+
+The scene also reads `prefers-reduced-motion`, and keeps reading it. A crash's
+screen-wide red wash and its 26-frame shake are gated by it; the fireball is not,
+because it is the event rather than decoration around one. `detonation.ts` owns that
+whole sequence and hands the caller a per-frame displacement rather than moving the
+scene itself.
+
 ## The wait
 
 The betting window is the longest stretch anybody looks at this chart, and for a

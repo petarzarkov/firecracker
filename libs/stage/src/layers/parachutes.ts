@@ -59,8 +59,8 @@ interface Jumper {
 
 export interface Parachutes {
   readonly view: Container;
-  /** Put someone in the air at `(x, y)`. */
-  drop(cashOut: StageCashOut, x: number, y: number): void;
+  /** Put someone in the air at `(x, y)`, drawn at `zoom` of the canopy's size. */
+  drop(cashOut: StageCashOut, x: number, y: number, zoom: number): void;
   advance(delta: number, width: number, height: number): void;
   clear(): void;
 }
@@ -125,7 +125,7 @@ export const createParachutes = async (url?: string): Promise<Parachutes> => {
   return {
     view,
 
-    drop(cashOut, x, y): void {
+    drop(cashOut, x, y, zoom): void {
       const jumper = claim();
       // Spread back along the rocket's wake, so several cash-outs in the same
       // instant - which is what a round hitting a popular auto-exit looks like -
@@ -138,7 +138,14 @@ export const createParachutes = async (url?: string): Promise<Parachutes> => {
 
       jumper.label.text = `${cashOut.name}\n${cashOut.multiplier.toFixed(2)}x  ${money(cashOut.payoutCents)}`;
       jumper.label.visible = true;
-      if (jumper.sprite !== null) jumper.sprite.visible = true;
+      jumper.label.scale.set(Math.max(0.75, zoom));
+      if (jumper.sprite !== null) {
+        // Sized here rather than at construction: a canopy drawn for a desktop plot
+        // covers the axis labels on a 320px one.
+        jumper.sprite.width = CANOPY_WIDTH * zoom;
+        jumper.sprite.height = CANOPY_WIDTH * aspect * zoom;
+        jumper.sprite.visible = true;
+      }
     },
 
     advance(delta, width, height): void {
