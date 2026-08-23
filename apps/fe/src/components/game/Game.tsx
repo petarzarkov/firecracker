@@ -83,6 +83,7 @@ function InlineChatPanel({ full = false }: { full?: boolean }) {
         flexShrink={0}
       >
         <Text
+          as="h2"
           fontSize="xs"
           fontWeight="bold"
           color="gray.400"
@@ -263,6 +264,25 @@ export function Game() {
       fontFamily="mono"
       overflow="hidden"
     >
+      {/*
+        The app had no heading of any level on any screen - "FIRECRACKER", "MY BETS"
+        and "PLAYERS" are all styled `Text` - so a screen reader had nothing to
+        navigate by and the document outline was empty. This is the h1; the panels
+        below are h2s. Off-screen rather than hidden, because `display: none` would
+        take it out of the accessibility tree too.
+      */}
+      <Text
+        as="h1"
+        position="absolute"
+        w="1px"
+        h="1px"
+        overflow="hidden"
+        clipPath="inset(50%)"
+        whiteSpace="nowrap"
+      >
+        Firecracker — a provably-fair crash game
+      </Text>
+
       <ConnectionBanner />
 
       {/* Header */}

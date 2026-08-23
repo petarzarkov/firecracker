@@ -1,7 +1,7 @@
 {
   "name": "Firecracker",
   "short_name": "Firecracker",
-  "description": "Firecracker App",
+  "description": "A provably-fair crash game. Bet, ride the multiplier, cash out before it explodes.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1a1a1a",

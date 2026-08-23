@@ -10,6 +10,18 @@ const customConfig = defineConfig({
       bg: 'gaming.darker',
       color: 'white',
     },
+    /*
+      Keyboard focus, once, for everything. The default is a one-pixel browser
+      outline, which on a #0d0d0d ground is close to no indicator at all - and the
+      first Tab on the lobby lands in the chat scroller, where it was invisible.
+      `:focus-visible` rather than `:focus`, so a mouse click never draws it.
+    */
+    '*:focus-visible': {
+      outline: '2px solid',
+      outlineColor: 'fire.amber',
+      outlineOffset: '2px',
+      borderRadius: '2px',
+    },
   },
   theme: {
     recipes: {

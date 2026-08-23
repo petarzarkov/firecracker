@@ -202,7 +202,9 @@ function NextRoundHint() {
       as="span"
       ml={{ base: 1, lg: 2 }}
       fontSize={{ base: '2xs', lg: 'xs' }}
-      color="gray.500"
+      /* Was `gray.500` on this panel: 2.30:1, which is unreadable rather than
+         merely quiet - and it is the line that says which round an edit lands on. */
+      color="orange.300"
       fontWeight="normal"
     >
       · next round
@@ -242,6 +244,10 @@ function BetAmountInput({
           type="number"
           min="1"
           step="1"
+          /* The visible "BET AMOUNT" above is a `Text`, not a `<label for>`, so
+             without this the field announces as an unnamed number spinner. */
+          aria-label="Bet amount in dollars"
+          inputMode="decimal"
           bg="#1e1e1e"
           border="1px solid"
           borderColor="#444"
@@ -383,23 +389,23 @@ export function BetPanel() {
       <Flex gap={{ base: 2, lg: 3 }} align="flex-end" mt={{ base: 0, lg: 2 }}>
         <Box flex={1}>
           <Flex gap={{ base: 1, lg: 2 }} flexWrap="wrap" align="center">
-            <Text
-              fontSize={{ base: '2xs', lg: 'xs' }}
-              color="#999"
-              alignSelf="center"
-              mr={1}
-            >
+            <Text fontSize="xs" color="#aaa" alignSelf="center" mr={1}>
               Quick:
             </Text>
             {QUICK_AMOUNTS.map((a) => (
               <Button
                 key={a}
-                size={{ base: '2xs', lg: 'xs' }}
+                size={{ base: 'xs', lg: 'xs' }}
                 variant="outline"
                 borderColor="#555"
                 color="#ccc"
                 fontFamily="mono"
-                fontSize={{ base: '2xs', lg: 'xs' }}
+                fontSize="xs"
+                /* These were 30x24 on a phone against a 44x44 guideline, and they
+                   set the stake - a mis-tap here is the wrong amount of money, not
+                   the wrong page. */
+                minW={{ base: '52px', lg: 'auto' }}
+                minH={{ base: '40px', lg: 'auto' }}
                 onClick={() => setAmount(a.toFixed(2))}
                 _hover={{
                   borderColor: 'green.400',
@@ -422,17 +428,20 @@ export function BetPanel() {
                   ? 'green.500'
                   : hasAutoCashOut
                     ? 'gray.600'
-                    : 'gray.800'
+                    : 'gray.700'
               }
+              /* `gray.700` on this ground measured 1.21:1 - a disabled control
+                 still has to be readable enough to say why it is disabled. */
               color={
                 autoPlay
                   ? 'green.400'
                   : hasAutoCashOut
-                    ? 'gray.500'
-                    : 'gray.700'
+                    ? 'gray.400'
+                    : 'gray.500'
               }
               fontFamily="mono"
-              fontSize={{ base: '2xs', lg: 'xs' }}
+              fontSize="xs"
+              minH={{ base: '40px', lg: 'auto' }}
               disabled={!hasAutoCashOut}
               onClick={() => setAutoPlay((v) => !v)}
               visibility={activeTab === 'auto' ? 'visible' : 'hidden'}
@@ -451,7 +460,7 @@ export function BetPanel() {
                   : 'Set an AUTO EXIT value to enable auto-play'
               }
             >
-              {autoPlay ? 'AUTO ON' : 'AUTO'}
+              {autoPlay ? 'AUTO-PLAY ON' : 'AUTO-PLAY'}
             </Button>
           </Flex>
         </Box>
@@ -491,12 +500,12 @@ export function BetPanel() {
               key={tab}
               value={tab}
               fontFamily="mono"
-              fontSize={{ base: '2xs', lg: 'xs' }}
+              fontSize="xs"
               fontWeight="bold"
               letterSpacing="wide"
-              px={{ base: 2, lg: 3 }}
-              py={{ base: 1, lg: 1.5 }}
-              color="#888"
+              px={{ base: 3, lg: 3 }}
+              py={{ base: 2, lg: 1.5 }}
+              color="#999"
               _selected={{
                 color: 'green.400',
                 borderBottom: '2px solid',

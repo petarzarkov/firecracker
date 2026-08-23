@@ -81,10 +81,10 @@ function MessageButton({ bet }: { bet: BetEntry }) {
           targetUserId: bet.userId,
         })
       }
-      fontSize="10px"
+      fontSize="sm"
       lineHeight={1}
       px={1}
-      opacity={0.35}
+      opacity={0.6}
       flexShrink={0}
       _hover={{ opacity: 1, color: 'green.300' }}
       transition="opacity 0.15s, color 0.15s"
@@ -169,8 +169,8 @@ const BetRow = memo(function BetRow({
           </>
         )}
         <Text
-          fontSize="10px"
-          color={isCashedOut ? 'green.300' : isLost ? 'gray.500' : 'gray.200'}
+          fontSize="xs"
+          color={isCashedOut ? 'green.300' : isLost ? 'gray.400' : 'gray.200'}
           overflow="hidden"
           textOverflow="ellipsis"
           whiteSpace="nowrap"
@@ -247,8 +247,9 @@ export function PlayerList() {
     return (
       <Box>
         <Text
+          as="h2"
           fontSize="xs"
-          color="gray.500"
+          color="gray.400"
           fontWeight="bold"
           letterSpacing="wide"
           mb={2}
@@ -265,8 +266,9 @@ export function PlayerList() {
   return (
     <Box flex={1} overflow="hidden" display="flex" flexDirection="column">
       <Text
+        as="h2"
         fontSize="xs"
-        color="gray.500"
+        color="gray.400"
         fontWeight="bold"
         letterSpacing="wide"
         mb={2}
@@ -282,13 +284,13 @@ export function PlayerList() {
         borderColor="gray.700"
         mb={1}
       >
-        <Text fontSize="2xs" color="gray.600" flex={1}>
+        <Text fontSize="xs" color="gray.500" flex={1}>
           PLAYER
         </Text>
-        <Text fontSize="2xs" color="gray.600" w="60px" textAlign="right">
+        <Text fontSize="xs" color="gray.500" w="60px" textAlign="right">
           BET
         </Text>
-        <Text fontSize="2xs" color="gray.600" w="82px" textAlign="right">
+        <Text fontSize="xs" color="gray.500" w="82px" textAlign="right">
           WON
         </Text>
       </Flex>

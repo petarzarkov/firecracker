@@ -1,11 +1,21 @@
 import { Box, Flex, Text } from '@chakra-ui/react';
 import { useGameStore } from '@/store/gameStore';
 
+/**
+ * The bands the pills are coloured by, and the legend beside the title - one list,
+ * so the two cannot drift into disagreeing about what blue means.
+ */
+const BANDS = [
+  { upTo: 2, color: '#ff8844' },
+  { upTo: 5, color: '#ffd700' },
+  { upTo: 10, color: '#44aaff' },
+  { upTo: null, color: '#bb44ff' },
+] as const;
+
 function crashColor(cp: number): string {
   if (cp < 1.5) return '#ff4444';
-  if (cp < 2) return '#ff8844';
-  if (cp < 5) return '#ffd700';
-  if (cp < 10) return '#44aaff';
+  for (const band of BANDS)
+    if (band.upTo !== null && cp < band.upTo) return band.color;
   return '#bb44ff';
 }
 
@@ -14,15 +24,32 @@ export function RoundHistory() {
 
   return (
     <Box>
-      <Text
-        fontSize="xs"
-        color="#aaa"
-        fontWeight="bold"
-        letterSpacing="wide"
-        mb={2}
-      >
-        HISTORY
-      </Text>
+      <Flex align="baseline" justify="space-between" mb={2} gap={2}>
+        <Text
+          as="h2"
+          fontSize="xs"
+          color="#aaa"
+          fontWeight="bold"
+          letterSpacing="wide"
+        >
+          HISTORY
+        </Text>
+        {/*
+          The pills have always been colour-banded and nothing said by what. Four
+          swatches and their thresholds cost one line and turn a decoration into a
+          reading of how the last twenty rounds went.
+        */}
+        <Flex align="center" gap={1.5} aria-label="Crash point bands">
+          {BANDS.map(({ upTo, color }) => (
+            <Flex key={color} align="center" gap={0.5}>
+              <Box w="6px" h="6px" borderRadius="full" bg={color} />
+              <Text fontSize="2xs" color="gray.500" fontFamily="mono">
+                {upTo === null ? '10+' : `<${upTo}`}
+              </Text>
+            </Flex>
+          ))}
+        </Flex>
+      </Flex>
 
       {recentCrashes.length === 0 ? (
         <Text fontSize="xs" color="gray.600" textAlign="center" py={2}>

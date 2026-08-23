@@ -4,11 +4,13 @@
    migration that would then be reviewing two changes at once. */
 import { Box, Icon, Image, Link, Stack, Text } from '@chakra-ui/react';
 import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react';
-import { FaGamepad, FaGithub, FaLinkedin } from 'react-icons/fa';
+import { FaGamepad, FaGithub, FaGoogle, FaLinkedin } from 'react-icons/fa';
+import type { IconType } from 'react-icons';
 import { useAuthStore } from '../../store/authStore';
 import { useGameStore } from '../../store/gameStore';
 import * as authApi from '../../systems/auth/auth-api';
 import type { SocialProvider } from '../../systems/auth/auth-api';
+import { enabledProviders } from '../../systems/auth/use-auth-providers';
 import { AvatarPicker } from '../ui/AvatarPicker';
 import { Button } from '../ui/Button';
 import { GradientDivider } from '../ui/GradientDivider';
@@ -76,60 +78,100 @@ const glassTint = (rgb: string, restAlpha: number) => ({
 });
 
 const LINKEDIN_RGB = '0,119,181';
+const GOOGLE_RGB = '219,68,55';
 const DEMO_RGB = '255,200,0';
+
+/** One row per provider the server says it can complete. See `enabledProviders`. */
+const PROVIDERS: ReadonlyArray<{
+  readonly id: SocialProvider;
+  readonly label: string;
+  readonly icon: IconType;
+  readonly tint?: readonly [string, number];
+}> = [
+  {
+    id: 'google',
+    label: 'Continue with Google',
+    icon: FaGoogle,
+    tint: [GOOGLE_RGB, 0.22],
+  },
+  { id: 'github', label: 'Continue with GitHub', icon: FaGithub },
+  {
+    id: 'linkedin',
+    label: 'Continue with LinkedIn',
+    icon: FaLinkedin,
+    tint: [LINKEDIN_RGB, 0.3],
+  },
+];
 
 const SocialButtons = ({
   isLoading,
+  providers,
   onDemoLogin,
   onSocial,
 }: {
   isLoading: boolean;
+  providers: readonly SocialProvider[];
   onDemoLogin: () => void;
   onSocial: (provider: SocialProvider) => void;
-}) => (
-  <>
-    <GradientDivider />
-    <Stack gap={3}>
-      <Button
-        onClick={() => onSocial('github')}
-        disabled={isLoading}
-        variant="glass"
-        width="full"
-      >
-        <Icon as={FaGithub} />
-        Continue with GitHub
-      </Button>
-      <Button
-        onClick={() => onSocial('linkedin')}
-        disabled={isLoading}
-        variant="glass"
-        width="full"
-        {...glassTint(LINKEDIN_RGB, 0.3)}
-      >
-        <Icon as={FaLinkedin} />
-        Continue with LinkedIn
-      </Button>
-    </Stack>
-    <Box
-      style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}
-      pt={3}
-      mt={1}
-    >
-      <Button
-        onClick={onDemoLogin}
-        disabled={isLoading}
-        variant="glass"
-        width="full"
-        color="yellow.300"
-        borderStyle="dashed"
-        {...glassTint(DEMO_RGB, 0)}
-      >
-        <Icon as={FaGamepad} />
-        Try Demo
-      </Button>
-    </Box>
-  </>
-);
+}) => {
+  const offered = PROVIDERS.filter((p) => providers.includes(p.id));
+  return (
+    <>
+      {/*
+        The demo comes before the social buttons now, in its own group.
+
+        It was last on the card and dashed - the least important-looking thing on a
+        screen where nothing else shows a visitor what the game is. It is not the
+        fire gradient either: `Login` is this form's submit and there cannot be two
+        primaries on one card.
+      */}
+      <GradientDivider />
+      <Box>
+        <Button
+          onClick={onDemoLogin}
+          disabled={isLoading}
+          variant="glass"
+          width="full"
+          color="yellow.200"
+          fontWeight="bold"
+          {...glassTint(DEMO_RGB, 0.14)}
+        >
+          <Icon as={FaGamepad} />
+          Play the demo
+        </Button>
+        <Text
+          fontSize="xs"
+          color="rgba(255,255,255,0.5)"
+          textAlign="center"
+          mt="2"
+          fontFamily="monospace"
+        >
+          $1,000 in play money. No email, no card.
+        </Text>
+      </Box>
+
+      {offered.length > 0 && (
+        <Stack gap={3} mt={3}>
+          {offered.map((provider) => (
+            <Button
+              key={provider.id}
+              onClick={() => onSocial(provider.id)}
+              disabled={isLoading}
+              variant="glass"
+              width="full"
+              {...(provider.tint === undefined
+                ? {}
+                : glassTint(provider.tint[0], provider.tint[1]))}
+            >
+              <Icon as={provider.icon} />
+              {provider.label}
+            </Button>
+          ))}
+        </Stack>
+      )}
+    </>
+  );
+};
 
 export function LoginForm() {
   const [mode, setMode] = useState<FormMode>('login');
@@ -147,6 +189,14 @@ export function LoginForm() {
 
   const setAuth = useAuthStore((state) => state.setAuth);
   const setIsDemoMode = useGameStore((state) => state.setIsDemoMode);
+  /**
+   * Which social buttons to draw, from the server rather than from a list here.
+   *
+   * Empty until it answers, and empty if it never does: a provider that is not
+   * configured fails at its callback with a page the player cannot act on, which is
+   * worse than a button that is briefly missing while the email form works.
+   */
+  const providers = enabledProviders();
 
   const handleDemoLogin = async () => {
     setStatus({ isLoading: true, error: '', success: '' });
@@ -354,6 +404,7 @@ export function LoginForm() {
               />
             </Box>
             <Text
+              as="h1"
               fontSize="2xl"
               fontWeight="black"
               fontFamily="monospace"
@@ -369,8 +420,11 @@ export function LoginForm() {
               FIRECRACKER
             </Text>
             <Text
+              as="h2"
               fontSize="sm"
-              color="rgba(255,255,255,0.45)"
+              /* 0.45 alpha on this card is under 4.5:1; it is the line that says
+                 which form you are looking at. */
+              color="rgba(255,255,255,0.62)"
               mt="1"
               fontFamily="monospace"
               letterSpacing="wider"
@@ -505,6 +559,7 @@ export function LoginForm() {
                   </Link>
                   <SocialButtons
                     isLoading={status.isLoading}
+                    providers={providers}
                     onDemoLogin={handleDemoLogin}
                     onSocial={handleSocial}
                   />

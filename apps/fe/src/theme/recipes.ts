@@ -71,10 +71,29 @@ export const buttonRecipe = defineRecipe({
 });
 
 export const dialogRecipe = defineSlotRecipe({
-  slots: ['backdrop', 'content', 'header', 'body', 'footer'],
+  /**
+   * **`positioner` is load-bearing.** A slot recipe replaces the default for its
+   * component rather than merging into it, so leaving this one out dropped Chakra's
+   * `position: fixed; inset: 0` for the slot - and every dialog then laid itself out
+   * in normal flow, below an app shell that is `100dvh` with `overflow: hidden`.
+   * `Change Avatar` rendered at y=900 in a 900px viewport: a dimmed page, no dialog,
+   * no console error, and Escape the only way out.
+   */
+  slots: ['backdrop', 'positioner', 'content', 'header', 'body', 'footer'],
   base: {
     backdrop: {
       bg: 'blackAlpha.600',
+    },
+    positioner: {
+      position: 'fixed',
+      insetInline: 0,
+      top: 0,
+      bottom: 0,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '4',
+      zIndex: 'modal',
     },
     content: {
       bg: 'gaming.dark',

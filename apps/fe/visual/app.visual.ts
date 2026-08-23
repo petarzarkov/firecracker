@@ -17,7 +17,7 @@ import { launch, openPage, shoot } from './browser.js';
  *
  * Point them somewhere else with `VISUAL_APP_URL`.
  *
- * They sign in **anonymously**, through the lobby's own "Try Demo" button. The
+ * They sign in **anonymously**, through the lobby's own "Play the demo" button. The
  * socket admits spectators but the client does not: an unauthenticated visitor gets
  * the login screen and never reaches a chart, so a spec that only loaded the page
  * would be asserting about a form. The demo account is the shortest path to the
@@ -47,7 +47,7 @@ const COUNTDOWN = /starting in|starting\.\.\./i;
 /** Signs in as a demo player and waits for the chart the stage draws. */
 const enterLobby = async (page: Page): Promise<void> => {
   await page.goto(APP, { waitUntil: 'networkidle' });
-  await page.getByRole('button', { name: /try demo/i }).click();
+  await page.getByRole('button', { name: /play the demo/i }).click();
   // The canvas is the stage's, so this doubles as the check that the client's
   // dynamic import of `@firecracker/stage` resolves in a real bundle.
   await page.waitForSelector('canvas', { timeout: 30_000 });
@@ -78,7 +78,7 @@ describe('the client, in a browser', () => {
 
     console.log('  →', await shoot(page, 'app-login'));
     await expect(
-      page.getByRole('button', { name: /try demo/i }).isVisible(),
+      page.getByRole('button', { name: /play the demo/i }).isVisible(),
     ).resolves.toBe(true);
 
     expect(complaints.errors).toEqual([]);

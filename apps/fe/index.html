@@ -5,9 +5,16 @@
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
+    <!--
+      No `maximum-scale` and no `user-scalable=no`. Locking the viewport fails WCAG
+      1.4.4, and this app has 11px type in its player list - pinch is exactly how
+      somebody reads it. The layout is responsive down to 320px, so the lock was
+      never load-bearing.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+      name="description"
+      content="Firecracker is a provably-fair crash game: bet before the launch, ride the multiplier, and cash out before the rocket explodes. Every round's crash point can be re-drawn from its published seeds."
     />
     <meta name="theme-color" content="#1a1a1a" />
     <title>Firecracker</title>

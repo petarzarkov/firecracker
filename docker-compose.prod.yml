@@ -82,7 +82,7 @@ services:
     # Docker's 10s default would not survive raising it.
     stop_grace_period: 20s
     ports:
-      - '${API_PORT:-3001}:3001'
+      - '${COMPOSE_API_PORT:-3001}:3001'
     volumes:
       - app-data:/app/data
     depends_on:

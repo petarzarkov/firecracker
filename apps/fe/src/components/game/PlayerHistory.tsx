@@ -253,6 +253,7 @@ export function PlayerHistory() {
         flexShrink={0}
       >
         <Text
+          as="h2"
           fontSize="xs"
           fontWeight="bold"
           color="#aaa"
