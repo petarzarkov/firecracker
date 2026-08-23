@@ -1,5 +1,9 @@
 import { Logger } from '@dunx/core';
-import { encode, encodeRelay, PubSub } from '@dunx/http';
+import { PubSub } from '@dunx/http';
+// The relay codec, `/internal` since dunx 3.0.0. `RelayPublisher` writes the wire
+// format a `RedisRelay` on another node reads, so it has to be dunx's own encoder -
+// a local reimplementation would be a fan-out that breaks on a framework bump.
+import { encode, encodeRelay } from '@dunx/http/internal';
 import { RedisConnection } from '@dunx/infra/redis';
 import { AppConfigService } from '../../config/app.config.service.js';
 

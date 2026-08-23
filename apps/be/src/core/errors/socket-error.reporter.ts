@@ -1,12 +1,16 @@
 import { Logger } from '@dunx/core';
 import {
   HttpStatusCode,
-  observe,
   type SocketContext,
   type SocketFrame,
   type SocketMiddleware,
   type SocketNext,
 } from '@dunx/http';
+// dunx 3.0.0 moved the middleware fold to `/internal` and 3.0.1 dropped the
+// deprecated re-export, so this is the only place it lives. The subpath carries no
+// stability promise: `observe` is the sync-throw *and* async-reject dance written
+// once, and reimplementing it here would be a second copy that silently drifts.
+import { observe } from '@dunx/http/internal';
 import { ErrorMapper } from './error-mapper.js';
 
 /**
