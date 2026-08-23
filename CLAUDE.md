@@ -423,6 +423,32 @@ Every spec sets `QUEUE_CONSUME: 'false'` except `queues.spec.ts`, and that is lo
 
 A bug fix comes with the test that would have caught it.
 
+### `*.visual.ts` — a real browser, and a picture
+
+A third kind, in `apps/fe/visual/`, run by Playwright over Chromium. Not picked up
+by `bun test` — the name does not match its patterns — so `bun run test` stays
+hermetic and browserless. `bunx playwright install chromium` once, then:
+
+```bash
+bun run visual        # the stage. Needs nothing at all.
+bun run visual:app    # the client. Needs `docker compose up -d` and `bun dev`.
+```
+
+**`bun run visual` needs no server**, and that is the whole design: `createStage`
+takes a sampler, so the harness page is the client's chart with React, the store and
+the socket removed, bundled by `Bun.build` and served on a throwaway port. The page's
+clock is stepped by hand and `Math.random` is seeded, so a frame is reproducible and
+`advance(90)` is the same ninety frames every time.
+
+Screenshots land in `apps/fe/visual/screens/`, gitignored. **They are the point.** A
+spec can assert that a region got brighter; it cannot assert that the countdown was
+printing over the rocket, that four boarding players had collapsed into one clump, or
+that a sprite was invisible against the plot - all three of which were true, all three
+shipped, and all three were found by looking at a PNG. Assert what you can, then look.
+
+`apps/fe/visual/README.md` has the rest: why the pixel readback has to happen in the
+same `evaluate` as the draw, and why the app suite signs in through **Try Demo**.
+
 ---
 
 ## Commands
@@ -432,6 +458,8 @@ A bug fix comes with the test that would have caught it.
 | `bun dev`                     | both apps                   |
 | `bun run dev:be` / `dev:fe`   | one of them                 |
 | `bun run test`                | every test in the workspace |
+| `bun run visual`              | the stage, in Chromium      |
+| `bun run visual:app`          | the client, in Chromium     |
 | `bun run lint` / `format`     | oxlint / oxfmt              |
 | `bun run typecheck`           | every workspace             |
 | `bun run mig:gen` / `mig:run` | drizzle migrations          |

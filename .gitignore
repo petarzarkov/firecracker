@@ -20,6 +20,11 @@ apps/be/.tmp/
 .env*
 !.env.example
 
+# What `bun run visual` draws. An artefact of a run, and a person looking at one
+# is the assertion it serves - a committed screenshot would be a golden image, and
+# nothing here compares against one.
+apps/fe/visual/screens/
+
 # Logs
 logs
 *.log

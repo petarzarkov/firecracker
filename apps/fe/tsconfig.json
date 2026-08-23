@@ -19,6 +19,6 @@
   /* `vite.config.ts` is checked here rather than through a composite project
      reference. The reference existed to give it Node semantics; the base config
      covers that, and a referenced project cannot inherit `noEmit`. */
-  "include": ["src", "vite.config.ts"],
+  "include": ["src", "visual", "vite.config.ts"],
   "exclude": ["node_modules", "dist"]
 }

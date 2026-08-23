@@ -1,5 +1,6 @@
-import { Container, FillGradient, Graphics } from 'pixi.js';
+import { Container, Graphics } from 'pixi.js';
 import * as palette from '../palette.js';
+import { underCurveTexture } from '../textures.js';
 import type { Scale } from '../scale.js';
 import type { StagePoint } from '../types.js';
 
@@ -20,36 +21,27 @@ const TIP_HALO_RADIUS = 7;
 const TIP_RADIUS = 4;
 
 /**
- * The area under the round: strongest at the curve, gone by the axis. A flat fill
- * buries the starfield and flattens the shape into a wedge by 3x.
+ * The area under the round: strongest at the curve, gone by the axis, and gone at
+ * the leading edge too.
  *
- * `textureSpace: 'local'` maps the gradient across the shape's own bounds, which is
- * what tracks a resizing plot and a rescaling axis with no recomputed coordinates.
+ * It was a two-stop {@link FillGradient} fading downward, which left the closing
+ * edge - the vertical drop from the tip to the axis - as a hard step from lit plot
+ * to unlit, right beside the rocket where every eye already is. A linear gradient
+ * fades in one direction and this shape needs two, so the profile is painted into a
+ * texture instead: see `underCurveTexture`. One fill either way.
+ *
+ * `textureSpace: 'local'` maps it across the shape's own bounds, which is what
+ * tracks a resizing plot and a rescaling axis with no recomputed coordinates - and
+ * what puts the feather on the tip rather than at some fixed pixel.
  */
-const fadeUnder = (colour: number): FillGradient => {
-  // A stop is `{ offset, color }` with no alpha of its own, so the alpha rides
-  // in the colour as an eight-digit hex.
-  const at = (alpha: number): string =>
-    `#${colour.toString(16).padStart(6, '0')}${Math.round(alpha * 255)
-      .toString(16)
-      .padStart(2, '0')}`;
-
-  return new FillGradient({
-    type: 'linear',
-    start: { x: 0, y: 0 },
-    end: { x: 0, y: 1 },
-    colorStops: [
-      { offset: 0, color: at(0.34) },
-      { offset: 0.55, color: at(0.1) },
-      { offset: 1, color: at(0) },
-    ],
+const wash = (colour: number) =>
+  ({
+    texture: underCurveTexture(),
+    // The texture is white, so this is a tint. A rising round and a crashed one
+    // differ in nothing else.
+    color: colour,
     textureSpace: 'local',
-  });
-};
-
-/** Built once each; a new gradient per frame would upload a texture per frame. */
-const RISING_FILL = fadeUnder(palette.CURVE);
-const CRASHED_FILL = fadeUnder(palette.CURVE_CRASHED);
+  }) as const;
 
 /**
  * The points to draw, oldest first, always ending at `head`. Pure and separate from
@@ -156,7 +148,7 @@ export const createCurve = (): Curve => {
         .lineTo(tipX, plot.bottom)
         .lineTo(plot.left, plot.bottom)
         .closePath()
-        .fill(crashed ? CRASHED_FILL : RISING_FILL);
+        .fill(wash(colour));
 
       trace(graphics, scale, path, span);
       graphics.stroke({

@@ -23,6 +23,8 @@
     "start": "bun run --filter 'firecracker-be' start",
     "test": "bun run --parallel --filter '*' test",
     "test:e2e": "bun run --filter 'firecracker-be' test:e2e",
+    "visual": "bun run --filter 'firecracker-fe' visual",
+    "visual:app": "bun run --filter 'firecracker-fe' visual:app",
     "email": "bun run --filter 'firecracker-be' email",
     "typecheck": "bun run --parallel --filter '*' typecheck",
     "lint": "oxlint --fix apps libs",
@@ -41,6 +43,7 @@
     "lint-staged": "^17.3.0",
     "oxfmt": "^0.63.0",
     "oxlint": "^1.78.0",
+    "playwright": "^1.62.1",
     "typescript": "^7.0.2"
   },
   "lint-staged": {
