@@ -1,25 +1,15 @@
 import { SOCKET_CLIENT_EVENTS } from '@firecracker/contracts';
-import {
-  Box,
-  Flex,
-  IconButton,
-  Image,
-  Input,
-  Tabs,
-  Text,
-} from '@chakra-ui/react';
-import { useEffect, useRef, useState } from 'react';
-import { FiExternalLink } from 'react-icons/fi';
-import { IoSend } from 'react-icons/io5';
+import { Box, Flex, Image, Tabs, Text } from '@chakra-ui/react';
+import { useState } from 'react';
 import { LazyChatWindow } from '@/components/ui/LazyChatWindow';
 import { CHAT_THEME } from '@/theme/chat';
 import { PlayerChatDialogue } from '@/components/ui/PlayerChatDialogue';
 import { useSocket } from '@/SocketContext';
-import { useAuthStore } from '@/store/authStore';
 import { useChatStore } from '@/store/chatStore';
 import { useGameSocket } from '@/systems/network/useGameSocket';
-import { useWideLayout } from '@/hooks/useWideLayout';
-import { BetPanel } from './BetPanel';
+import { useLayout } from '@/hooks/useWideLayout';
+import { BetPanel, CashOutBar } from './BetPanel';
+import { InlineChatPanel } from './InlineChatPanel';
 import { ConnectionBanner } from './ConnectionBanner';
 import { CrashChart } from './CrashChart';
 import { PlayerHistory } from './PlayerHistory';
@@ -36,216 +26,25 @@ const MOBILE_TABS = [
   ['chat', 'CHAT'],
 ] as const;
 
-function InlineChatPanel({ full = false }: { full?: boolean }) {
-  const socket = useSocket();
-  const user = useAuthStore((state) => state.user);
-  const messages = useChatStore((state) => state.globalChat.messages);
-  const openGlobalChat = useChatStore((state) => state.openGlobalChat);
-  const connectedPlayers = useChatStore((state) => state.connectedPlayers);
-  const [input, setInput] = useState('');
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  // Auto-scroll on new messages
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional — scroll only when count changes
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages.length]);
-
-  const handleSend = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || !socket) return;
-    socket.emit(SOCKET_CLIENT_EVENTS.CHAT_MESSAGE, { message: input.trim() });
-    setInput('');
-  };
-
-  return (
-    <Flex
-      direction="column"
-      w={full ? '100%' : { base: '185px', lg: '205px' }}
-      h={full ? '100%' : undefined}
-      flex={full ? 1 : undefined}
-      flexShrink={full ? undefined : 0}
-      borderRight={full ? undefined : '1px solid'}
-      borderColor="gray.700"
-      bg="gray.900"
-      overflow="hidden"
-    >
-      {/* Header */}
-      <Flex
-        px={3}
-        py={2}
-        align="center"
-        justify="space-between"
-        borderBottom="1px solid"
-        borderColor="gray.700"
-        flexShrink={0}
-      >
-        <Text
-          as="h2"
-          fontSize="xs"
-          fontWeight="bold"
-          color="gray.400"
-          letterSpacing="widest"
-        >
-          CHAT
-          {connectedPlayers > 0 && (
-            <Text as="span" color="green.500" fontWeight="normal" ml={1}>
-              ({connectedPlayers})
-            </Text>
-          )}
-        </Text>
-        <IconButton
-          aria-label="Pop out chat"
-          size="2xs"
-          variant="ghost"
-          color="gray.500"
-          _hover={{ color: 'gray.200' }}
-          onClick={openGlobalChat}
-          title="Pop out"
-        >
-          <FiExternalLink size={14} />
-        </IconButton>
-      </Flex>
-
-      {/* Messages */}
-      <Box
-        ref={scrollRef}
-        flex={1}
-        overflowY="auto"
-        p={2}
-        css={{
-          '&::-webkit-scrollbar': { width: '5px' },
-          '&::-webkit-scrollbar-track': {
-            background: 'rgba(255,255,255,0.04)',
-          },
-          '&::-webkit-scrollbar-thumb': {
-            background: 'rgba(255,255,255,0.22)',
-            borderRadius: '3px',
-          },
-        }}
-      >
-        {messages.length === 0 ? (
-          <Text fontSize="xs" color="#888" textAlign="center" mt={6} px={1}>
-            No messages yet
-          </Text>
-        ) : (
-          messages.map((msg) => (
-            <Flex
-              key={`${new Date(msg.timestamp).getTime()}-${msg.senderId}`}
-              mb={1.5}
-              gap={1.5}
-              align="flex-start"
-            >
-              {msg.senderPicture ? (
-                <Image
-                  src={msg.senderPicture}
-                  alt={msg.senderName}
-                  boxSize="18px"
-                  borderRadius="full"
-                  objectFit="cover"
-                  flexShrink={0}
-                  mt="2px"
-                />
-              ) : (
-                <Flex
-                  w="18px"
-                  h="18px"
-                  borderRadius="full"
-                  bg="green.800"
-                  align="center"
-                  justify="center"
-                  flexShrink={0}
-                  mt="2px"
-                >
-                  <Text
-                    fontSize="9px"
-                    fontWeight="bold"
-                    color="white"
-                    lineHeight={1}
-                  >
-                    {msg.senderName.slice(0, 1).toUpperCase()}
-                  </Text>
-                </Flex>
-              )}
-              <Box flex={1} minW={0}>
-                <Text
-                  as="span"
-                  fontSize="xs"
-                  color="green.400"
-                  fontWeight="medium"
-                >
-                  {msg.senderName}:{' '}
-                </Text>
-                <Text as="span" fontSize="xs" color="gray.100">
-                  {msg.message}
-                </Text>
-              </Box>
-            </Flex>
-          ))
-        )}
-      </Box>
-
-      {/* Input — authenticated only (server rejects guest send attempts) */}
-      {user ? (
-        <Box
-          as="form"
-          onSubmit={handleSend}
-          p={2}
-          borderTop="1px solid"
-          borderColor="gray.700"
-          flexShrink={0}
-        >
-          <Flex gap={1}>
-            <Input
-              size="xs"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Say something..."
-              bg="#1e1e1e"
-              border="1px solid"
-              borderColor="#333"
-              color="gray.200"
-              borderRadius="sm"
-              _placeholder={{ color: '#777', fontSize: '11px' }}
-              _focus={{ borderColor: 'green.600', outline: 'none' }}
-              autoComplete="off"
-              maxLength={200}
-            />
-            <IconButton
-              type="submit"
-              aria-label="Send"
-              size="xs"
-              disabled={!input.trim()}
-              bg="green.700"
-              color="white"
-              _hover={{ bg: 'green.600' }}
-              _disabled={{ opacity: 0.4 }}
-              borderRadius="sm"
-              flexShrink={0}
-            >
-              <IoSend size={14} />
-            </IconButton>
-          </Flex>
-        </Box>
-      ) : (
-        <Box p={2} borderTop="1px solid" borderColor="gray.700" flexShrink={0}>
-          <Text fontSize="xs" color="gray.600" textAlign="center">
-            Login to chat
-          </Text>
-        </Box>
-      )}
-    </Flex>
-  );
-}
+/**
+ * A tablet keeps the bet panel on screen permanently and drops the tab that held
+ * it - there is room for both, which is the whole reason the layout exists.
+ */
+const TABLET_TABS = MOBILE_TABS.filter(([value]) => value !== 'game');
 
 export function Game() {
   useGameSocket();
 
-  // Only the live layout is mounted - see `useWideLayout` for what mounting both
-  // costs.
-  const wide = useWideLayout();
+  // Only the live layout is mounted - see `useLayout` for what mounting more than
+  // one costs.
+  const layout = useLayout();
+  const wide = layout === 'desktop';
+  /**
+   * Controlled, so the pinned cash-out knows whether the panel is already on
+   * screen - two identical CASH OUT buttons, one over the other, is what an
+   * uncontrolled tab strip gave.
+   */
+  const [tab, setTab] = useState(layout === 'tablet' ? 'players' : 'game');
   const socket = useSocket();
   const { globalChat, closeGlobalChat, playerChats } = useChatStore(
     (state) => state,
@@ -326,10 +125,10 @@ export function Game() {
         </Flex>
       </Flex>
 
-      {/* Mobile layout (below lg) */}
+      {/* Phone and tablet (below lg) */}
       {!wide && (
         <Box display="flex" flex={1} flexDirection="column" overflow="hidden">
-          {/* Chart — fills all space above the fixed tab panel */}
+          {/* Chart — fills all space above the panel */}
           <Box
             flex={1}
             minH={0}
@@ -342,79 +141,122 @@ export function Game() {
             <CrashChart />
           </Box>
 
-          {/* Tab panel — fixed height, never grows with content */}
-          <Tabs.Root
-            defaultValue="game"
-            display="flex"
-            flexDirection="column"
+          {/*
+            Cash out, where a tab cannot hide it.
+            
+            On a phone the controls are one tab among four and nothing switches back
+            when a round starts, so a player who opened chat during the betting
+            window had no way to take the money while the multiplier climbed. This
+            renders only while there is something to take. The tablet has the panel
+            on screen already.
+          */}
+          {layout === 'phone' && tab !== 'game' && <CashOutBar />}
+
+          <Flex
+            flexShrink={0}
             /*
              * `dvh`, matching the root's `100dvh`. In `vh` this panel is measured
              * against the *large* viewport while its parent is measured against the
              * live one, so while a phone's address bar is showing the tabs claim
              * more than their share and the chart above them is squeezed by the
              * difference.
+             *
+             * `clamp`, because a fraction alone is wrong at both ends: on a 1180px
+             * tablet 30dvh left a band of dead black under the controls, and in
+             * landscape it left 117px, which is not enough to show the stake field
+             * at all - so `PLACE BET` was live above an amount nobody could see.
              */
-            h="30dvh"
-            flexShrink={0}
+            h="clamp(170px, 34dvh, 330px)"
             overflow="hidden"
-            variant="subtle"
           >
-            {/* Tab bar */}
-            <Tabs.List
-              bg="gray.900"
-              borderTop="1px solid"
-              borderColor="gray.700"
-              flexShrink={0}
-            >
-              {MOBILE_TABS.map(([value, label]) => (
-                <Tabs.Trigger
-                  key={value}
-                  value={value}
-                  flex={1}
-                  fontFamily="mono"
-                  fontSize="2xs"
-                  letterSpacing="wide"
-                  px={1}
-                  py={1.5}
-                  minH="auto"
-                  color="gray.500"
-                  _selected={{ color: 'green.400', bg: 'gray.800' }}
-                >
-                  {label}
-                </Tabs.Trigger>
-              ))}
-            </Tabs.List>
-
-            {/* Content area — fills rest of tab panel, each panel scrolls */}
-            <Box flex={1} minH={0} overflow="hidden">
-              <Tabs.Content
-                value="game"
-                h="full"
-                overflow="hidden"
-                p={0}
+            {/*
+              The tablet keeps the controls beside the tabs rather than inside them.
+              A 820-point iPad was being handed the phone's drawer, with the width
+              for both sitting unused.
+            */}
+            {layout === 'tablet' && (
+              <Box
+                w="52%"
+                overflowY="auto"
                 bg="gray.900"
+                borderTop="1px solid"
+                borderRight="1px solid"
+                borderColor="gray.700"
+                p={2}
               >
-                <Box h="full" overflowY="auto" p={0}>
-                  <BetPanel />
-                </Box>
-              </Tabs.Content>
+                <BetPanel />
+              </Box>
+            )}
 
-              <Tabs.Content value="history" h="full" overflow="hidden" p={0}>
-                <PlayerHistory />
-              </Tabs.Content>
+            <Tabs.Root
+              value={tab}
+              onValueChange={(event) => setTab(event.value)}
+              display="flex"
+              flexDirection="column"
+              flex={1}
+              minW={0}
+              overflow="hidden"
+              variant="subtle"
+            >
+              {/* Tab bar */}
+              <Tabs.List
+                bg="gray.900"
+                borderTop="1px solid"
+                borderColor="gray.700"
+                flexShrink={0}
+              >
+                {(layout === 'tablet' ? TABLET_TABS : MOBILE_TABS).map(
+                  ([value, label]) => (
+                    <Tabs.Trigger
+                      key={value}
+                      value={value}
+                      flex={1}
+                      fontFamily="mono"
+                      fontSize="2xs"
+                      letterSpacing="wide"
+                      px={1}
+                      py={1.5}
+                      minH="auto"
+                      color="gray.500"
+                      _selected={{ color: 'green.400', bg: 'gray.800' }}
+                    >
+                      {label}
+                    </Tabs.Trigger>
+                  ),
+                )}
+              </Tabs.List>
 
-              <Tabs.Content value="players" h="full" overflowY="auto" p={0}>
-                <Flex direction="column" p={2} gap={3}>
-                  <RoundHistory />
-                  <PlayerList />
-                </Flex>
-              </Tabs.Content>
+              {/* Content area — fills rest of tab panel, each panel scrolls */}
+              <Box flex={1} minH={0} overflow="hidden">
+                <Tabs.Content
+                  value="game"
+                  h="full"
+                  overflow="hidden"
+                  p={0}
+                  bg="gray.900"
+                >
+                  <Box h="full" overflowY="auto" p={0}>
+                    <BetPanel />
+                  </Box>
+                </Tabs.Content>
 
-              <Tabs.Content value="chat" h="full" overflow="hidden" p={0}>
-                <InlineChatPanel full />
-              </Tabs.Content>
-            </Box>
-          </Tabs.Root>
+                <Tabs.Content value="history" h="full" overflow="hidden" p={0}>
+                  <PlayerHistory />
+                </Tabs.Content>
+
+                <Tabs.Content value="players" h="full" overflowY="auto" p={0}>
+                  <Flex direction="column" p={2} gap={3}>
+                    <RoundHistory />
+                    <PlayerList />
+                  </Flex>
+                </Tabs.Content>
+
+                <Tabs.Content value="chat" h="full" overflow="hidden" p={0}>
+                  <InlineChatPanel full />
+                </Tabs.Content>
+              </Box>
+            </Tabs.Root>
+          </Flex>
         </Box>
       )}
 

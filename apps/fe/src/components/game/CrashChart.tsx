@@ -145,7 +145,13 @@ export function CrashChart() {
     <Box
       position="relative"
       flex={1}
-      minH="280px"
+      /*
+        A flat 280px floor pushed the whole column past the viewport in landscape -
+        header plus chart plus controls came to 514px on a 390px-tall phone, so the
+        stake field ended up under the fold. Chakra's breakpoints are widths, and
+        this is a question about height, so it is a raw `min()`.
+      */
+      minH="min(280px, 40dvh)"
       borderRadius="lg"
       overflow="hidden"
       bg="#0a0a0a"

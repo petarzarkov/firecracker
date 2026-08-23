@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { useAuthStore } from '@/store/authStore';
 import { ApiError, fetchMyBets } from '@/systems/network/bets';
 import { AuthMiddleware } from '@/middleware/authMiddleware';
-import { useGameStore } from '@/store/gameStore';
+import { type BetEntry, useGameStore } from '@/store/gameStore';
 
 function fmtCents(cents: number): string {
   return (cents / 100).toFixed(2);
@@ -136,6 +136,55 @@ function BetRow({ bet }: { bet: GameBetView }) {
         </Text>
       </Flex>
     </Tooltip>
+  );
+}
+
+/**
+ * The current round's bet, from the store rather than from the API.
+ *
+ * Deliberately not a faked {@link GameBetView}: it has no id, no crash point and no
+ * settled status, and inventing them would let it flow into code that assumes a
+ * settled row. It is a live line, and it reads like one.
+ */
+function LiveBetRow({ bet }: { bet: BetEntry }) {
+  const phase = useGameStore((state) => state.phase);
+  const live = bet.status === 'ACTIVE';
+
+  return (
+    <Flex
+      px={2}
+      py={1.5}
+      align="center"
+      justify="space-between"
+      gap={2}
+      borderBottom="1px solid"
+      borderColor="#1e1e1e"
+      bg="rgba(96,165,250,0.07)"
+    >
+      <Flex align="center" gap={2} minW={0}>
+        <Box
+          w="6px"
+          h="6px"
+          borderRadius="full"
+          bg={live ? '#60a5fa' : '#666'}
+        />
+        <Box minW={0}>
+          <Text fontSize="xs" color="gray.100" fontFamily="mono">
+            ${fmtCents(bet.betAmountCents)}
+          </Text>
+          <Text fontSize="2xs" color="gray.500" fontFamily="mono">
+            {phase === 'WAITING' ? 'this round · waiting' : 'this round'}
+          </Text>
+        </Box>
+      </Flex>
+      <Text fontSize="2xs" color="#60a5fa" fontFamily="mono">
+        {bet.status === 'CASHED_OUT'
+          ? `✓${bet.cashedOutAt?.toFixed(2)}x`
+          : bet.status === 'LOST'
+            ? 'lost'
+            : 'open'}
+      </Text>
+    </Flex>
   );
 }
 
@@ -278,7 +327,17 @@ export function PlayerHistory() {
           },
         }}
       >
-        {bets.length === 0 && !isLoading ? (
+        {/*
+          The bet on the table, before the server has been asked about it.
+
+          This list is fetched, and it refreshes when a betting window opens and
+          after a cash-out - so a bet placed *during* a window missed both, and a
+          panel headed MY BETS said "No bets yet" while the player list beside it
+          showed the same player's stake. The store has it; this renders it.
+        */}
+        {myBet !== null && <LiveBetRow bet={myBet} />}
+
+        {bets.length === 0 && myBet === null && !isLoading ? (
           <Text fontSize="xs" color="#888" textAlign="center" mt={6} px={2}>
             No bets yet
           </Text>

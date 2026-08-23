@@ -7,7 +7,7 @@ import { Box, Button, Flex, Input, Tabs, Text } from '@chakra-ui/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSocket } from '@/SocketContext';
 import { useAuthStore } from '@/store/authStore';
-import type { BetEntry } from '@/store/gameStore';
+import type { BetEntry, GamePhase } from '@/store/gameStore';
 import { getLiveMultiplier, useGameStore } from '@/store/gameStore';
 import { autoCashOutFor, type BetTab } from './auto-cash-out';
 
@@ -24,13 +24,20 @@ const QUICK_AMOUNTS = [1, 5, 10, 25, 50, 100];
  */
 const DEFAULT_AUTO_CASH_OUT = '1.01';
 
-function betButtonLabel(myBet: BetEntry | null): string {
+/**
+ * What the action button says.
+ *
+ * **The phase matters.** This answered on status alone, so an `ACTIVE` bet read
+ * `RIDING...` for the whole betting window after it was placed - eight seconds of
+ * telling a player their money was exposed to a round still sitting on the pad.
+ */
+function betButtonLabel(myBet: BetEntry | null, phase: GamePhase): string {
   if (myBet === null) return 'PLACE BET';
   if (myBet.status === 'CASHED_OUT')
     return `WON $${((myBet.payoutCents ?? 0) / 100).toFixed(2)}`;
   if (myBet.status === 'LOST')
     return `LOST $${(myBet.betAmountCents / 100).toFixed(2)}`;
-  return 'RIDING...';
+  return phase === 'WAITING' ? 'BET PLACED' : 'RIDING...';
 }
 
 function statusBg(status: BetEntry['status']): string {
@@ -46,7 +53,13 @@ function statusColor(status: BetEntry['status']): string {
 }
 
 /** Cash-out button — updates multiplier text via RAF, not React re-renders */
-function CashOutButton({ onCashOut }: { onCashOut: () => void }) {
+function CashOutButton({
+  onCashOut,
+  full = false,
+}: {
+  onCashOut: () => void;
+  full?: boolean;
+}) {
   const labelRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
@@ -76,6 +89,7 @@ function CashOutButton({ onCashOut }: { onCashOut: () => void }) {
       fontFamily="mono"
       letterSpacing="wide"
       minW={{ base: '112px', lg: '140px' }}
+      width={full ? 'full' : undefined}
       boxShadow="0 0 20px #ff880060"
     >
       <span ref={labelRef}>CASH OUT 1.00x</span>
@@ -158,10 +172,15 @@ function BetStatusBar({
 function PlaceBetButton({
   canBet,
   myBet,
+  phase,
+  overBalance,
   onPlaceBet,
 }: {
   canBet: boolean;
   myBet: BetEntry | null;
+  phase: GamePhase;
+  /** The stake is more than the account holds - say so on the button itself. */
+  overBalance: boolean;
   onPlaceBet: () => void;
 }) {
   return (
@@ -181,9 +200,12 @@ function PlaceBetButton({
       fontFamily="mono"
       letterSpacing="wide"
       minW={{ base: '112px', lg: '140px' }}
+      width={{ base: 'full', lg: 'auto' }}
       boxShadow={canBet ? '0 0 20px rgba(255,107,0,0.38)' : 'none'}
     >
-      {betButtonLabel(myBet)}
+      {overBalance && myBet === null
+        ? 'NOT ENOUGH'
+        : betButtonLabel(myBet, phase)}
     </Button>
   );
 }
@@ -265,6 +287,64 @@ function BetAmountInput({
   );
 }
 
+/**
+ * Taking the money, as a hook - because two places need it.
+ *
+ * The bet panel has the button, and on a phone the panel lives in a tab beside
+ * chat and the player list, so a player reading chat mid-round had no way to cash
+ * out at all. `CashOutBar` is that button pinned where the tabs cannot hide it, and
+ * both call this.
+ */
+export function useCashOut(): { canCashOut: boolean; cashOut: () => void } {
+  const socket = useSocket();
+  const phase = useGameStore((state) => state.phase);
+  const myBet = useGameStore((state) => state.myBet);
+  const updateBet = useGameStore((state) => state.updateBet);
+
+  const canCashOut = phase === 'RUNNING' && myBet?.status === 'ACTIVE';
+
+  const cashOut = useCallback(() => {
+    if (!socket || !canCashOut || !myBet) return;
+    const mult = getLiveMultiplier();
+    updateBet({
+      userId: myBet.userId,
+      username: myBet.username,
+      betAmountCents: myBet.betAmountCents,
+      status: 'CASHED_OUT',
+      cashedOutAt: mult,
+      payoutCents: Math.floor(myBet.betAmountCents * mult),
+      isOptimistic: true,
+    });
+    socket.emit(GAME_CLIENT_EVENTS.CASH_OUT);
+  }, [socket, canCashOut, myBet, updateBet]);
+
+  return { canCashOut, cashOut };
+}
+
+/**
+ * The cash-out button, pinned above the tab strip on a phone.
+ *
+ * Renders nothing unless there is something to take. It is the only control in this
+ * game with a deadline, and it was the one you could navigate away from.
+ */
+export function CashOutBar() {
+  const { canCashOut, cashOut } = useCashOut();
+  if (!canCashOut) return null;
+
+  return (
+    <Box
+      px={2}
+      py={2}
+      bg="gray.900"
+      borderTop="1px solid"
+      borderColor="orange.500"
+      flexShrink={0}
+    >
+      <CashOutButton onCashOut={cashOut} full />
+    </Box>
+  );
+}
+
 export function BetPanel() {
   const socket = useSocket();
   const phase = useGameStore((state) => state.phase);
@@ -273,23 +353,45 @@ export function BetPanel() {
   const clearBetError = useGameStore((state) => state.clearBetError);
   const isDemoMode = useGameStore((state) => state.isDemoMode);
   const addBet = useGameStore((state) => state.addBet);
-  const updateBet = useGameStore((state) => state.updateBet);
   const myUserId = useAuthStore((state) => state.user?.id);
   const myUsername = useAuthStore(
     (state) => state.user?.displayName ?? state.user?.email?.split('@')[0],
   );
 
+  const balanceCents = useGameStore((state) => state.demoBalanceCents) ?? 0;
   const [amount, setAmount] = useState('5.00');
   const [autoCashOut, setAutoCashOut] = useState(DEFAULT_AUTO_CASH_OUT);
   const [autoPlay, setAutoPlay] = useState(false);
   const [activeTab, setActiveTab] = useState<BetTab>('manual');
 
   const amountCents = Math.round(Number.parseFloat(amount || '0') * 100);
+  const overBalance = balanceCents > 0 && amountCents > balanceCents;
+
+  /**
+   * Sets the stake, held between the minimum and what is actually in the account.
+   *
+   * Every adjustment goes through here. Typing 99999 against $1,000 used to leave a
+   * fully enabled button and a server round-trip to find out, with the refusal
+   * printed at the bottom of the panel while the eye was on the button at the top.
+   */
+  const setStake = useCallback(
+    (cents: number) => {
+      const ceiling = balanceCents > 0 ? balanceCents : cents;
+      setAmount((Math.max(100, Math.min(cents, ceiling)) / 100).toFixed(2));
+    },
+    [balanceCents],
+  );
   // The tab is part of the answer - see `autoCashOutFor`.
   const autoCashOutTarget = autoCashOutFor(activeTab, autoCashOut);
   const hasAutoCashOut = autoCashOutTarget !== null;
-  const canBet = phase === 'WAITING' && myBet === null && amountCents >= 100;
-  const canCashOut = phase === 'RUNNING' && myBet?.status === 'ACTIVE';
+  const canBet =
+    phase === 'WAITING' &&
+    myBet === null &&
+    amountCents >= 100 &&
+    // `0` means the balance has not arrived yet, not that the account is empty -
+    // gating on it would refuse the first bet of every session.
+    (balanceCents === 0 || amountCents <= balanceCents);
+  const { canCashOut, cashOut } = useCashOut();
   /**
    * Whether an edit lands on the **next** round rather than this one.
    *
@@ -340,20 +442,7 @@ export function BetPanel() {
     myUserId,
   ]);
 
-  function handleCashOut() {
-    if (!socket || !canCashOut || !myBet) return;
-    const mult = getLiveMultiplier();
-    updateBet({
-      userId: myBet.userId,
-      username: myBet.username,
-      betAmountCents: myBet.betAmountCents,
-      status: 'CASHED_OUT',
-      cashedOutAt: mult,
-      payoutCents: Math.floor(myBet.betAmountCents * mult),
-      isOptimistic: true,
-    });
-    socket.emit(GAME_CLIENT_EVENTS.CASH_OUT);
-  }
+  const handleCashOut = cashOut;
 
   // Auto-play requires auto exit — turn off if exit target is removed
   useEffect(() => {
@@ -368,9 +457,15 @@ export function BetPanel() {
   }, [autoPlay, canBet, handlePlaceBet]);
 
   const actionButton = canCashOut ? (
-    <CashOutButton onCashOut={handleCashOut} />
+    <CashOutButton onCashOut={handleCashOut} full />
   ) : (
-    <PlaceBetButton canBet={canBet} myBet={myBet} onPlaceBet={handlePlaceBet} />
+    <PlaceBetButton
+      canBet={canBet}
+      myBet={myBet}
+      phase={phase}
+      overBalance={overBalance}
+      onPlaceBet={handlePlaceBet}
+    />
   );
 
   return (
@@ -381,93 +476,6 @@ export function BetPanel() {
       borderColor="orange.400"
       p={{ base: 1.5, lg: 3 }}
     >
-      {/*
-       * Action row — always the same height regardless of active tab.
-       * AUTO toggle is always rendered (visibility:hidden when on manual)
-       * so this row never changes height either.
-       */}
-      <Flex gap={{ base: 2, lg: 3 }} align="flex-end" mt={{ base: 0, lg: 2 }}>
-        <Box flex={1}>
-          <Flex gap={{ base: 1, lg: 2 }} flexWrap="wrap" align="center">
-            <Text fontSize="xs" color="#aaa" alignSelf="center" mr={1}>
-              Quick:
-            </Text>
-            {QUICK_AMOUNTS.map((a) => (
-              <Button
-                key={a}
-                size={{ base: 'xs', lg: 'xs' }}
-                variant="outline"
-                borderColor="#555"
-                color="#ccc"
-                fontFamily="mono"
-                fontSize="xs"
-                /* These were 30x24 on a phone against a 44x44 guideline, and they
-                   set the stake - a mis-tap here is the wrong amount of money, not
-                   the wrong page. */
-                minW={{ base: '52px', lg: 'auto' }}
-                minH={{ base: '40px', lg: 'auto' }}
-                onClick={() => setAmount(a.toFixed(2))}
-                _hover={{
-                  borderColor: 'green.400',
-                  color: 'green.300',
-                  bg: 'rgba(255,107,0,0.12)',
-                }}
-                _disabled={{ opacity: 0.4, cursor: 'not-allowed' }}
-                px={{ base: 2, lg: 3 }}
-                py={1}
-              >
-                ${a}
-              </Button>
-            ))}
-            {/* AUTO toggle — always rendered; invisible on manual to keep row height stable */}
-            <Button
-              size={{ base: '2xs', lg: 'xs' }}
-              variant="outline"
-              borderColor={
-                autoPlay
-                  ? 'green.500'
-                  : hasAutoCashOut
-                    ? 'gray.600'
-                    : 'gray.700'
-              }
-              /* `gray.700` on this ground measured 1.21:1 - a disabled control
-                 still has to be readable enough to say why it is disabled. */
-              color={
-                autoPlay
-                  ? 'green.400'
-                  : hasAutoCashOut
-                    ? 'gray.400'
-                    : 'gray.500'
-              }
-              fontFamily="mono"
-              fontSize="xs"
-              minH={{ base: '40px', lg: 'auto' }}
-              disabled={!hasAutoCashOut}
-              onClick={() => setAutoPlay((v) => !v)}
-              visibility={activeTab === 'auto' ? 'visible' : 'hidden'}
-              pointerEvents={activeTab === 'auto' ? 'auto' : 'none'}
-              _hover={{
-                borderColor: 'green.400',
-                color: 'green.300',
-                bg: 'rgba(255,107,0,0.1)',
-              }}
-              _disabled={{ opacity: 0.35, cursor: 'not-allowed' }}
-              title={
-                hasAutoCashOut
-                  ? autoPlay
-                    ? 'Auto-play ON — click to stop'
-                    : 'Auto-play: bet automatically each round'
-                  : 'Set an AUTO EXIT value to enable auto-play'
-              }
-            >
-              {autoPlay ? 'AUTO-PLAY ON' : 'AUTO-PLAY'}
-            </Button>
-          </Flex>
-        </Box>
-
-        <Box flexShrink={0}>{actionButton}</Box>
-      </Flex>
-
       {/*
        * Status bar — always rendered with a fixed min-height so its appearance
        * never shifts the chart above. Uses visibility:hidden when not active.
@@ -592,6 +600,151 @@ export function BetPanel() {
           </Flex>
         </Tabs.Content>
       </Tabs.Root>
+
+      {/*
+       * Adjustments, then the action - **under** the field they act on.
+       *
+       * The panel used to read bottom-up: the button and the quick amounts sat
+       * above the MANUAL/AUTO tabs and the amount they spend, so on a phone the
+       * primary action was the first thing you reached and the last thing you
+       * should press.
+       *
+       * The AUTO-PLAY toggle is always rendered (visibility:hidden on manual) so
+       * this row never changes height, and neither does the chart above it.
+       */}
+      <Flex
+        direction={{ base: 'column', lg: 'row' }}
+        gap={{ base: 2, lg: 3 }}
+        align={{ base: 'stretch', lg: 'flex-end' }}
+        mt={{ base: 2, lg: 2 }}
+      >
+        <Box flex={1}>
+          <Flex gap={{ base: 1, lg: 2 }} flexWrap="wrap" align="center">
+            <Text fontSize="xs" color="#aaa" alignSelf="center" mr={1}>
+              Quick:
+            </Text>
+            {QUICK_AMOUNTS.map((a) => (
+              <Button
+                key={a}
+                size={{ base: 'xs', lg: 'xs' }}
+                variant="outline"
+                borderColor="#555"
+                color="#ccc"
+                fontFamily="mono"
+                fontSize="xs"
+                /* These were 30x24 on a phone against a 44x44 guideline, and they
+                   set the stake - a mis-tap here is the wrong amount of money, not
+                   the wrong page. */
+                minW={{ base: '52px', lg: 'auto' }}
+                minH={{ base: '40px', lg: 'auto' }}
+                onClick={() => setStake(a * 100)}
+                _hover={{
+                  borderColor: 'green.400',
+                  color: 'green.300',
+                  bg: 'rgba(255,107,0,0.12)',
+                }}
+                _disabled={{ opacity: 0.4, cursor: 'not-allowed' }}
+                px={{ base: 2, lg: 3 }}
+                py={1}
+              >
+                ${a}
+              </Button>
+            ))}
+            {/*
+              Halve, double, everything. A crash game has these three and this one
+              did not, so the only way to bet what you actually hold was to know
+              the number and type it.
+            */}
+            {(
+              [
+                ['½', () => setStake(Math.floor(amountCents / 2))],
+                ['2×', () => setStake(amountCents * 2)],
+                ['MAX', () => setStake(balanceCents)],
+              ] as const
+            ).map(([label, onClick]) => (
+              <Button
+                key={label}
+                size="xs"
+                variant="outline"
+                borderColor="#4a3a22"
+                color="orange.200"
+                fontFamily="mono"
+                fontSize="xs"
+                minW={{ base: '52px', lg: 'auto' }}
+                minH={{ base: '40px', lg: 'auto' }}
+                px={{ base: 2, lg: 3 }}
+                py={1}
+                onClick={onClick}
+                _hover={{ borderColor: 'orange.400', color: 'orange.100' }}
+              >
+                {label}
+              </Button>
+            ))}
+            {/* AUTO toggle — always rendered; invisible on manual to keep row height stable */}
+            <Button
+              size={{ base: '2xs', lg: 'xs' }}
+              variant="outline"
+              borderColor={
+                autoPlay
+                  ? 'green.500'
+                  : hasAutoCashOut
+                    ? 'gray.600'
+                    : 'gray.700'
+              }
+              /* `gray.700` on this ground measured 1.21:1 - a disabled control
+                 still has to be readable enough to say why it is disabled. */
+              color={
+                autoPlay
+                  ? 'green.400'
+                  : hasAutoCashOut
+                    ? 'gray.400'
+                    : 'gray.500'
+              }
+              fontFamily="mono"
+              fontSize="xs"
+              minH={{ base: '40px', lg: 'auto' }}
+              disabled={!hasAutoCashOut}
+              onClick={() => setAutoPlay((v) => !v)}
+              visibility={activeTab === 'auto' ? 'visible' : 'hidden'}
+              pointerEvents={activeTab === 'auto' ? 'auto' : 'none'}
+              _hover={{
+                borderColor: 'green.400',
+                color: 'green.300',
+                bg: 'rgba(255,107,0,0.1)',
+              }}
+              _disabled={{ opacity: 0.35, cursor: 'not-allowed' }}
+              title={
+                hasAutoCashOut
+                  ? autoPlay
+                    ? 'Auto-play ON — click to stop'
+                    : 'Auto-play: bet automatically each round'
+                  : 'Set an AUTO EXIT value to enable auto-play'
+              }
+            >
+              {autoPlay ? 'AUTO-PLAY ON' : 'AUTO-PLAY'}
+            </Button>
+          </Flex>
+        </Box>
+
+        {/*
+          Stuck to the bottom of the panel's scroll area on anything narrow.
+          
+          The panel is 170px tall in landscape and the action is the last thing in
+          it, so on a phone held sideways `PLACE BET` sat below the fold of a
+          container most people would not think to scroll. `lg` has room for the
+          row, so there it stays where it is.
+        */}
+        <Box
+          flexShrink={0}
+          position={{ base: 'sticky', lg: 'static' }}
+          bottom={0}
+          zIndex={1}
+          bg={{ base: 'gray.900', lg: 'transparent' }}
+          pt={{ base: 1, lg: 0 }}
+        >
+          {actionButton}
+        </Box>
+      </Flex>
 
       {/*
        * Error slot — always rendered at fixed height so its appearance never
