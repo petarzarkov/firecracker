@@ -5,6 +5,7 @@ import {
   OnMessage,
   OnOpen,
   OnUpgrade,
+  Public,
   PubSub,
   type Socket,
 } from '@dunx/http';
@@ -49,6 +50,17 @@ import {
  * A spectator gets `context.player === null` - the upgrade never refuses an
  * anonymous caller - and every handler that spends money checks it.
  */
+/**
+ * **`@Public()`, or a spectator never gets through the door.**
+ *
+ * `SessionGuard` is global middleware and dunx guards a route unless it is told
+ * otherwise, so the upgrade was answered with a 401 before it ever reached
+ * `@OnUpgrade` - which is written for anonymous callers, as is `SocketAuthService`,
+ * as is every handler that checks `player !== null`. All of that was unreachable:
+ * the browser saw `Connection closed before receiving a handshake response`, and
+ * the client hid it behind a login form, so nobody found out.
+ */
+@Public()
 @Gateway('/ws')
 export class GameGateway {
   constructor(

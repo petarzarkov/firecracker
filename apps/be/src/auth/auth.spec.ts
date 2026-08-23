@@ -6,6 +6,7 @@ import { AppModule } from '../app.module.js';
 import { EnvConfig } from '../config/env.validation.js';
 import { AppHttpOptions } from '../http.options.js';
 import { users } from '../users/schema/user.schema.js';
+import { wallets } from '../wallet/schema/wallet.schema.js';
 import {
   dropTestNamespaces,
   testNamespace,
@@ -134,5 +135,66 @@ describe('a demo player', () => {
     expect(response.status).toBe(200);
     expect(body.user.name).not.toBe('Anonymous');
     expect(body.user.name).toMatch(/^[A-Z][a-z]+[A-Z][a-z]+\d{3}$/);
+  });
+
+  /**
+   * Converting keeps the run.
+   *
+   * `anonymous()` deletes the demo user the moment it links a real account, and
+   * every table referencing a user cascades - so without `AccountLinker` the bets,
+   * the wallet and the uploaded avatar all went with it, at the exact moment the
+   * player decided to stay. This is the whole reason `onLinkAccount` is wired.
+   */
+  test('keeps their wallet and their bets when they make a real account', async () => {
+    const anon = await server.request('api/auth/sign-in/anonymous', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    const cookie = jar(anon);
+    const demoUserId = ((await anon.json()) as { user: { id: string } }).user
+      .id;
+
+    // A balance is created the first time anything asks for one.
+    const wallet = await server.request('api/wallet?isDemo=true', {
+      headers: { cookie },
+    });
+    expect(wallet.status).toBe(200);
+
+    const db = server.app.get(SyncDatabase);
+    const before = db
+      .select()
+      .from(wallets)
+      .where(eq(wallets.userId, demoUserId))
+      .all();
+    expect(before.length).toBeGreaterThan(0);
+
+    const converted = await server.request('api/auth/sign-up/email', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({
+        email: 'converted@example.com',
+        name: 'Converted',
+        password: 'a-strong-password',
+      }),
+    });
+    expect(converted.status).toBe(200);
+    const realUserId = ((await converted.json()) as { user: { id: string } })
+      .user.id;
+    expect(realUserId).not.toBe(demoUserId);
+
+    // The demo row is gone, and the wallet it owned is on the new account rather
+    // than gone with it.
+    expect(
+      db.select().from(users).where(eq(users.id, demoUserId)).all(),
+    ).toHaveLength(0);
+    const after = db
+      .select()
+      .from(wallets)
+      .where(eq(wallets.userId, realUserId))
+      .all();
+    expect(after.map((row) => row.id).sort()).toEqual(
+      before.map((row) => row.id).sort(),
+    );
   });
 });

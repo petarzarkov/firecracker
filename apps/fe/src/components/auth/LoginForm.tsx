@@ -177,8 +177,15 @@ const SocialButtons = ({
  * `onBack` returns to the lobby, which a visitor can now watch without an account.
  * Absent when this is the whole page - a password reset arriving on a link, say.
  */
-export function LoginForm({ onBack }: { onBack?: () => void }) {
-  const [mode, setMode] = useState<FormMode>('login');
+export function LoginForm({
+  onBack,
+  initialMode = 'login',
+}: {
+  onBack?: () => void;
+  /** `register` is how a demo player converts - see `UserMenu`. */
+  initialMode?: FormMode;
+}) {
+  const [mode, setMode] = useState<FormMode>(initialMode);
   const [formData, setFormData] = useState<FormData>(INITIAL_STATE);
   const [resetToken, setResetToken] = useState('');
   const [status, setStatus] = useState<{

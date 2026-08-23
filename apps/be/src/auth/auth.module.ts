@@ -14,6 +14,10 @@ import { verifications } from './schema/verification.schema.js';
 import { JOBS, QUEUES } from '../notifications/events/events.js';
 import { AuthHooks } from './auth.hooks.js';
 import { AUTH_MOUNT, AuthOptions } from './auth.options.js';
+import {
+  AccountLinker,
+  AccountLinkerModule,
+} from './services/account-linker.service.js';
 import { AuthAdminSeeder } from './services/auth-admin.seeder.js';
 import { CurrentUser } from './services/current-user.service.js';
 
@@ -33,8 +37,13 @@ const options = {
     redis: RedisConnection,
     publisher: JobPublisher,
     logger: Logger,
+    linker: AccountLinker,
   ): BetterAuthOptions => {
-    const base = AuthOptions.base(config.values);
+    const base = AuthOptions.base(config.values, {
+      // Before the demo user is deleted, and everything that references it with it.
+      onLinkAccount: ({ anonymousUser, newUser }) =>
+        linker.adopt(anonymousUser.user.id, newUser.user.id),
+    });
     const redisSessions =
       config.get('auth').sessionStore === AuthSessionStore.REDIS;
 
@@ -96,6 +105,7 @@ const options = {
     RedisConnection,
     JobPublisher,
     Logger,
+    AccountLinker,
   ] as const,
 };
 
@@ -110,7 +120,7 @@ const options = {
  */
 @Module({
   global: true,
-  imports: [AuthModule.forRootAsync(options, AUTH_MOUNT)],
+  imports: [AccountLinkerModule, AuthModule.forRootAsync(options, AUTH_MOUNT)],
   providers: [CurrentUser, AuthAdminSeeder],
   /**
    * `AuthModule` **by class**, which dunx resolves to the configuration above, so a

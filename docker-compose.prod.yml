@@ -15,9 +15,17 @@
 #
 # pm2 is gone. Docker restarts these, and a process manager inside a container that
 # already has one is two supervisors disagreeing about who owns the process.
+x-logging:
+  &logging # The json-file default has no cap, and this process logs per round forever.
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '5'
+
 services:
   cloudflared:
     image: cloudflare/cloudflared:latest
+    logging: *logging
     container_name: cloudflared
     restart: unless-stopped
     command: tunnel run
@@ -33,6 +41,7 @@ services:
 
   app-redis:
     image: public.ecr.aws/docker/library/redis:8.4.0
+    logging: *logging
     container_name: app-redis
     restart: unless-stopped
     env_file:
@@ -61,6 +70,7 @@ services:
 
   app:
     container_name: app
+    logging: *logging
     restart: unless-stopped
     build:
       # The workspace root, because the lockfile and the workspace list are there.
@@ -78,6 +88,32 @@ services:
       # is modest; it is set at all because a shape only configured in production is a
       # shape nobody has run.
       HEALTH_DRAIN_DELAY_MS: 6000
+
+      # Everything below is a fact about *this container*, not about the deployment,
+      # which is why it is here rather than in `.env`. `environment:` outranks
+      # `env_file:`, and that precedence is the whole mechanism: a root `.env` that
+      # also carries the app's own configuration - the 3999 the Vite proxy wants, a
+      # `localhost` Redis, a `./data` relative path - cannot reach in here and
+      # quietly break the container.
+      APP_ENV: prod
+      NODE_ENV: production
+      # The port this file publishes. An `API_PORT` in `.env` used to win, so the
+      # app listened on 3999 while the mapping pointed at 3001 and nothing answered.
+      API_PORT: 3001
+      # Absolute, and on the volume. A relative `./data/...` resolves against the
+      # image WORKDIR (/app/apps/be), which is not the mount - so the database lived
+      # in the container layer and every restart began with an empty one.
+      SQLITE_DB_PATH: /app/data/firecracker.db
+      STORAGE_LOCAL_ROOT: /app/data/uploads
+      # The compose service name. There is no Redis in this container, and an absent
+      # one does not fail boot - the queue answers 503 - so the symptom is a lobby
+      # stuck on "starting", which looks nothing like a misconfiguration. The `:+`
+      # keeps the URL right whether or not REDIS_PASSWORD is set.
+      REDIS_URL: redis://${REDIS_PASSWORD:+:${REDIS_PASSWORD}@}app-redis:6379
+      # cloudflared is the only caller. Without this, `ClientAddress.of` ignores
+      # `x-forwarded-for` and falls back to the peer address - the tunnel's own
+      # container - so every visitor on earth shares one THROTTLE_LIMIT bucket.
+      TRUST_PROXY: 'true'
     # The drain plus teardown. Explicit next to the number it depends on, because
     # Docker's 10s default would not survive raising it.
     stop_grace_period: 20s

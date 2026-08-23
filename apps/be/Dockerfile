@@ -17,16 +17,38 @@
 FROM oven/bun:1.4.0-slim AS client
 WORKDIR /app
 COPY package.json bun.lock bunfig.toml ./
+# Every workspace tsconfig extends this one, and vite reads the chain to configure
+# esbuild - so without it the bundle fails on a tsconfig it cannot resolve, not on
+# anything in the code.
+COPY tsconfig.json ./
 COPY apps/fe/package.json ./apps/fe/
+# Both libs the client depends on, manifests first. `--filter` prunes the *install*,
+# never the workspace graph: bun reads every workspace named in bun.lock and refuses
+# a checkout where one a survivor depends on is missing on disk. Copying only
+# apps/fe/package.json failed here with exactly that, so the image never built.
+COPY libs/contracts/package.json ./libs/contracts/
+COPY libs/stage/package.json ./libs/stage/
 RUN bun install --frozen-lockfile --filter 'firecracker-fe'
+# Sources after the install, so a code edit does not re-resolve the lockfile. Both
+# libs export `./src/index.ts` with no build step, so vite compiles them from here.
+COPY libs ./libs
 COPY apps/fe ./apps/fe
-RUN bun run --filter 'firecracker-fe' build
+# `build:dist`, not `build`: the latter is `tsc --noEmit && vite build`, and a
+# typecheck has no business gating an image. `--filter` prunes the install, so the
+# dev-only @types this workspace resolves locally are absent here and tsc failed on
+# its own broken type graph - react-icons' JSX namespace, vite's ImportMeta - while
+# `bun run typecheck` passes on all four workspaces. Types are CI's gate, not the
+# deploy's; vite strips them without checking, so the bundle is identical.
+RUN bun run --filter 'firecracker-fe' build:dist
 
 # ── Server dependencies ──────────────────────────────────────────────────────
 FROM oven/bun:1.4.0-slim AS deps
 WORKDIR /app
 COPY package.json bun.lock bunfig.toml ./
 COPY apps/be/package.json ./apps/be/
+# Same rule as the client stage. The server depends on contracts and not on stage,
+# and bun only demands the workspaces its surviving filter actually reaches.
+COPY libs/contracts/package.json ./libs/contracts/
 RUN bun install --frozen-lockfile --production --filter 'firecracker-be'
 
 # ── Runtime ──────────────────────────────────────────────────────────────────
@@ -54,7 +76,16 @@ ENV NODE_ENV=production \
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/be/node_modules ./apps/be/node_modules
 COPY package.json bunfig.toml ./
-COPY apps/be/package.json ./apps/be/
+# Bun transpiles from source at run time, so the tsconfig is a runtime input too:
+# `apps/be/tsconfig.json` is what sets `jsx: react-jsx` for the four `.tsx` email
+# templates. Leaving it out means depending on Bun's default matching it forever.
+COPY tsconfig.json ./
+COPY apps/be/package.json apps/be/tsconfig.json ./apps/be/
+# `node_modules/@firecracker/contracts` is a symlink into here, so without this the
+# server resolves the wire to a dangling link and dies on its first import - after a
+# green build. It is source-only (`exports: ./src/index.ts`), so there is nothing
+# to compile and nothing to copy from a build stage.
+COPY libs/contracts ./libs/contracts
 COPY apps/be/src ./apps/be/src
 COPY apps/be/scripts ./apps/be/scripts
 COPY --from=client /app/apps/fe/dist ./apps/fe/dist

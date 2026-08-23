@@ -33,7 +33,13 @@ const MOBILE_TABS = [
  */
 const TABLET_TABS = MOBILE_TABS.filter(([value]) => value !== 'game');
 
-export function Game({ onSignIn }: { onSignIn: () => void }) {
+export function Game({
+  onSignIn,
+  onConvert,
+}: {
+  onSignIn: () => void;
+  onConvert: () => void;
+}) {
   useGameSocket();
 
   // Only the live layout is mounted - see `useLayout` for what mounting more than
@@ -123,7 +129,7 @@ export function Game({ onSignIn }: { onSignIn: () => void }) {
 
         <Flex align="center" gap={{ base: 1, lg: 3 }}>
           {signedIn && <WalletWidget />}
-          <UserMenu onSignIn={onSignIn} />
+          <UserMenu onSignIn={onSignIn} onConvert={onConvert} />
         </Flex>
       </Flex>
 

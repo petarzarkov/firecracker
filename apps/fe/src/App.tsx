@@ -18,7 +18,9 @@ function App() {
    * lobby is its own advertisement; asking for an account before showing it is
    * asking someone to buy a ticket to read the poster.
    */
-  const [signingIn, setSigningIn] = useState(false);
+  const [authView, setAuthView] = useState<'none' | 'login' | 'register'>(
+    'none',
+  );
 
   useEffect(() => {
     AuthMiddleware.initialize();
@@ -38,6 +40,24 @@ function App() {
     document.getElementById('boot')?.remove();
   }, []);
 
+  /**
+   * Puts the card away once it has done its job.
+   *
+   * Signing in is easy - the user appears. **Converting is not**: a demo player is
+   * already signed in when they open the register form, so nothing about
+   * `isAuthenticated` changes and the form sat there spinning over a sign-up the
+   * server had already completed. What changes is that the account stops being a
+   * demo one.
+   */
+  useEffect(() => {
+    if (authView === 'none') return;
+    const done =
+      authView === 'register'
+        ? isAuthenticated && user !== null && user.isDemo !== true
+        : isAuthenticated && user !== null;
+    if (done) setAuthView('none');
+  }, [authView, isAuthenticated, user]);
+
   if (window.location.pathname === '/oauth/callback') {
     return <OAuthCallback />;
   }
@@ -47,13 +67,27 @@ function App() {
   // is a signed-in user. `AuthMiddleware` is what checks the session is still live.
   const signedIn = isAuthenticated && user !== null;
 
-  if (!signedIn && signingIn) {
-    return <LoginForm onBack={() => setSigningIn(false)} />;
+  /**
+   * The card, for the two ways into an account: a visitor signing in, and a demo
+   * player converting. `register` is the second - better-auth's `anonymous()` links
+   * the sign-up to the session already open, so it keeps the run rather than
+   * starting a new one.
+   */
+  if (authView !== 'none' && (!signedIn || authView === 'register')) {
+    return (
+      <LoginForm
+        initialMode={authView === 'register' ? 'register' : 'login'}
+        onBack={() => setAuthView('none')}
+      />
+    );
   }
 
   return (
     <SocketProvider>
-      <Game onSignIn={() => setSigningIn(true)} />
+      <Game
+        onSignIn={() => setAuthView('login')}
+        onConvert={() => setAuthView('register')}
+      />
     </SocketProvider>
   );
 }

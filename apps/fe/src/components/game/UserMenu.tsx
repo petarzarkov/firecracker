@@ -16,7 +16,14 @@ function getInitials(displayName?: string | null, email?: string): string {
   return (email ?? '??').slice(0, 2).toUpperCase();
 }
 
-export function UserMenu({ onSignIn }: { onSignIn?: () => void }) {
+export function UserMenu({
+  onSignIn,
+  onConvert,
+}: {
+  onSignIn?: () => void;
+  /** Turn a demo account into a real one. See the menu item below. */
+  onConvert?: () => void;
+}) {
   const user = useAuthStore((state) => state.user);
   const token = useAuthStore((state) => state.token);
   const clearAuth = useAuthStore((state) => state.clearAuth);
@@ -200,6 +207,12 @@ export function UserMenu({ onSignIn }: { onSignIn?: () => void }) {
                    * break opportunity. Left to overflow it is what widened the panel
                    * past the screen in the first place.
                    */}
+                  {/*
+                    A demo player is shown what their account *is*, not its
+                    machine-generated address - `temp-<uuid>@demo.firecracker.local`
+                    tells them nothing and takes three lines to do it. Their role
+                    was on show too, which means even less to them than the address.
+                  */}
                   <Text
                     fontSize="xs"
                     color="gray.500"
@@ -207,19 +220,34 @@ export function UserMenu({ onSignIn }: { onSignIn?: () => void }) {
                     mt={0.5}
                     wordBreak="break-all"
                   >
-                    {user.email}
-                  </Text>
-                  <Text
-                    fontSize="xs"
-                    color="green.500"
-                    fontFamily="mono"
-                    mt={0.5}
-                  >
-                    {user.roles.join(', ')}
+                    {user.isDemo ? 'Demo account · play money' : user.email}
                   </Text>
                 </Box>
               </Flex>
               <Menu.Separator borderColor="gray.700" />
+              {/*
+                The way out of a demo account.
+                
+                `anonymous()` links a sign-up to the session already open, and
+                `AccountLinker` moves the wallet, the bets and the avatar across
+                before the demo row is deleted - so this keeps the run rather than
+                starting a new one. There was no path to it at all before: a player
+                who had had a good evening could only lose it.
+              */}
+              {user.isDemo === true && onConvert !== undefined && (
+                <Menu.Item
+                  value="convert"
+                  color="orange.300"
+                  fontFamily="mono"
+                  fontSize="sm"
+                  fontWeight="bold"
+                  _hover={{ bg: 'gray.700', color: 'orange.200' }}
+                  onClick={onConvert}
+                  cursor="pointer"
+                >
+                  Keep this account
+                </Menu.Item>
+              )}
               <Menu.Item
                 value="avatar"
                 color="gray.200"

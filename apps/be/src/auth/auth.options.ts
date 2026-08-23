@@ -18,13 +18,27 @@ export const AUTH_MOUNT = '/auth';
  * for an OpenAPI schema - one plugin list is what stops the document describing a
  * different API than the one that runs.
  */
+/**
+ * The parts of the options that need the container, handed in rather than reached
+ * for: `base` is also what `AuthDocument` builds a database-less instance from, and
+ * one plugin list is what stops the OpenAPI document describing a different API than
+ * the one that runs.
+ */
+export interface AuthHookOverrides {
+  /** Runs before `anonymous()` deletes the demo user. See `AccountLinker`. */
+  readonly onLinkAccount?: (context: {
+    anonymousUser: { user: { id: string } };
+    newUser: { user: { id: string } };
+  }) => void | Promise<void>;
+}
+
 export class AuthOptions {
   /** The mount *after* the global prefix - see {@link AUTH_MOUNT}. */
   static basePath(prefix: string): string {
     return `/${prefix}${AUTH_MOUNT}`;
   }
 
-  static base(config: AppConfig) {
+  static base(config: AppConfig, hooks?: AuthHookOverrides) {
     const { auth } = config;
     const origins = [auth.baseUrl, ...auth.trustedOrigins];
 
@@ -98,6 +112,18 @@ export class AuthOptions {
         anonymous({
           emailDomainName: 'demo.firecracker.local',
           generateName: anonymousName,
+          /**
+           * What a conversion keeps.
+           *
+           * Without this the plugin links the accounts, deletes the demo user, and
+           * every table referencing it cascades - bets, wallet, uploaded avatar -
+           * so the moment a player decided to keep their run was the moment it was
+           * thrown away. `AccountLinker` moves it first; see `auth.module.ts` for
+           * where the handle comes from.
+           */
+          ...(hooks?.onLinkAccount === undefined
+            ? {}
+            : { onLinkAccount: hooks.onLinkAccount }),
         }),
         // `Authorization: Bearer <token>` instead of a cookie, which is what a
         // non-browser client and the e2e suite use.
