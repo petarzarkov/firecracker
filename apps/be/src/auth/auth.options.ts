@@ -92,6 +92,30 @@ export class AuthOptions {
         ...(auth.github === undefined ? {} : { github: auth.github }),
         ...(auth.linkedin === undefined ? {} : { linkedin: auth.linkedin }),
       },
+      /**
+       * A social sign-in joins the account that already owns the address.
+       *
+       * Every provider here maps `name`, `email` and `image` off the profile by
+       * better-auth's own default, so a first social sign-in arrives with an avatar
+       * and a display name already filled in. What it could not do was arrive at an
+       * *existing* row: implicit linking treats the IdP's `email_verified` claim as
+       * proof of ownership only when the local row is verified too, and this app
+       * sends no verification mail, so every email-and-password row is
+       * `emailVerified: false`. Signing up with a password and later choosing Google
+       * on the same address was refused as an unlinked account.
+       *
+       * **The trade is explicit.** Trusting a provider means believing its assertion
+       * about an address instead of our own, so a provider that ever hands out an
+       * address it has not verified would hand over the account with it. These three
+       * verify, and the alternative on offer was worse: no linking at all, or a
+       * second row that the `UQ_user_email` index refuses outright.
+       *
+       * `email-password` is deliberately **not** here - that direction is the one
+       * where the unverified row is the claimant.
+       */
+      account: {
+        accountLinking: { trustedProviders: ['google', 'github', 'linkedin'] },
+      },
       plugins: [
         // `role` on the user, which `@Roles()` reads through `SessionGuard`, plus
         // ban and impersonation.
