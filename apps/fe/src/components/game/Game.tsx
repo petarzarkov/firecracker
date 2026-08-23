@@ -8,6 +8,7 @@ import { useSocket } from '@/SocketContext';
 import { useAuthStore } from '@/store/authStore';
 import { useChatStore } from '@/store/chatStore';
 import { useGameSocket } from '@/systems/network/useGameSocket';
+import { useGameSound, useSoundStore } from '@/systems/audio/useGameSound';
 import { useLayout } from '@/hooks/useWideLayout';
 import { BetPanel, CashOutBar } from './BetPanel';
 import { InlineChatPanel } from './InlineChatPanel';
@@ -33,6 +34,31 @@ const MOBILE_TABS = [
  */
 const TABLET_TABS = MOBILE_TABS.filter(([value]) => value !== 'game');
 
+/** The one control for the game's three cues. See `useGameSound`. */
+function SoundToggle() {
+  const on = useSoundStore((state) => state.on);
+  const toggle = useSoundStore((state) => state.toggle);
+
+  return (
+    <Box
+      as="button"
+      aria-label={on ? 'Turn sound off' : 'Turn sound on'}
+      aria-pressed={on}
+      title={on ? 'Sound on' : 'Sound off'}
+      onClick={toggle}
+      px={2}
+      py={1}
+      borderRadius="md"
+      color={on ? 'orange.300' : 'gray.600'}
+      fontSize="sm"
+      lineHeight={1}
+      _hover={{ color: on ? 'orange.200' : 'gray.400' }}
+    >
+      {on ? '♪' : '♪̸'}
+    </Box>
+  );
+}
+
 export function Game({
   onSignIn,
   onConvert,
@@ -41,6 +67,7 @@ export function Game({
   onConvert: () => void;
 }) {
   useGameSocket();
+  useGameSound();
 
   // Only the live layout is mounted - see `useLayout` for what mounting more than
   // one costs.
@@ -128,6 +155,7 @@ export function Game({
         </Flex>
 
         <Flex align="center" gap={{ base: 1, lg: 3 }}>
+          <SoundToggle />
           {signedIn && <WalletWidget />}
           <UserMenu onSignIn={onSignIn} onConvert={onConvert} />
         </Flex>

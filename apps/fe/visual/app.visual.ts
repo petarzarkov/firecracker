@@ -166,6 +166,38 @@ describe('the client, in a browser', () => {
     await page.close();
   });
 
+  /**
+   * Sound is opt-in, and the guard that matters is that nothing is *built* before
+   * it is asked for. A browser will refuse to start an audio context outside a
+   * gesture anyway, so a regression here is silent until somebody's tab starts
+   * making noise at them.
+   */
+  test('makes no sound, and no audio context, until it is asked to', async () => {
+    const { page, complaints } = await openPage(browser, DESKTOP);
+    await page.addInitScript(() => {
+      const scope = globalThis as unknown as { __contexts: number };
+      scope.__contexts = 0;
+      const Ctor = globalThis.AudioContext;
+      globalThis.AudioContext = class extends Ctor {
+        constructor(...args: ConstructorParameters<typeof Ctor>) {
+          super(...args);
+          scope.__contexts += 1;
+        }
+      } as typeof Ctor;
+    });
+
+    await page.goto(APP, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(SETTLE_MS);
+    expect(await page.evaluate('globalThis.__contexts')).toBe(0);
+
+    await page.getByRole('button', { name: /turn sound on/i }).click();
+    await page.waitForTimeout(500);
+    expect(await page.evaluate('globalThis.__contexts')).toBe(1);
+
+    expect(complaints.errors).toEqual([]);
+    await page.close();
+  });
+
   test('the lobby lays out on a phone', async () => {
     const { page } = await openPage(browser, MOBILE);
     await enterLobby(page);
