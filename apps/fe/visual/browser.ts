@@ -46,6 +46,17 @@ export interface PageOptions {
    * with it. See `clock.ts`.
    */
   readonly clock?: 'stepped' | 'real';
+
+  /**
+   * Device pixel ratio, 1 unless a spec is about it.
+   *
+   * Every spec here ran at 1, which is the one value that cannot catch a
+   * resolution bug: the stage caps its renderer `resolution` at 2, so a 3x phone is
+   * the only configuration where the backing store, the canvas's CSS box and the
+   * device all disagree - and "the plot drew into the corner of a black box" is
+   * what that disagreement looks like.
+   */
+  readonly scale?: number;
 }
 
 export const openPage = async (
@@ -53,7 +64,10 @@ export const openPage = async (
   size: { width: number; height: number },
   options: PageOptions = {},
 ): Promise<{ page: Page; complaints: Complaints }> => {
-  const page = await browser.newPage({ viewport: size, deviceScaleFactor: 1 });
+  const page = await browser.newPage({
+    viewport: size,
+    deviceScaleFactor: options.scale ?? 1,
+  });
   const errors: string[] = [];
   const warnings: string[] = [];
 

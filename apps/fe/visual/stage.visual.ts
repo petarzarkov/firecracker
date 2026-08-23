@@ -194,8 +194,10 @@ describe('the stage, drawn', () => {
   });
 
   /** A fresh page per test: one stage, one seeded clock, nothing carried over. */
-  const open = async (): Promise<{ page: Page; complaints: Complaints }> => {
-    const opened = await openPage(browser, SIZE, { clock: 'stepped' });
+  const open = async (
+    scale = 1,
+  ): Promise<{ page: Page; complaints: Complaints }> => {
+    const opened = await openPage(browser, SIZE, { clock: 'stepped', scale });
     await opened.page.goto(harness.url);
     // The bundle is a module, so it is still fetching when `goto` resolves.
     await opened.page.waitForFunction("'__harness' in globalThis");
@@ -209,6 +211,61 @@ describe('the stage, drawn', () => {
    * on a machine with no usable GPU, which is why `createStage` races it against a
    * timeout - and why nothing below could be trusted if this failed.
    */
+  /**
+   * The scene fills the canvas on a 2x or 3x display.
+   *
+   * `renderer.width` is **already CSS pixels** - PIXI stores
+   * `Math.round(width * resolution) / resolution` on the texture source and
+   * `renderer.width` reads that frame, while the backing store is `canvas.width`.
+   * Dividing it by `resolution` again halved every dimension the layers measure in,
+   * so the plot drew into the top-left corner of the box and the rest stayed the
+   * clear colour - indistinguishable from the container behind it.
+   *
+   * **At `deviceScaleFactor: 1` the division is a no-op**, which is the whole reason
+   * this needs its own case: every other spec here and every desktop run divides by
+   * one, so a bug that only exists above 1x was invisible to all of them while being
+   * the first thing anybody saw on a phone.
+   *
+   * `resolution` is capped at 2, so a 3x page renders at 2x deliberately - the point
+   * of 3 is that the cap makes the device ratio and the renderer's disagree, which
+   * is the case a naive `devicePixelRatio` read would also get wrong.
+   */
+  test('fills the canvas at 3x, not a quarter of it', async () => {
+    const { page, complaints } = await open(3);
+
+    await set(page, { phase: 'running', elapsed: 0 });
+    // Long enough for the curve to reach the right-hand edge of the plot, which is
+    // where the tip and the rocket are drawn.
+    const cells = await frameAfter(page, 4 * SECOND, GRID.cols, GRID.rows);
+
+    console.log('  →', await shoot(page, 'stage-3x'));
+
+    /*
+      The rocket, which is far and away the brightest thing drawn, rides the curve's
+      leading edge - and that edge is always the plot's right edge, because the
+      horizontal axis scales to the round's own length. So where the brightest cell
+      is *is* how wide the plot thinks it is.
+
+      With `INSETS.right` at 62 of 900 that puts it at about 0.93. Halved it lands at
+      0.43, which is what this pins: a threshold between the two rather than near
+      either, so it fails on the bug without being brittle about the sprite's exact
+      glow.
+    */
+    const tip = brightest(cells);
+    expect(tip.x).toBeGreaterThan(0.7);
+
+    /*
+      And the plot reaches the bottom. `1x` is the baseline the curve leaves from, at
+      `height - INSETS.bottom` - about 0.95 down a 520px canvas - so the lowest strip
+      holds the gridline and the bright start of the curve. Halved, that strip is
+      empty and everything is in the top half.
+    */
+    expect(region(cells, { x0: 0, x1: 1, y0: 0.9, y1: 1 })).toBeGreaterThan(2);
+
+    expect(complaints.errors).toEqual([]);
+    await page.close();
+  });
+
   test('starts a renderer and draws a plot', async () => {
     const { page, complaints } = await open();
 

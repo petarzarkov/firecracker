@@ -207,9 +207,22 @@ export const createStage = async (options: StageOptions): Promise<Stage> => {
    */
   let burstPending = false;
 
+  /**
+   * The drawing surface in CSS pixels, which is what every layer here measures in.
+   *
+   * **Not divided by `resolution`.** `renderer.width` is already CSS pixels: PIXI's
+   * `TextureSource.resize` stores `Math.round(width * resolution) / resolution` and
+   * `renderer.width` reads that frame, while the backing store is `canvas.width`.
+   * Dividing again halved every dimension, so the plot drew into the top-left corner
+   * of the canvas and the rest stayed the clear colour - which is the same colour the
+   * container is painted, so there was no seam to see it by.
+   *
+   * At `devicePixelRatio: 1` the division was a no-op, which is why it survived every
+   * spec and every desktop and only ever showed up on a phone.
+   */
   const sizeOf = () => ({
-    width: app.renderer.width / app.renderer.resolution,
-    height: app.renderer.height / app.renderer.resolution,
+    width: app.renderer.width,
+    height: app.renderer.height,
   });
 
   const enter = (phase: StagePhase): void => {

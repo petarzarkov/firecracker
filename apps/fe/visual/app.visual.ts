@@ -27,6 +27,12 @@ const APP = process.env['VISUAL_APP_URL'] ?? 'http://localhost:5173';
 
 const DESKTOP = { width: 1440, height: 900 };
 const MOBILE = { width: 390, height: 844 };
+/**
+ * A real phone rather than a CSS one: 360 points at 3x, which is what most
+ * Androids report. The width matters because it is narrower than `MOBILE`, and the
+ * ratio matters because the stage renders at `min(devicePixelRatio, 2)`.
+ */
+const PHONE_3X = { width: 360, height: 800 };
 
 /** Long enough for the socket to connect and a round frame to arrive. */
 const SETTLE_MS = 4000;
@@ -218,6 +224,60 @@ describe('the client, in a browser', () => {
     );
     expect(overflow).toBeLessThanOrEqual(0);
 
+    await page.close();
+  });
+
+  /**
+   * The stage fills its box on a 3x phone.
+   *
+   * `resizeTo` reads the element only on a `window` resize, so a container that
+   * settled while `createStage` was still awaiting a renderer left the plot drawn
+   * into the top-left corner of a larger box - and because the canvas clears to the
+   * colour the box is painted, there was no seam to see it by. A `ResizeObserver`
+   * is what fixes it; this is what would notice it coming back.
+   *
+   * Measured, not eyeballed: the canvas's CSS box has to match the container it is
+   * `inset: 0` inside, and its backing store has to be that times the capped
+   * resolution. A stale renderer fails the first; a resolution bug fails the second.
+   */
+  test('the stage fills its box on a 3x phone', async () => {
+    const { page, complaints } = await openPage(browser, PHONE_3X, {
+      scale: 3,
+    });
+    await enterLobby(page);
+
+    console.log('  →', await shoot(page, 'app-phone-3x'));
+
+    const fit = await page.evaluate(() => {
+      const canvas = document.querySelector('canvas');
+      if (canvas === null) return null;
+      const box = canvas.parentElement?.getBoundingClientRect();
+      const seen = canvas.getBoundingClientRect();
+      return {
+        boxWidth: Math.round(box?.width ?? 0),
+        boxHeight: Math.round(box?.height ?? 0),
+        cssWidth: Math.round(seen.width),
+        cssHeight: Math.round(seen.height),
+        bufferWidth: canvas.width,
+        bufferHeight: canvas.height,
+        ratio: globalThis.devicePixelRatio,
+      };
+    });
+
+    expect(fit).not.toBeNull();
+    const seen = fit as NonNullable<typeof fit>;
+    expect(seen.ratio).toBe(3);
+
+    // Within a point, because a fractional viewport rounds.
+    expect(Math.abs(seen.cssWidth - seen.boxWidth)).toBeLessThanOrEqual(1);
+    expect(Math.abs(seen.cssHeight - seen.boxHeight)).toBeLessThanOrEqual(1);
+
+    // `min(devicePixelRatio, 2)` - a 3x phone renders at 2x deliberately, so the
+    // buffer is twice the CSS box and not three times it.
+    expect(seen.bufferWidth).toBe(seen.cssWidth * 2);
+    expect(seen.bufferHeight).toBe(seen.cssHeight * 2);
+
+    expect(complaints.errors).toEqual([]);
     await page.close();
   });
 });
