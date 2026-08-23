@@ -53,6 +53,42 @@ export const DEFAULT_MODEL = 'gemini-flash-latest';
 /** Exported for the test that pins the derank order. See `google.service.test.ts`. */
 export const modelRpm = (model: string): number | undefined => MODEL_RPM[model];
 
+/**
+ * The hierarchy this key can actually use.
+ *
+ * **An alias survives whether or not `models.list()` mentions it**, and that is the
+ * whole point of the fix. `list()` returns pinned generations; it does not advertise
+ * `gemini-flash-latest`, so filtering the hierarchy by it deleted every alias and
+ * left the pinned list with `gemini-2.5-pro` on top - a model this key answers
+ * `404 - no longer available to new users` for. Nothing below it was ever reached,
+ * because a 404 is not a quota error, so the whole provider was offline and the bots
+ * simply stopped talking.
+ */
+export const narrowHierarchy = (
+  available: readonly string[],
+): readonly string[] =>
+  MODEL_HIERARCHY.filter(
+    (model) => model.endsWith('-latest') || available.includes(model),
+  );
+
+/**
+ * A model that is gone rather than busy.
+ *
+ * Google retires a pinned generation and answers 404 for it while `models.list()`
+ * still offers it, so this cannot be inferred from the catalogue. Treated as a
+ * *permanent* derank: a temporary one would be re-tried on the next cool-down and
+ * wedge the provider again ten minutes later, which is exactly what it did.
+ */
+export const isRetiredModel = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    /\b404\b/.test(message) ||
+    /no longer available|not found|is not supported|does not exist/i.test(
+      message,
+    )
+  );
+};
+
 /** How long to stay on a downgraded model before trying a better one again. */
 const UPGRADE_COOLDOWN_MS = 10 * 60 * 1000;
 
@@ -103,9 +139,7 @@ export class GoogleService extends BaseProviderService implements OnInit {
     if (!this.configured) return;
     try {
       const available = await this.listModels();
-      const filtered = MODEL_HIERARCHY.filter((model) =>
-        available.includes(model),
-      );
+      const filtered = narrowHierarchy(available);
       if (filtered.length > 0) this.#hierarchy = filtered;
       this.logger.info('gemini model hierarchy loaded', {
         models: this.#hierarchy,
@@ -192,6 +226,31 @@ export class GoogleService extends BaseProviderService implements OnInit {
     try {
       return await call(this.#model);
     } catch (error) {
+      /**
+       * A retired model is dropped for the life of the process, not deranked for
+       * ten minutes: `#considerUpgrade` climbs back to the top of the hierarchy
+       * once the cool-down passes, so a temporary step off a 404 walks straight
+       * back onto it. That loop is what took the lobby's chatter offline
+       * indefinitely while the log filled with the same 404.
+       */
+      if (isRetiredModel(error)) {
+        const retired = this.#model;
+        this.#hierarchy = this.#hierarchy.filter((model) => model !== retired);
+        const next = this.#hierarchy[0];
+        if (next === undefined) throw error;
+
+        this.logger.warn('gemini model is gone, dropping it for good', {
+          model: retired,
+          to: next,
+          reason: (error as Error).message.slice(0, 160),
+        });
+        this.#model = next;
+        this.#derankedAt = 0;
+
+        await this.#pace();
+        return call(this.#model);
+      }
+
       if (!this.isQuotaError(error)) throw error;
 
       const next = this.#derank();
@@ -224,12 +283,23 @@ export class GoogleService extends BaseProviderService implements OnInit {
     return next ?? null;
   }
 
-  /** Back to the best model once the cool-down has passed. */
+  /**
+   * Back to the default once the cool-down has passed - **not** to the top of the
+   * hierarchy.
+   *
+   * They are not the same model. The hierarchy is ordered by rising rate limit so a
+   * derank always steps somewhere cheaper to keep, which puts `gemini-pro-latest`
+   * and its 5rpm at the top; the default sits below it deliberately. Climbing to
+   * `[0]` upgraded the service onto a tier it was never meant to start on and paced
+   * every call twelve seconds apart to stay inside it.
+   */
   #considerUpgrade(): void {
     if (this.#derankedAt === 0) return;
     if (Date.now() - this.#derankedAt < UPGRADE_COOLDOWN_MS) return;
 
-    const best = this.#hierarchy[0];
+    const best = this.#hierarchy.includes(DEFAULT_MODEL)
+      ? DEFAULT_MODEL
+      : this.#hierarchy[0];
     if (best !== undefined && best !== this.#model) {
       this.logger.debug(
         'gemini cool-down elapsed, trying the best model again',

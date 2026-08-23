@@ -57,19 +57,27 @@ export class AIService {
    * that fails should be a lobby with fewer jokes in it, never an error path.
    */
   async line(prompt: string, systemPrompt: string): Promise<string | null> {
-    const provider = this.providers.preferred;
-    if (provider === null) return null;
-    try {
-      const text = await this.providers.queryText(
-        provider,
-        '',
-        prompt,
-        systemPrompt,
-      );
-      const trimmed = text.trim();
-      return trimmed.length > 0 ? trimmed : null;
-    } catch {
-      return null;
+    /**
+     * Every configured provider, not just the best one.
+     *
+     * One key is one free tier, and a spent tier used to mean silence until the
+     * quota reset - the lobby stuck on the last lines it managed to write, which is
+     * exactly what reads as a script.
+     */
+    for (const provider of this.providers.configured) {
+      try {
+        const text = await this.providers.queryText(
+          provider,
+          '',
+          prompt,
+          systemPrompt,
+        );
+        const trimmed = text.trim();
+        if (trimmed.length > 0) return trimmed;
+      } catch {
+        // Logged by `queryText` already. Try the next one.
+      }
     }
+    return null;
   }
 }

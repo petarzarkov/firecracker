@@ -34,10 +34,25 @@ export class AIProviderService {
 
   /** The first configured provider, for callers with no preference. */
   get preferred(): AIProvider | null {
-    if (this.groq.configured) return AIProvider.GROQ;
-    if (this.google.configured) return AIProvider.GOOGLE;
-    if (this.openRouter.configured) return AIProvider.OPENROUTER;
-    return null;
+    return this.configured[0] ?? null;
+  }
+
+  /**
+   * Every provider with credentials, best first.
+   *
+   * A list rather than a single choice, because one provider is one free tier: a
+   * Gemini key allows twenty `generate_content` calls a day, which a lobby betting
+   * every twenty seconds spends inside a quarter of an hour. After that
+   * `preferred` alone answered nothing for the rest of the day and the chat froze
+   * on whatever was in the scrollback - which is what a visitor then reads as
+   * canned, because by then it is.
+   */
+  get configured(): readonly AIProvider[] {
+    return [
+      ...(this.groq.configured ? [AIProvider.GROQ] : []),
+      ...(this.google.configured ? [AIProvider.GOOGLE] : []),
+      ...(this.openRouter.configured ? [AIProvider.OPENROUTER] : []),
+    ];
   }
 
   async queryText(

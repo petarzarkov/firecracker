@@ -9,6 +9,14 @@ import { CrashEngineService } from '../engine/crash-engine.service.js';
 import { GAME_EVENTS, GAME_TOPIC, publishGame } from '../game.events.js';
 import { GameMath } from '../game.math.js';
 import { GameRoundStatus } from '../rounds/game-round.schema.js';
+import {
+  BOT_NAMES,
+  BOT_VOICES,
+  type BotName,
+  chatterPrompt,
+  personaFor,
+  tooSimilar,
+} from './bot-voice.js';
 
 /**
  * A literal, because `@Interval`'s argument is evaluated before the container
@@ -16,35 +24,8 @@ import { GameRoundStatus } from '../rounds/game-round.schema.js';
  */
 const WATCH_INTERVAL_MS = 250;
 
-/**
- * Explicitly told not to explain itself: a model given a crash-game prompt with no
- * persona writes a paragraph of gambling advice, which a real casino should not be
- * publishing.
- */
-const BOT_PERSONA =
-  'You are a player in a crash-gambling lobby chat. Reply with one short, casual line - ' +
-  'under 12 words, lowercase, no emoji, no advice, no hashtags. Never mention being an AI.';
-
-const BOT_NAMES = [
-  'rocketman',
-  'moonshot',
-  'diamondhand',
-  'paperhands',
-  'ka_boom',
-  'lucky7',
-  'nitro',
-  'bigred',
-  'cashout_carl',
-  'fuse',
-  'ember',
-  'skyward',
-  'orbit',
-  'ignition',
-  'afterburner',
-  'gravity',
-  'cinder',
-  'blastoff',
-] as const;
+/** How many recent lines the model is shown, and checked against. */
+const RECENT_LINES = 6;
 
 interface Bot {
   /** The `bot:` prefix keeps this from colliding with a person's id, visibly. */
@@ -166,36 +147,62 @@ export class GameBotsService implements OnInit {
     if (previous !== GameRoundStatus.RUNNING) return;
     if (!this.ai.available || this.#bots.length === 0) return;
 
+    const crashPointX100 = this.engine.crashPointX100;
+    if (crashPointX100 === null) return;
+
     const rng = new Rng();
     const speaker = rng.pick(this.#bots);
     const speaks = rng.bool(this.config.get('game').bots.chatChance);
     rng.free();
     if (!speaks || speaker === undefined) return;
 
-    const won = speaker.cashedOut;
-    const multiplier = GameMath.toMultiplier(speaker.targetX100).toFixed(2);
-
-    void this.ai
-      .line(
-        won
-          ? `You cashed out at ${multiplier}x and made money. React in under 12 words.`
-          : `You held too long and the rocket exploded before your ${multiplier}x target. React in under 12 words.`,
-        BOT_PERSONA,
-      )
-      .then((text) => {
-        if (text === null) return;
-        // Trimmed hard: a model that ignores the word limit must not be able to
-        // paste an essay into a lobby.
-        this.chat.say(
-          { username: speaker.username, picture: null },
-          text.slice(0, 140),
-        );
-      })
-      .catch((error: unknown) =>
+    void this.#speak(speaker, GameMath.toMultiplier(crashPointX100)).catch(
+      (error: unknown) =>
         this.logger.debug('bot chatter failed', {
           reason: (error as Error).message,
         }),
-      );
+    );
+  }
+
+  /**
+   * One regular, reacting to the round that just ended.
+   *
+   * The lobby's own last few lines go into the prompt and are checked against the
+   * answer, because a model told not to repeat itself still does - and two bots
+   * saying the same thing a round apart is the tell that turns atmosphere into
+   * obvious machinery.
+   */
+  async #speak(speaker: Bot, crashPoint: number): Promise<void> {
+    const recent = (await this.chat.history())
+      .slice(-RECENT_LINES)
+      .map((line) => line.message);
+
+    const voice = BOT_VOICES[speaker.username as BotName];
+    const text = await this.ai.line(
+      chatterPrompt({
+        username: speaker.username,
+        stakeCents: speaker.betAmountCents,
+        target: GameMath.toMultiplier(speaker.targetX100),
+        crashPoint,
+        cashedOut: speaker.cashedOut,
+        recent,
+      }),
+      personaFor(speaker.username, voice ?? 'an ordinary player'),
+    );
+    if (text === null) return;
+
+    // Trimmed hard: a model that ignores the word limit must not be able to paste
+    // an essay into a lobby.
+    const line = text.replaceAll('"', '').trim().slice(0, 140);
+    if (line.length === 0 || tooSimilar(line, recent)) {
+      this.logger.debug('bot line dropped as a repeat', {
+        username: speaker.username,
+        line,
+      });
+      return;
+    }
+
+    this.chat.say({ username: speaker.username, picture: null }, line);
   }
 
   /** Cash out every bot the curve has now reached. */

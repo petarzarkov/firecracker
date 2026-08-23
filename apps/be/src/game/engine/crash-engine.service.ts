@@ -109,6 +109,16 @@ export class CrashEngineService implements OnInit, OnShutdown {
       : null;
   }
 
+  /**
+   * Where this round stopped, once it has. `null` until then - handing it out
+   * earlier would be handing out the outcome while bets are still open.
+   */
+  get crashPointX100(): number | null {
+    return this.#phase === GameRoundStatus.CRASHED
+      ? this.#crashPointX100
+      : null;
+  }
+
   registerAutoCashOutHandler(
     fn: (roundId: string, multiplierX100: number) => void,
   ): void {
