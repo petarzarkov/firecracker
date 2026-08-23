@@ -108,6 +108,8 @@ export function useGameSocket() {
               roundId: r.roundId,
               crashPoint: r.crashPoint,
             })),
+            seedHash: data.seedHash,
+            nonce: data.nonce,
           },
           myUserId,
         );
@@ -122,6 +124,10 @@ export function useGameSocket() {
         waitingEndsAt: data.waitingEndsAt
           ? new Date(data.waitingEndsAt)
           : undefined,
+        // The commitment, published before the crash point is drawn. Kept so a
+        // player can check it against the seed revealed at the crash.
+        seedHash: data.seedHash,
+        nonce: data.nonce,
       });
     });
 
@@ -132,7 +138,31 @@ export function useGameSocket() {
 
     // Crash is urgent — updates phase + marks losing bets
     socket.on(GAME_EVENTS.CRASHED, (data: GameCrashedPayload) => {
-      setCrashed(data.roundId, data.crashPoint);
+      /**
+       * The reveal, kept rather than dropped.
+       *
+       * Every field of the proof has always been on this frame - the seed, the
+       * client seed, the nonce and the algorithm - and the client read two of them.
+       * `seedHash` comes from the store, where the phase change put it before the
+       * round ran, which is the whole point: the commitment cannot be chosen after
+       * the fact.
+       */
+      const { seedHash } = useGameStore.getState();
+      setCrashed(
+        data.roundId,
+        data.crashPoint,
+        seedHash === null
+          ? undefined
+          : {
+              roundId: data.roundId,
+              crashPoint: data.crashPoint,
+              serverSeedHash: seedHash,
+              serverSeed: data.seed,
+              clientSeed: data.clientSeed,
+              nonce: data.nonce,
+              algorithm: data.algorithm,
+            },
+      );
     });
 
     // Player list updates — deferred so they don't block RAF/setInterval

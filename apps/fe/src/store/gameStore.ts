@@ -19,6 +19,25 @@ export interface CrashedRound {
   crashPoint: number;
 }
 
+/**
+ * Everything needed to re-draw a round's crash point without trusting us.
+ *
+ * All of it already arrived on the socket - the commitment on every phase change,
+ * the reveal on every crash - and the client threw all of it away. There was no
+ * `verify`, no `fair` and no `seed` anywhere in this app, on a game whose whole
+ * claim is that you do not have to take its word for anything.
+ */
+export interface RoundProof {
+  roundId: string;
+  crashPoint: number;
+  /** `SHA256(serverSeed)`, published *before* the crash point exists. */
+  serverSeedHash: string;
+  serverSeed: string;
+  clientSeed: string;
+  nonce: number;
+  algorithm: string;
+}
+
 export interface ChartPoint {
   elapsed: number;
   multiplier: number;
@@ -137,6 +156,14 @@ interface GameState {
   recentCrashes: CrashedRound[];
   betError: string | null;
   isDemoMode: boolean;
+  /** The commitment for the round on the table, published before it is drawn. */
+  seedHash: string | null;
+  nonce: number | null;
+  /**
+   * Proofs for rounds this session watched crash, by round id. Older rounds come
+   * from `/api/game/rounds/:id/verify` instead - see `fetchProof`.
+   */
+  proofs: Record<string, RoundProof>;
 }
 
 interface GameActions {
@@ -150,6 +177,8 @@ interface GameActions {
       waitingEndsAt?: Date | undefined;
       startedAt?: Date | undefined;
       recentCrashes?: CrashedRound[] | undefined;
+      seedHash?: string | null | undefined;
+      nonce?: number | null | undefined;
     },
     myUserId?: string,
   ) => void;
@@ -159,9 +188,11 @@ interface GameActions {
     waitingEndsAt?: Date | undefined;
     startedAt?: Date | undefined;
     crashedAt?: Date | undefined;
+    seedHash?: string | undefined;
+    nonce?: number | undefined;
   }) => void;
   addTick: (multiplier: number, elapsed: number) => void;
-  setCrashed: (roundId: string, crashPoint: number) => void;
+  setCrashed: (roundId: string, crashPoint: number, proof?: RoundProof) => void;
   addBet: (bet: BetEntry, myUserId?: string) => void;
   updateBet: (bet: BetEntry, myUserId?: string) => void;
   setMyBet: (bet: BetEntry) => void;
@@ -207,6 +238,9 @@ export const useGameStore = create<GameState & GameActions>()(
     recentCrashes: [],
     betError: null,
     isDemoMode: true,
+    seedHash: null,
+    nonce: null,
+    proofs: {},
 
     setRoundState: (payload, myUserId) => {
       // Populate liveRef for canvas RAF rendering (reconnect mid-round)
@@ -232,10 +266,14 @@ export const useGameStore = create<GameState & GameActions>()(
       set((state) => {
         state.phase = payload.phase;
         state.roundId = payload.roundId;
+        if (payload.seedHash !== undefined) state.seedHash = payload.seedHash;
+        if (payload.nonce !== undefined) state.nonce = payload.nonce;
         state.multiplier = payload.multiplier;
         state.waitingEndsAt = payload.waitingEndsAt ?? null;
         state.startedAt = payload.startedAt ?? null;
         state.activeBets = payload.activeBets;
+        state.seedHash = payload.seedHash ?? null;
+        state.nonce = payload.nonce ?? null;
 
         if (myUserId) {
           state.myBet =
@@ -252,6 +290,8 @@ export const useGameStore = create<GameState & GameActions>()(
       set((state) => {
         state.phase = payload.phase;
         state.roundId = payload.roundId;
+        if (payload.seedHash !== undefined) state.seedHash = payload.seedHash;
+        if (payload.nonce !== undefined) state.nonce = payload.nonce;
 
         if (payload.phase === 'WAITING') {
           liveRef.chartPoints = [];
@@ -284,7 +324,7 @@ export const useGameStore = create<GameState & GameActions>()(
       liveRef.chartPoints.push({ elapsed, multiplier });
     },
 
-    setCrashed: (roundId, crashPoint) => {
+    setCrashed: (roundId, crashPoint, proof) => {
       // Update liveRef BEFORE Zustand so the canvas sees the crash point
       // on the same frame as the phase transition to CRASHED.
       liveRef.multiplier = crashPoint;
@@ -296,6 +336,17 @@ export const useGameStore = create<GameState & GameActions>()(
         state.recentCrashes.unshift({ roundId, crashPoint });
         if (state.recentCrashes.length > 20) {
           state.recentCrashes = state.recentCrashes.slice(0, 20);
+        }
+
+        if (proof !== undefined) {
+          state.proofs[roundId] = proof;
+          // Bounded by the history it belongs to: a proof nothing can open any more
+          // is a leak, and a long session crashes a round every twenty seconds.
+          for (const id of Object.keys(state.proofs)) {
+            if (!state.recentCrashes.some((round) => round.roundId === id)) {
+              delete state.proofs[id];
+            }
+          }
         }
 
         // ACTIVE bets are lost. Optimistic cashouts that the server hadn't

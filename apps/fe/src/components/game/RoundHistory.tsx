@@ -1,5 +1,7 @@
 import { Box, Flex, Text } from '@chakra-ui/react';
+import { useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
+import { FairnessDialog } from './FairnessDialog';
 
 /**
  * The bands the pills are coloured by, and the legend beside the title - one list,
@@ -14,13 +16,21 @@ const BANDS = [
 
 function crashColor(cp: number): string {
   if (cp < 1.5) return '#ff4444';
-  for (const band of BANDS)
+  for (const band of BANDS) {
     if (band.upTo !== null && cp < band.upTo) return band.color;
+  }
   return '#bb44ff';
 }
 
 export function RoundHistory() {
   const recentCrashes = useGameStore((state) => state.recentCrashes);
+  /**
+   * Which round's proof is open. `undefined` is closed; `null` is the round in
+   * progress, which has a commitment but no reveal yet.
+   */
+  const [openRound, setOpenRound] = useState<string | null | undefined>(
+    undefined,
+  );
 
   return (
     <Box>
@@ -78,7 +88,15 @@ export function RoundHistory() {
                     ▼
                   </Text>
                 )}
+                {/*
+                  A pill is the only place a player ever sees a past round, so it is
+                  where "was that real?" has to be answerable. It was a `Box`.
+                */}
                 <Box
+                  as="button"
+                  aria-label={`Show how round ${index + 1} was drawn — crashed at ${r.crashPoint.toFixed(2)}x`}
+                  onClick={() => setOpenRound(r.roundId)}
+                  cursor="pointer"
                   px={isLatest ? 2.5 : 2}
                   py={0.5}
                   borderRadius="full"
@@ -90,6 +108,7 @@ export function RoundHistory() {
                   fontWeight="bold"
                   color="white"
                   boxShadow={isLatest ? `0 0 6px ${color}` : 'none'}
+                  _hover={{ bg: `${color}33` }}
                 >
                   {r.crashPoint.toFixed(2)}x
                 </Box>
@@ -98,6 +117,26 @@ export function RoundHistory() {
           })}
         </Flex>
       )}
+
+      <Box
+        as="button"
+        onClick={() => setOpenRound(null)}
+        mt={2}
+        fontSize="2xs"
+        fontFamily="mono"
+        color="gray.500"
+        letterSpacing="wide"
+        cursor="pointer"
+        _hover={{ color: 'orange.300' }}
+      >
+        ⚄ provably fair — check this round
+      </Box>
+
+      <FairnessDialog
+        roundId={openRound ?? null}
+        open={openRound !== undefined}
+        onClose={() => setOpenRound(undefined)}
+      />
     </Box>
   );
 }
