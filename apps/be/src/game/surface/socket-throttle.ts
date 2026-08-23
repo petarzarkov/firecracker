@@ -52,6 +52,16 @@ const LIMITS: Readonly<Record<string, Limit>> = Object.freeze({
       data: { success: false, error: refusal },
     },
   },
+  [GAME_CLIENT_EVENTS.CANCEL_BET]: {
+    // Paired with the bet it takes back, so the same cadence: a player holds one
+    // bet per round and cancelling more often than that is a loop, not a mind
+    // being changed.
+    perWindow: 5,
+    refuse: {
+      event: GAME_EVENTS.CANCEL_BET_ACK,
+      data: { success: false, error: refusal },
+    },
+  },
   [GAME_CLIENT_EVENTS.CASH_OUT]: {
     // Looser than a bet: a player who thinks the button missed will press it again,
     // and the second press is settled by the bet row rather than by this.

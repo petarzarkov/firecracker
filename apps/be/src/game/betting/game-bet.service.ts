@@ -33,6 +33,13 @@ export class BetRejected extends HttpError {
  * advisory lock", is the argument, and the three legs are `transactionSync`, the
  * SQL-guarded debit and the unique index below.
  */
+/** What `cancelBet` hands back, so the caller can tell the lobby and the wallet. */
+export interface CancelledBet {
+  readonly isDemo: boolean;
+  readonly refundedCents: number;
+  readonly balanceCents: number;
+}
+
 export class GameBetService {
   /**
    * `game_bet_round_user_demo_index`, **as the columns, not the index name**:
@@ -245,6 +252,58 @@ export class GameBetService {
     }
 
     return refunds;
+  }
+
+  /**
+   * Takes a bet back off the table, before the round it belongs to has launched.
+   *
+   * The row is **deleted** rather than marked refunded, because
+   * `game_bet_round_user_demo_index` is unique over `(round_id, user_id, is_demo)`
+   * whatever the status - a settled-but-present row would let the guard in
+   * `placeBet` pass and then have the insert fail on the index, refusing a re-bet
+   * with a message about an active bet that no longer exists.
+   *
+   * The money is not deleted with it: the ledger's `game_bet_id` is
+   * `onDelete: 'set null'`, so the debit and this refund both stay on the wallet's
+   * history. A cancelled bet is a bet that did not happen; the money that moved
+   * still did.
+   */
+  cancelBet(userId: string, roundId: string): CancelledBet {
+    return transactionSync(this.db, (tx) => {
+      const betRepo = GameBetRepository.over(tx);
+
+      const bet = betRepo.findActiveByRoundAndUserAnyMode(roundId, userId);
+      if (bet === undefined) {
+        throw new BetRejected('You have no bet on this round to cancel');
+      }
+
+      const wallet = this.wallets.findWallet(tx, userId, bet.isDemo);
+      if (wallet === undefined) {
+        throw new BetRejected('Wallet not found - please reconnect');
+      }
+
+      const credited = this.wallets.credit(
+        tx,
+        wallet.id,
+        bet.betAmountCents,
+        WalletTransactionType.REFUND,
+        `Bet cancelled before launch in round ${roundId}`,
+        bet.id,
+      );
+      betRepo.deleteById(bet.id);
+
+      this.logger.debug('bet cancelled', {
+        userId,
+        roundId,
+        refundedCents: bet.betAmountCents,
+      });
+
+      return {
+        isDemo: bet.isDemo,
+        refundedCents: bet.betAmountCents,
+        balanceCents: credited.balanceCents,
+      };
+    });
   }
 
   /** Everything still open when the rocket exploded. One statement, no loop. */

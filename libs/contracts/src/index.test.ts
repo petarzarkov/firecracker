@@ -57,6 +57,8 @@ describe('the event names', () => {
       'gameTick',
       'gameCrashed',
       'betPlaced',
+      'betCancelled',
+      'cancelBetAck',
       'betCashedOut',
       'betAck',
       'cashOutAck',
@@ -103,6 +105,8 @@ const gamePayloads: Witness<GamePayloads> = {
   [GAME_EVENTS.TICK]: true,
   [GAME_EVENTS.CRASHED]: true,
   [GAME_EVENTS.BET_PLACED]: true,
+  [GAME_EVENTS.BET_CANCELLED]: true,
+  [GAME_EVENTS.CANCEL_BET_ACK]: true,
   [GAME_EVENTS.BET_CASHED_OUT]: true,
   [GAME_EVENTS.BET_ACK]: true,
   [GAME_EVENTS.CASH_OUT_ACK]: true,
@@ -128,6 +132,7 @@ const playerChatPayloads: Witness<PlayerChatPayloads> = {
 
 const gameClientPayloads: Witness<GameClientPayloads> = {
   [GAME_CLIENT_EVENTS.PLACE_BET]: true,
+  [GAME_CLIENT_EVENTS.CANCEL_BET]: true,
   [GAME_CLIENT_EVENTS.CASH_OUT]: true,
   [GAME_CLIENT_EVENTS.SUBMIT_CLIENT_SEED]: true,
   [GAME_CLIENT_EVENTS.JOIN_PLAYER_CHAT]: true,

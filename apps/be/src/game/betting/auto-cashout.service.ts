@@ -55,6 +55,16 @@ export class AutoCashOutService {
   }
 
   /**
+   * Forgets one player's target.
+   *
+   * Called when a bet is cancelled: a target left behind belongs to a bet that no
+   * longer exists, and the sweep would pay out on a round the player is not in.
+   */
+  async clear(roundId: string, userId: string): Promise<void> {
+    await this.redis.hdel(this.#key(roundId), userId).catch(() => 0);
+  }
+
+  /**
    * Called on every tick. Cashes out everyone whose target the curve has reached.
    *
    * The payout multiplier is `min(current, target)`, not `current`: a player who

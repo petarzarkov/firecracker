@@ -8,6 +8,7 @@ import {
   GAME_TOPIC,
   publishGame,
   type BetAckPayload,
+  type CancelBetAckPayload,
   type CashOutAckPayload,
 } from '../game.events.js';
 import { GameMath } from '../game.math.js';
@@ -108,6 +109,54 @@ export class BetActionsService {
       return {
         success: false,
         error: GameMessages.playerFacing(error, 'Failed to place bet'),
+      };
+    }
+  }
+
+  /**
+   * Taking a bet back, which is only a thing during the betting window.
+   *
+   * Guarded on the phase for the obvious reason: once the rocket is climbing, the
+   * exit is a cash-out at the multiplier, and a "cancel" would be a refund of a bet
+   * that is already losing. The auto-cashout goes with it - a target for a bet that
+   * no longer exists would pay out on a round the player is not in.
+   */
+  async cancel(player: SocketPlayer | null): Promise<CancelBetAckPayload> {
+    if (player === null) {
+      return { success: false, error: 'Login required' };
+    }
+
+    if (this.engine.phase !== GameRoundStatus.WAITING) {
+      return {
+        success: false,
+        error: 'A bet can only be cancelled before the round starts',
+      };
+    }
+
+    const roundId = this.engine.roundId;
+    if (roundId === null) {
+      return { success: false, error: 'No active round' };
+    }
+
+    try {
+      const cancelled = this.bets.cancelBet(player.userId, roundId);
+      await this.autoCashOut.clear(roundId, player.userId);
+
+      publishGame(
+        this.events,
+        Topics.user(player.userId),
+        GAME_EVENTS.WALLET_UPDATED,
+        { balanceCents: cancelled.balanceCents, isDemo: cancelled.isDemo },
+      );
+      publishGame(this.events, GAME_TOPIC, GAME_EVENTS.BET_CANCELLED, {
+        userId: player.userId,
+      });
+
+      return { success: true, refundedCents: cancelled.refundedCents };
+    } catch (error) {
+      return {
+        success: false,
+        error: GameMessages.playerFacing(error, 'Failed to cancel the bet'),
       };
     }
   }

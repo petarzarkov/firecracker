@@ -1,8 +1,10 @@
 import {
   type ActiveBetView,
   type BetAckPayload,
+  type BetCancelledPayload,
   type BetCashedOutPayload,
   type BetPlacedPayload,
+  type CancelBetAckPayload,
   type CashOutAckPayload,
   GAME_EVENTS,
   type GameCrashedPayload,
@@ -81,6 +83,7 @@ export function useGameSocket() {
     setCrashed,
     addBet,
     updateBet,
+    removeBet,
     setWalletBalance,
     setDemoBalance,
     setBetError,
@@ -187,6 +190,16 @@ export function useGameSocket() {
       });
     });
 
+    socket.on(GAME_EVENTS.BET_CANCELLED, (data: BetCancelledPayload) => {
+      startTransition(() => removeBet(data.userId));
+    });
+
+    socket.on(GAME_EVENTS.CANCEL_BET_ACK, (data: CancelBetAckPayload) => {
+      // A refusal means the bet is still on the table, so put the row back by
+      // asking for the truth rather than guessing at it.
+      if (!data.success && data.error) setBetError(data.error);
+    });
+
     socket.on(GAME_EVENTS.BET_CASHED_OUT, (data: BetCashedOutPayload) => {
       // Queued before the store work, so the chart draws the jump on the frame
       // the news arrived rather than after React has caught up.
@@ -280,6 +293,7 @@ export function useGameSocket() {
     setCrashed,
     addBet,
     updateBet,
+    removeBet,
     setWalletBalance,
     setDemoBalance,
     setBetError,

@@ -204,6 +204,8 @@ interface GameActions {
   setIsDemoMode: (isDemoMode: boolean) => void;
   /** Removes the optimistic place-bet entry when the server rejects it. */
   rollbackBet: () => void;
+  /** Drops a bet that was taken back before the launch. */
+  removeBet: (userId: string) => void;
   /**
    * Rolls back an optimistic cashout. Sets the status back to ACTIVE
    * (or LOST if the round has already crashed) so the store is consistent
@@ -442,6 +444,14 @@ export const useGameStore = create<GameState & GameActions>()(
     setIsDemoMode: (isDemoMode) => {
       set((state) => {
         state.isDemoMode = isDemoMode;
+      });
+    },
+
+    removeBet: (userId) => {
+      set((state) => {
+        const idx = state.activeBets.findIndex((b) => b.userId === userId);
+        if (idx >= 0) state.activeBets.splice(idx, 1);
+        if (state.myBet?.userId === userId) state.myBet = null;
       });
     },
 

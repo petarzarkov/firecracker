@@ -4,11 +4,13 @@ import type { WalletService } from '../../wallet/services/wallet.service.js';
 import type { CrashEngineService } from '../engine/crash-engine.service.js';
 import type { ClientSeedService } from '../fairness/client-seed.service.js';
 import { GAME_EVENTS, GAME_TOPIC } from '../game.events.js';
+import { Topics } from '../../notifications/events/events.js';
 import type { GameBetRow } from '../betting/game-bet.schema.js';
 import { GameRoundStatus } from '../rounds/game-round.schema.js';
 import type { AutoCashOutService } from '../betting/auto-cashout.service.js';
 import {
   BetRejected,
+  type CancelledBet,
   type GameBetService,
 } from '../betting/game-bet.service.js';
 import { BetActionsService } from './bet-actions.service.js';
@@ -54,8 +56,11 @@ let engine: {
 let bets: {
   placeBet: (...args: unknown[]) => GameBetRow;
   cashOut: (...args: unknown[]) => GameBetRow;
+  cancelBet: (...args: unknown[]) => CancelledBet;
   findActiveByRoundAndUserAnyMode: () => GameBetRow | undefined;
 };
+
+let cleared: unknown[];
 
 const betRow = (over: Partial<GameBetRow> = {}): GameBetRow =>
   ({
@@ -82,6 +87,10 @@ const subject = (): BetActionsService =>
         stored.push(args);
         return Promise.resolve();
       },
+      clear: (...args: unknown[]) => {
+        cleared.push(args);
+        return Promise.resolve();
+      },
     } as unknown as AutoCashOutService,
     {
       contributeIfAbsent: (_roundId: string, userId: string) => {
@@ -103,6 +112,7 @@ beforeEach(() => {
   published = [];
   seeded = [];
   stored = [];
+  cleared = [];
   cashOutCalls = [];
   multiplierReads = 0;
 
@@ -115,6 +125,11 @@ beforeEach(() => {
 
   bets = {
     placeBet: () => betRow(),
+    cancelBet: () => ({
+      isDemo: true,
+      refundedCents: 500,
+      balanceCents: 5000,
+    }),
     cashOut: (...args: unknown[]) => {
       cashOutCalls.push(args[2] as number);
       return betRow({ payoutCents: 1000 });
@@ -339,5 +354,67 @@ describe('cashing out', () => {
       throw new Error('SQLITE_BUSY: database is locked');
     };
     expect(subject().cashOut(player, {}).error).toBe('Failed to cash out');
+  });
+});
+
+/**
+ * Taking a bet back, which only exists during the betting window - once the rocket
+ * is climbing the exit is a cash-out, and a refund then would hand back a stake
+ * that is already losing.
+ */
+describe('cancelling a bet', () => {
+  test('refunds the stake and tells the lobby the row is gone', async () => {
+    const ack = await subject().cancel(player);
+
+    expect(ack.success).toBe(true);
+    expect(ack.refundedCents).toBe(500);
+    expect(frame(GAME_EVENTS.BET_CANCELLED)?.data['userId']).toBe(
+      player.userId,
+    );
+    expect(frame(GAME_EVENTS.BET_CANCELLED)?.topic).toBe(GAME_TOPIC);
+  });
+
+  test('the refunded balance goes to that player alone', async () => {
+    await subject().cancel(player);
+
+    const wallet = frame(GAME_EVENTS.WALLET_UPDATED);
+    expect(wallet?.topic).toBe(Topics.user(player.userId));
+    expect(wallet?.data['balanceCents']).toBe(5000);
+    expect(wallet?.data['isDemo']).toBe(true);
+  });
+
+  /**
+   * A target left behind belongs to a bet that no longer exists, and the tick sweep
+   * would pay it out on a round the player is not in.
+   */
+  test('forgets the auto-cashout target with it', async () => {
+    await subject().cancel(player);
+    expect(cleared).toHaveLength(1);
+    expect(cleared[0]).toEqual([ROUND_ID, player.userId]);
+  });
+
+  test('is refused once the round is running', async () => {
+    engine.phase = GameRoundStatus.RUNNING;
+
+    const ack = await subject().cancel(player);
+    expect(ack.success).toBe(false);
+    expect(ack.error).toMatch(/before the round starts/i);
+    expect(published).toHaveLength(0);
+  });
+
+  test('is refused for a spectator', async () => {
+    const ack = await subject().cancel(null);
+    expect(ack.success).toBe(false);
+    expect(published).toHaveLength(0);
+  });
+
+  test('answers with an ack rather than throwing when there is nothing to cancel', async () => {
+    bets.cancelBet = () => {
+      throw new BetRejected('You have no bet on this round to cancel');
+    };
+
+    const ack = await subject().cancel(player);
+    expect(ack.success).toBe(false);
+    expect(ack.error).toMatch(/no bet on this round/i);
   });
 });

@@ -462,8 +462,45 @@ export function BetPanel({ onSignIn }: { onSignIn?: () => void }) {
     }
   }, [autoPlay, canBet, handlePlaceBet]);
 
+  /**
+   * Before the launch a bet is still yours to take back.
+   *
+   * Every crash game allows this and this one did not, so the only way out of a
+   * mis-click was to watch it ride. The server refunds the stake and forgets the
+   * auto-cashout; see `BetActionsService.cancel`.
+   */
+  const canCancel = phase === 'WAITING' && myBet?.status === 'ACTIVE';
+
   const actionButton = canCashOut ? (
     <CashOutButton onCashOut={handleCashOut} full />
+  ) : canCancel ? (
+    <Flex gap={2} align="stretch">
+      <Button
+        onClick={() => socket?.emit(GAME_CLIENT_EVENTS.CANCEL_BET, {})}
+        variant="outline"
+        borderColor="#5a4a3a"
+        color="gray.300"
+        fontFamily="mono"
+        fontWeight="bold"
+        fontSize={{ base: 'sm', lg: 'md' }}
+        px={{ base: 3, lg: 4 }}
+        py={{ base: 3, lg: 4 }}
+        borderRadius="lg"
+        flexShrink={0}
+        _hover={{ borderColor: 'red.400', color: 'red.300' }}
+      >
+        CANCEL
+      </Button>
+      <Box flex={1}>
+        <PlaceBetButton
+          canBet={canBet}
+          myBet={myBet}
+          phase={phase}
+          overBalance={overBalance}
+          onPlaceBet={handlePlaceBet}
+        />
+      </Box>
+    </Flex>
   ) : (
     <PlaceBetButton
       canBet={canBet}

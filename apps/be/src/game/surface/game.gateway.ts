@@ -158,6 +158,15 @@ export class GameGateway {
     this.#send(socket, GAME_EVENTS.BET_ACK, ack);
   }
 
+  @OnMessage(GAME_CLIENT_EVENTS.CANCEL_BET)
+  async cancelBet(
+    _data: unknown,
+    socket: Socket<GameSocketContext>,
+  ): Promise<void> {
+    const ack = await this.actions.cancel(socket.data.context.player);
+    this.#send(socket, GAME_EVENTS.CANCEL_BET_ACK, ack);
+  }
+
   @OnMessage(GAME_CLIENT_EVENTS.CASH_OUT)
   cashOut(data: unknown, socket: Socket<GameSocketContext>): void {
     const ack = this.actions.cashOut(socket.data.context.player, data);

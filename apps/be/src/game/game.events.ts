@@ -19,8 +19,10 @@ export {
 export type {
   ActiveBetView,
   BetAckPayload,
+  BetCancelledPayload,
   BetCashedOutPayload,
   BetPlacedPayload,
+  CancelBetAckPayload,
   CashOutAckPayload,
   CrashedRoundSummary,
   GameCrashedPayload,

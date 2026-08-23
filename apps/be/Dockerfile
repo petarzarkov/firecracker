@@ -80,7 +80,14 @@ COPY package.json bunfig.toml ./
 # `apps/be/tsconfig.json` is what sets `jsx: react-jsx` for the four `.tsx` email
 # templates. Leaving it out means depending on Bun's default matching it forever.
 COPY tsconfig.json ./
-COPY apps/be/package.json apps/be/tsconfig.json ./apps/be/
+# `apps/be/bunfig.toml`, and it is the load-bearing one - not the root copy above.
+# Bun reads bunfig.toml from the process's cwd and does not walk up, and CMD runs
+# with WORKDIR /app/apps/be, so the root file is invisible to it. Without this the
+# image builds green and every boot dies on the first provider with a constructor:
+# "no dependencies were recorded ... @dunx/transform did not transform it". The
+# bullmq fork inherits that cwd, so it is also what keeps a `background` handler
+# working.
+COPY apps/be/package.json apps/be/tsconfig.json apps/be/bunfig.toml ./apps/be/
 # `node_modules/@firecracker/contracts` is a symlink into here, so without this the
 # server resolves the wire to a dangling link and dies on its first import - after a
 # green build. It is source-only (`exports: ./src/index.ts`), so there is nothing

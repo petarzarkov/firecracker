@@ -22,6 +22,10 @@ export const GAME_EVENTS = Object.freeze({
   TICK: 'gameTick',
   CRASHED: 'gameCrashed',
   BET_PLACED: 'betPlaced',
+  /** Somebody took their bet back. The lobby drops the row. */
+  BET_CANCELLED: 'betCancelled',
+  /** The answer to one `cancelBet`. */
+  CANCEL_BET_ACK: 'cancelBetAck',
   BET_CASHED_OUT: 'betCashedOut',
   BET_ACK: 'betAck',
   CASH_OUT_ACK: 'cashOutAck',
@@ -33,6 +37,8 @@ export type GameEvent = (typeof GAME_EVENTS)[keyof typeof GAME_EVENTS];
 /** What a client sends. */
 export const GAME_CLIENT_EVENTS = Object.freeze({
   PLACE_BET: 'placeBet',
+  /** Take a bet back before the launch. Only during the betting window. */
+  CANCEL_BET: 'cancelBet',
   CASH_OUT: 'cashOut',
   SUBMIT_CLIENT_SEED: 'submitClientSeed',
   JOIN_PLAYER_CHAT: 'joinPlayerChat',
@@ -50,6 +56,7 @@ export type GamePhase = 'waiting' | 'running' | 'crashed' | 'failed';
 export interface GameClientPayloads {
   readonly [GAME_CLIENT_EVENTS.PLACE_BET]: PlaceBetMessage;
   readonly [GAME_CLIENT_EVENTS.CASH_OUT]: CashOutMessage;
+  readonly [GAME_CLIENT_EVENTS.CANCEL_BET]: Record<string, never>;
   readonly [GAME_CLIENT_EVENTS.SUBMIT_CLIENT_SEED]: SubmitClientSeedMessage;
   readonly [GAME_CLIENT_EVENTS.JOIN_PLAYER_CHAT]: JoinPlayerChatMessage;
   readonly [GAME_CLIENT_EVENTS.SEND_PLAYER_CHAT]: SendPlayerChatMessage;
@@ -122,6 +129,22 @@ export interface BetPlacedPayload {
   readonly isDemo: boolean;
 }
 
+/**
+ * A bet withdrawn during the betting window. Only the id, because the row it names
+ * is gone: a cancelled bet is one that did not happen, and the wallet ledger keeps
+ * the debit and the refund either way.
+ */
+export interface BetCancelledPayload {
+  readonly userId: string;
+}
+
+export interface CancelBetAckPayload {
+  readonly success: boolean;
+  readonly error?: string;
+  /** The stake handed back, when there was one. */
+  readonly refundedCents?: number;
+}
+
 export interface BetCashedOutPayload {
   /** Who cashed out. Without it a client cannot tell whether it was them. */
   readonly userId: string;
@@ -188,6 +211,8 @@ export interface GamePayloads {
   readonly [GAME_EVENTS.TICK]: GameTickPayload;
   readonly [GAME_EVENTS.CRASHED]: GameCrashedPayload;
   readonly [GAME_EVENTS.BET_PLACED]: BetPlacedPayload;
+  readonly [GAME_EVENTS.BET_CANCELLED]: BetCancelledPayload;
+  readonly [GAME_EVENTS.CANCEL_BET_ACK]: CancelBetAckPayload;
   readonly [GAME_EVENTS.BET_CASHED_OUT]: BetCashedOutPayload;
   readonly [GAME_EVENTS.BET_ACK]: BetAckPayload;
   readonly [GAME_EVENTS.CASH_OUT_ACK]: CashOutAckPayload;
