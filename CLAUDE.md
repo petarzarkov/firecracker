@@ -259,6 +259,37 @@ rather than "you already have an active bet in this round". Money was never at r
 the transaction rolled back - but match on the column list, and let
 `bet-actions.test.ts` keep proving it.
 
+### Watching is public, and the gateway has to say so
+
+`@Public()` on `GameGateway`, above `@Gateway('/ws')`. `SessionGuard` is global
+middleware and dunx guards a route unless told otherwise, so without it the upgrade
+is answered 401 before `@OnUpgrade` runs - and everything written for a spectator
+(`SocketAuthService` returning `{ player: null }`, every handler checking
+`player !== null`) is unreachable code. It was, for months: the client's login wall
+meant nobody saw the refusal.
+
+A signed-out visitor gets the lobby. `useWebSocket` opens a socket with no user, and
+the `connected` frame is guarded because a spectator's carries no player - writing
+it into the store would sign them in as nobody.
+
+### A demo account converts, and keeps its history
+
+`anonymous()` deletes the demo user the moment a sign-up links to it, and every
+table referencing a user cascades. `AccountLinker.adopt` moves the bets, the wallet
+and the files first, from `onLinkAccount`. Wallets move one at a time into an empty
+slot - `wallet_user_id_is_demo_index` is unique over `(user_id, is_demo)`.
+
+It lives in its own `global: true` module because the hook is built in
+`AccountsModule` and _runs_ in the scope `AuthModule.forRootAsync` creates.
+
+### A cancelled bet is deleted, not marked
+
+`game_bet_round_user_demo_index` is unique over `(round_id, user_id, is_demo)`
+**whatever the status**, so a refunded-but-present row lets `placeBet`'s guard pass
+and then fails on the index - refusing a re-bet with a message about an active bet
+that no longer exists. The ledger keeps the money either way: `game_bet_id` is
+`onDelete: 'set null'`.
+
 ### Auth is cookie-first, and dev is same-origin
 
 The client goes through Vite's proxy (`ws: true`), so development has one origin
@@ -390,6 +421,36 @@ Migrations also run at boot, in `DatabaseBootstrap`.
 - The wire is `{ event, data }`. The client's `apps/fe/src/systems/network/socket.ts` is a socket.io-shaped shim over it, which is why the React components never changed.
 - Broadcasting goes through `EventsPublisher`, never `socket.publish` — the latter does not cross processes.
 
+### The client has three layouts, and only one is mounted
+
+`useLayout()` answers `phone` | `tablet` | `desktop` at 700px and 1024px. Only the
+live one renders: a hidden layout is still mounted, so two would mean two
+`CrashChart`s - two WebGL contexts, two tickers and two particle simulations, one of
+them drawing where nobody can see it.
+
+**The cash-out is pinned on a phone.** The controls are one tab among four and
+nothing switches back when a round starts, so `CashOutBar` sits above the tab strip
+whenever a bet is live and the panel holding the other copy is not on screen. It is
+the only control in this game with a deadline.
+
+### The fairness UI is the client half of a contract the server already kept
+
+The commitment arrives on every `gamePhase`, the whole proof on every `gameCrashed`,
+and `GET /api/game/rounds/:id/verify` re-serves both with the steps to redraw the
+number. The client read two fields of it and dropped the rest for months.
+
+`commitmentHolds` checks `SHA256(serverSeed)` **in the browser**, with
+`crypto.subtle` and no library - that is the half a client can settle by itself.
+Redrawing the crash point needs the same PRNG the server used and is documented
+rather than bundled: a redraw that agreed with us by running our code would prove
+very little.
+
+### Sound is off until it is asked for
+
+No `AudioContext` is constructed until the toggle is pressed - browsers refuse to
+start one outside a gesture anyway, and `app.visual.ts` pins the count at zero on
+arrival. The three cues are synthesised; there are no audio assets.
+
 ### The wire is declared once, in `libs/contracts`
 
 Every socket event name, the payload it carries, and the enums both sides read live in `@firecracker/contracts`. Both apps depend on it; neither restates it.
@@ -466,6 +527,14 @@ same `evaluate` as the draw, and why the app suite signs in through **Try Demo**
 | `bun run email`               | preview the email templates |
 
 Redis must be up for rounds to advance: `docker compose up -d`.
+
+**Nothing in the root `.env` may share a name with `apps/be/.env`.** Bun loads the
+root file into the process `bun run --filter` spawns the workspaces from, and a real
+environment variable beats a `.env` file in the child - so a collision silently
+overrides the app's own configuration. `API_PORT=3001` used to live there, which
+meant the documented `bun dev` started the API on 3001 while Vite proxied to 3999:
+the page loaded, the login form rendered, and every request behind it died. Anything
+compose needs is prefixed `COMPOSE_`.
 
 **Every suite takes its own `QUEUE_PREFIX`, via `testNamespace()`.** Only
 `queues.spec.ts` used to, and the other seven ran on the default - which is the

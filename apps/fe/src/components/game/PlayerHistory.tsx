@@ -286,8 +286,15 @@ export function PlayerHistory() {
   return (
     <Flex
       direction="column"
-      flex={1}
-      h="100%"
+      /*
+        Only as tall as it has something to say.
+        
+        This and the chat under it were both `flex: 1`, so a new player - or a
+        spectator - looked at "No bets yet" holding 45% of the sidebar while the
+        chat scrolled in a slot half its size.
+      */
+      flex={bets.length === 0 && myBet === null ? '0 0 auto' : 1}
+      h={bets.length === 0 && myBet === null ? 'auto' : '100%'}
       minH={0}
       overflow="hidden"
       borderBottom="1px solid"
