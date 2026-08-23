@@ -26,6 +26,14 @@ export interface Mote {
   size: number;
   tint: number;
   alpha: number;
+  /**
+   * The caller's own label for this mote, `0` unless a seed set one.
+   *
+   * One pool holding two populations that step differently is cheaper than two
+   * pools - {@link ParticleContainer} batches per container, so a second one is a
+   * second draw call for a handful of particles. The pool never reads it.
+   */
+  tag: number;
 }
 
 export interface MoteSeed {
@@ -36,6 +44,8 @@ export interface MoteSeed {
   life: number;
   size: number;
   tint: number;
+  /** See {@link Mote.tag}. Defaults to `0`. */
+  tag?: number;
 }
 
 /**
@@ -100,6 +110,7 @@ export const createMotePool = (
       size: 1,
       tint: 0xffffff,
       alpha: 0,
+      tag: 0,
     });
   }
 
@@ -140,6 +151,7 @@ export const createMotePool = (
       mote.size = seed.size;
       mote.tint = seed.tint;
       mote.alpha = 1;
+      mote.tag = seed.tag ?? 0;
     },
 
     update(step: MoteStep, delta: number): void {

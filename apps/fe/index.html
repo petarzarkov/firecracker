@@ -11,9 +11,64 @@
     />
     <meta name="theme-color" content="#1a1a1a" />
     <title>Firecracker</title>
+    <!--
+      The first paint, before a byte of the bundle has run.
+
+      The entry is React plus Chakra plus the app - a few hundred kilobytes to
+      fetch, parse and execute - and until `createRoot` commits, `#root` is empty
+      and the page is a white rectangle. That gap is most of what "it takes 1.4s to
+      load" describes, and it is the one part of it no amount of splitting removes.
+
+      Inline, so it costs no request; removed by `main.tsx` once React has actually
+      drawn something, so it can never outlive the app it stands in for.
+    -->
+    <style>
+      body {
+        margin: 0;
+        background: #0d0d0d;
+      }
+      #boot {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        letter-spacing: 0.35em;
+        font-size: 13px;
+        font-weight: 700;
+        color: #ff6b00;
+        animation: boot-pulse 1.4s ease-in-out infinite;
+      }
+      #boot img {
+        width: 56px;
+        height: 56px;
+      }
+      @keyframes boot-pulse {
+        0%,
+        100% {
+          opacity: 0.45;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #boot {
+          animation: none;
+          opacity: 0.8;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <div id="boot" role="status" aria-label="Loading Firecracker">
+      <img src="/png/android-chrome-192x192.png" alt="" />
+      <span>FIRECRACKER</span>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

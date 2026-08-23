@@ -172,6 +172,26 @@ export class Socket {
     return this;
   }
 
+  /**
+   * Open again after the retries ran out.
+   *
+   * `#scheduleRetry` stops at `reconnectionAttempts` and stays stopped - which is
+   * correct for a background loop and useless to a player looking at a dead lobby,
+   * because nothing else in the app ever reopens this socket. This is the button.
+   *
+   * Guarded on `#ws` rather than on `connected`: a socket in `CONNECTING` is not
+   * connected yet, and opening a second one for it leaks the first.
+   */
+  connect(): this {
+    if (this.#ws !== null) return this;
+    if (this.#retryTimer !== null) clearTimeout(this.#retryTimer);
+    this.#retryTimer = null;
+    this.#closed = false;
+    this.#attempts = 0;
+    this.#open();
+    return this;
+  }
+
   disconnect(): this {
     this.#closed = true;
     if (this.#retryTimer !== null) clearTimeout(this.#retryTimer);
@@ -256,6 +276,9 @@ export class Socket {
       this.#options.reconnectionDelayMax,
     );
     this.#attempts += 1;
+    // So the UI can say *which* try this is. Retrying silently for a minute and
+    // then giving up silently is, to a player, the same thing as being broken.
+    this.io.emitLocal('reconnect_attempt', this.#attempts);
     this.#retryTimer = setTimeout(() => this.#open(), delay);
   }
 

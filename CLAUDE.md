@@ -129,7 +129,7 @@ src/
 ├── chat/                      lobby scrollback and one-to-one rooms
 ├── files/                     uploads, and the sandboxed thumbnail handler
 ├── ai/                        model providers, for the bots and avatar suggestions
-├── notifications/             email, the events publisher
+├── notifications/             email and its templates, the events publisher
 └── infra/                     db, redis, queue, schedule, files, images, health
 ```
 
@@ -305,6 +305,50 @@ game, in `socket-throttle.ts`.
 
 ---
 
+## Email
+
+Resend, and the templates are React.
+
+`src/notifications/email/` holds the transport, one shared layout and four
+templates under `templates/`. They are the **only `.tsx` in `apps/be`**, which is
+what `"jsx": "react-jsx"` in its `tsconfig.json` is there for; the handlers that
+send them stay `.ts` by _calling_ the component rather than writing JSX, and the
+templates hold no state or hooks, so an element built that way renders the same.
+
+**Both alternatives, every time.** `EmailService.send` renders the tree twice -
+`render(tree)` and `render(tree, { plainText: true })` - and gives Resend `html`
+_and_ `text`. A message with no `text/plain` part scores worse with every spam
+filter that looks, and a password reset in a spam folder is a support ticket. The
+plain-text pass is also what carries a `<Button>`'s `href` into the text version;
+`email.test.ts` pins that, because losing it is silent.
+
+**No timeout and no retry of its own.** The queue owns both -
+`QUEUE_JOB_TIMEOUT_MS` bounds the attempt, `QUEUE_MAX_RETRIES` repeats it, and the
+worker's `limiter` is what keeps a burst under Resend's rate limit. The NestJS
+version's hand-rolled per-second send queue is gone with them, and a second retry
+loop inside one job attempt would multiply against the queue's three.
+
+Resend answers `{ data, error }` rather than throwing, so an unchecked call reports
+every refusal as a send. `send` throws on `error`, which is what spends a retry.
+
+**With no `RESEND_API_KEY` it logs and sends nothing**, so a fresh clone boots and
+the queue still demonstrably delivers a job to a worker. Never the rendered message
+in that line - see the logging rule below.
+
+`EMAIL_SENDER` defaults to Resend's sandbox sender, which needs no verified domain
+and **delivers only to the address that owns the Resend account**. That is what
+makes it a usable default and an unusable production value.
+
+`bun run email` serves the templates on :3035. Each one carries
+`PreviewProps` for it - a static object, because the preview server runs with no
+container and no database. The shared layout lives _outside_ `templates/` for the
+same reason: that server treats every file in there as an email to render.
+
+`invite-email.tsx` has **no caller**. There is no invite table, no
+`JOBS.USER_INVITED` and no controller to issue a code - the NestJS version had all
+three, and the template is the half worth carrying across. It renders and it is
+tested; wiring it is a feature.
+
 ## Health, and the drain
 
 `HealthModule` from `@dunx/http` serves `/api/health/live` and `/api/health/ready`. It replaced a hand-rolled Terminus envelope; the three-state `up`/`degraded`/`down` bucket is `critical: false` on an indicator now.
@@ -352,7 +396,7 @@ Every socket event name, the payload it carries, and the enums both sides read l
 
 They used to. The server declared the payloads in `game.events.ts` and the client hand-wrote its own beside its handlers, and the copies drifted **four times** — three of them a `userId` the server sent and the client did not read, the fourth a `username` the client read as `senderName`, which crashed the chat panel. Every one shipped, and every one was found by a person looking at a screen.
 
-- **In the lib:** event names, payloads, `GameRoundStatus`, `GameBetStatus`, `UserRole`, `InviteStatus`, `WalletTransactionType`.
+- **In the lib:** event names, payloads, `GameRoundStatus`, `GameBetStatus`, `UserRole`, `WalletTransactionType`.
 - **Not in the lib:** queue names, job names, job payloads, topic helpers. That is the server talking to itself, and a name a browser can read is a name somebody will send.
 - **No zod in there.** Sharing schemas would put zod in the browser bundle, and validating a frame is a separate decision from agreeing on its shape. The payloads are `interface`s and erase at build time.
 - Publish through `publishGame`, not `EventsPublisher.publish` — the latter takes `unknown`, which is the hole all four bugs came through.
@@ -391,6 +435,7 @@ A bug fix comes with the test that would have caught it.
 | `bun run lint` / `format`     | oxlint / oxfmt              |
 | `bun run typecheck`           | every workspace             |
 | `bun run mig:gen` / `mig:run` | drizzle migrations          |
+| `bun run email`               | preview the email templates |
 
 Redis must be up for rounds to advance: `docker compose up -d`.
 
@@ -421,8 +466,9 @@ engine's two boot-recovery lines.
 
 **Never log a URL that carries a token.** `LOG_MASK_FIELDS` masks by field _name_, so
 a one-time password-reset link inside a string sails through it. `EmailService` used
-to log whole bodies at `info` whenever `EMAIL_WEBHOOK_URL` was unset - which is
-local, CI, and any deploy that forgot it.
+to log whole bodies at `info` whenever no provider was configured - which is local,
+CI, and any deploy that forgot it. It now logs `to` and `subject`, never the
+rendered message, on both the sent and the not-sent path.
 
 A forked child cannot see a `logLevel` module option, because a module option is not
 an environment. `NODE_ENV` crosses a fork and `bun test` sets it, which is how a

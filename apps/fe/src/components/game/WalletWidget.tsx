@@ -10,15 +10,15 @@ export function WalletWidget() {
     <Flex
       align="center"
       gap={2}
-      px={3}
-      py={1.5}
+      px={{ base: 2, lg: 3 }}
+      py={{ base: 1, lg: 1.5 }}
       borderRadius="md"
       bg="gray.800"
       border="1px solid"
       borderColor="gray.700"
     >
       <Text
-        fontSize="sm"
+        fontSize={{ base: 'xs', lg: 'sm' }}
         fontWeight="bold"
         color={balance !== null ? 'yellow.400' : 'gray.500'}
         fontFamily="mono"

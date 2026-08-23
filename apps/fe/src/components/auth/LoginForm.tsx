@@ -62,6 +62,22 @@ const MODE_CONFIG: Record<
   },
 };
 
+/* `glass` hovers towards white, so a branded button has to restate the colours or
+   it brightens away from its own on the way up. Only the colours: chakra deep-merges
+   props over the recipe, so the lift and the transition still come from there. */
+const glassTint = (rgb: string, restAlpha: number) => ({
+  bg: `rgba(${rgb},${restAlpha})`,
+  borderColor: `rgba(${rgb},0.5)`,
+  _hover: {
+    bg: `rgba(${rgb},${restAlpha + 0.22})`,
+    borderColor: `rgba(${rgb},0.9)`,
+    boxShadow: `0 6px 20px rgba(${rgb},0.45)`,
+  },
+});
+
+const LINKEDIN_RGB = '0,119,181';
+const DEMO_RGB = '255,200,0';
+
 const SocialButtons = ({
   isLoading,
   onDemoLogin,
@@ -88,10 +104,7 @@ const SocialButtons = ({
         disabled={isLoading}
         variant="glass"
         width="full"
-        style={{
-          background: 'rgba(0,119,181,0.3)',
-          border: '1px solid rgba(0,119,181,0.5)',
-        }}
+        {...glassTint(LINKEDIN_RGB, 0.3)}
       >
         <Icon as={FaLinkedin} />
         Continue with LinkedIn
@@ -108,10 +121,8 @@ const SocialButtons = ({
         variant="glass"
         width="full"
         color="yellow.300"
-        style={{
-          background: 'transparent',
-          border: '1px dashed rgba(255,200,0,0.4)',
-        }}
+        borderStyle="dashed"
+        {...glassTint(DEMO_RGB, 0)}
       >
         <Icon as={FaGamepad} />
         Try Demo

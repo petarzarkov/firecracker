@@ -48,10 +48,18 @@ export const buttonRecipe = defineRecipe({
         border: '1px solid rgba(255,255,255,0.15)',
         color: 'white',
         borderRadius: '8px',
+        // Not `filter: brightness()`: this background is white already, so
+        // scaling its channels changes nothing a player can see, and a tinted
+        // caller starting from `transparent` has nothing to scale at all.
         _hover: {
-          filter: 'brightness(1.6)',
+          background: 'rgba(255,255,255,0.16)',
+          borderColor: 'rgba(255,255,255,0.4)',
+          transform: 'translateY(-1px)',
+          boxShadow:
+            '0 6px 20px rgba(0,0,0,0.45), 0 0 18px rgba(255,255,255,0.08)',
         },
         _active: {
+          transform: 'translateY(0px)',
           filter: 'brightness(0.9)',
         },
       },

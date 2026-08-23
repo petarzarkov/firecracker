@@ -11,7 +11,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { FiExternalLink } from 'react-icons/fi';
 import { IoSend } from 'react-icons/io5';
-import { ChatWindow } from '@/components/ui/ChatWindow';
+import { LazyChatWindow } from '@/components/ui/LazyChatWindow';
 import { CHAT_THEME } from '@/theme/chat';
 import { PlayerChatDialogue } from '@/components/ui/PlayerChatDialogue';
 import { useSocket } from '@/SocketContext';
@@ -20,12 +20,21 @@ import { useChatStore } from '@/store/chatStore';
 import { useGameSocket } from '@/systems/network/useGameSocket';
 import { useWideLayout } from '@/hooks/useWideLayout';
 import { BetPanel } from './BetPanel';
+import { ConnectionBanner } from './ConnectionBanner';
 import { CrashChart } from './CrashChart';
 import { PlayerHistory } from './PlayerHistory';
 import { PlayerList } from './PlayerList';
 import { RoundHistory } from './RoundHistory';
 import { UserMenu } from './UserMenu';
 import { WalletWidget } from './WalletWidget';
+
+/** The mobile tab bar. Each `value` names the `Tabs.Content` it reveals. */
+const MOBILE_TABS = [
+  ['game', 'CONTROLS'],
+  ['players', 'PLAYERS'],
+  ['history', 'MY BETS'],
+  ['chat', 'CHAT'],
+] as const;
 
 function InlineChatPanel({ full = false }: { full?: boolean }) {
   const socket = useSocket();
@@ -254,10 +263,12 @@ export function Game() {
       fontFamily="mono"
       overflow="hidden"
     >
+      <ConnectionBanner />
+
       {/* Header */}
       <Flex
-        px={4}
-        py={2}
+        px={{ base: 2, lg: 4 }}
+        py={{ base: 1, lg: 2 }}
         bg="gray.900"
         borderBottom="1px solid"
         borderColor="gray.700"
@@ -266,10 +277,11 @@ export function Game() {
         flexShrink={0}
       >
         <Flex align="center" gap={2}>
-          <img
+          <Image
             src="/png/android-chrome-192x192.png"
             alt="Firecracker"
-            style={{ width: 36, height: 36, objectFit: 'contain' }}
+            boxSize={{ base: '28px', lg: '36px' }}
+            objectFit="contain"
           />
           <Text
             fontSize="lg"
@@ -288,7 +300,7 @@ export function Game() {
           </Text>
         </Flex>
 
-        <Flex align="center" gap={3}>
+        <Flex align="center" gap={{ base: 1, lg: 3 }}>
           <WalletWidget />
           <UserMenu />
         </Flex>
@@ -302,7 +314,7 @@ export function Game() {
             flex={1}
             minH={0}
             overflow="hidden"
-            p={2}
+            p={1.5}
             pb={1}
             display="flex"
             flexDirection="column"
@@ -315,7 +327,14 @@ export function Game() {
             defaultValue="game"
             display="flex"
             flexDirection="column"
-            h="30vh"
+            /*
+             * `dvh`, matching the root's `100dvh`. In `vh` this panel is measured
+             * against the *large* viewport while its parent is measured against the
+             * live one, so while a phone's address bar is showing the tabs claim
+             * more than their share and the chart above them is squeezed by the
+             * difference.
+             */
+            h="30dvh"
             flexShrink={0}
             overflow="hidden"
             variant="subtle"
@@ -327,50 +346,23 @@ export function Game() {
               borderColor="gray.700"
               flexShrink={0}
             >
-              <Tabs.Trigger
-                value="game"
-                flex={1}
-                fontFamily="mono"
-                fontSize="xs"
-                letterSpacing="wide"
-                color="gray.500"
-                _selected={{ color: 'green.400', bg: 'gray.800' }}
-              >
-                CONTROLS
-              </Tabs.Trigger>
-              <Tabs.Trigger
-                value="players"
-                flex={1}
-                fontFamily="mono"
-                fontSize="xs"
-                letterSpacing="wide"
-                color="gray.500"
-                _selected={{ color: 'green.400', bg: 'gray.800' }}
-              >
-                PLAYERS
-              </Tabs.Trigger>
-              <Tabs.Trigger
-                value="history"
-                flex={1}
-                fontFamily="mono"
-                fontSize="xs"
-                letterSpacing="wide"
-                color="gray.500"
-                _selected={{ color: 'green.400', bg: 'gray.800' }}
-              >
-                MY BETS
-              </Tabs.Trigger>
-              <Tabs.Trigger
-                value="chat"
-                flex={1}
-                fontFamily="mono"
-                fontSize="xs"
-                letterSpacing="wide"
-                color="gray.500"
-                _selected={{ color: 'green.400', bg: 'gray.800' }}
-              >
-                CHAT
-              </Tabs.Trigger>
+              {MOBILE_TABS.map(([value, label]) => (
+                <Tabs.Trigger
+                  key={value}
+                  value={value}
+                  flex={1}
+                  fontFamily="mono"
+                  fontSize="2xs"
+                  letterSpacing="wide"
+                  px={1}
+                  py={1.5}
+                  minH="auto"
+                  color="gray.500"
+                  _selected={{ color: 'green.400', bg: 'gray.800' }}
+                >
+                  {label}
+                </Tabs.Trigger>
+              ))}
             </Tabs.List>
 
             {/* Content area — fills rest of tab panel, each panel scrolls */}
@@ -458,7 +450,7 @@ export function Game() {
 
       {/* Floating pop-out chat */}
       {globalChat.isOpen && (
-        <ChatWindow
+        <LazyChatWindow
           title="Chat"
           messages={globalChat.messages}
           isOpen={globalChat.isOpen}

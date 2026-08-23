@@ -1,38 +1,33 @@
 import { z } from 'zod';
 
 /**
- * Outbound notification transport.
+ * Outbound email, through Resend.
  *
- * A **webhook URL** rather than a vendor's SDK: an email provider is a `POST` with a
- * JSON body and every one of them accepts that shape, so naming Resend, Postmark or
- * SES here would pick for the reader while a URL also covers an internal relay.
+ * A vendor SDK rather than the webhook `POST` this used to be, because the thing
+ * being sent is no longer a string: a template is a React tree, and rendering it to
+ * HTML *and* a plain-text alternative is work every provider needs done and none of
+ * them does for you. Resend takes both in one call.
  *
  * Absent by default, and `EmailService` degrades rather than failing - so the queue
- * still demonstrably delivers a job to a worker with nothing configured.
+ * still demonstrably delivers a job to a worker on a machine with nothing set up,
+ * and a fresh clone boots.
  */
 export const notificationVarsSchema = z.object({
-  EMAIL_WEBHOOK_URL: z
-    .url()
+  RESEND_API_KEY: z
+    .string()
     .optional()
     .describe(
-      'Where to POST an outbound email. Unset logs the message instead of sending it.',
+      'Unset logs that a message would have been sent, and sends nothing.',
     ),
-  EMAIL_TIMEOUT_MS: z.coerce
-    .number()
-    .int()
-    .min(100)
-    .max(60_000)
-    .default(5_000)
-    .describe('Per-attempt budget for the email webhook call.'),
-  EMAIL_MAX_RETRIES: z.coerce
-    .number()
-    .int()
-    .min(0)
-    .max(5)
-    .default(2)
-    .describe(
-      'Retries inside one job attempt. The queue retries the job on top of this.',
-    ),
+  /**
+   * `onboarding@resend.dev` is Resend's shared sandbox sender: it needs no verified
+   * domain and delivers **only to the account owner's own address**, which is what
+   * makes it a usable default and an unusable production value.
+   */
+  EMAIL_SENDER: z
+    .string()
+    .default('Firecracker <onboarding@resend.dev>')
+    .describe('The `From` header. `Name <address>` is accepted.'),
 
   /**
    * Slack, for service notices. Both halves or nothing: a token with no channel

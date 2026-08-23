@@ -38,6 +38,13 @@ export class EnvConfig {
 
     const vars = parsed.data;
 
+    /**
+     * One origin, read twice: it is where better-auth issues cookies for *and* the
+     * only absolute URL an email can link to. Computed once because a second
+     * `?? http://localhost:${API_PORT}` is a second thing to keep in step.
+     */
+    const webUrl = vars.WEB_URL ?? `http://localhost:${vars.API_PORT}`;
+
     return {
       isProd: vars.APP_ENV === 'prod',
       app: {
@@ -49,6 +56,7 @@ export class EnvConfig {
         port: vars.API_PORT,
         prefix: vars.API_PREFIX,
         timezone: vars.TZ,
+        webUrl,
       },
       log: {
         level: vars.LOG_LEVEL,
@@ -95,9 +103,8 @@ export class EnvConfig {
       },
       ws: { relayChannel: vars.WS_RELAY_CHANNEL },
       email: {
-        webhookUrl: vars.EMAIL_WEBHOOK_URL,
-        timeoutMs: vars.EMAIL_TIMEOUT_MS,
-        maxRetries: vars.EMAIL_MAX_RETRIES,
+        apiKey: vars.RESEND_API_KEY,
+        sender: vars.EMAIL_SENDER,
       },
       storage: {
         driver: vars.STORAGE_DRIVER,
@@ -150,7 +157,7 @@ export class EnvConfig {
       auth: {
         secret: vars.BETTER_AUTH_SECRET ?? DEV_AUTH_SECRET,
         usingDevSecret: vars.BETTER_AUTH_SECRET === undefined,
-        baseUrl: vars.WEB_URL ?? `http://localhost:${vars.API_PORT}`,
+        baseUrl: webUrl,
         sessionStore: vars.AUTH_SESSION_STORE,
         trustedOrigins: vars.AUTH_TRUSTED_ORIGINS,
         sessionExpiration: vars.AUTH_SESSION_EXPIRATION,

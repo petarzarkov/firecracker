@@ -1,5 +1,10 @@
 {
   "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    /* The email templates are `.tsx`. Nothing else here is - the runtime is Bun,
+       not a browser - so this buys the automatic runtime and no React import. */
+    "jsx": "react-jsx"
+  },
   "include": ["src", "scripts", "e2e", "drizzle.config.ts"],
   "exclude": ["node_modules", "dist"]
 }

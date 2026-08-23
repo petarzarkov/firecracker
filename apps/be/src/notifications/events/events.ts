@@ -73,6 +73,8 @@ export interface UserRegisteredJob {
 export interface UserBannedJob {
   readonly userId: string;
   readonly email: string;
+  /** Carried on the job rather than looked up: the child has no users table. */
+  readonly name: string;
   readonly reason: string;
 }
 

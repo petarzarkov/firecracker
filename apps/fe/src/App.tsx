@@ -15,6 +15,19 @@ function App() {
     return () => AuthMiddleware.cleanup();
   }, []);
 
+  /**
+   * Takes down `index.html`'s boot splash.
+   *
+   * From an effect rather than from `main.tsx`, because `render()` schedules a
+   * commit rather than performing one - removing the splash beside the call can
+   * uncover an `#root` React has not filled yet, which is the white flash the
+   * splash exists to prevent. By the time an effect runs, the first commit is in
+   * the DOM.
+   */
+  useEffect(() => {
+    document.getElementById('boot')?.remove();
+  }, []);
+
   if (window.location.pathname === '/oauth/callback') {
     return <OAuthCallback />;
   }

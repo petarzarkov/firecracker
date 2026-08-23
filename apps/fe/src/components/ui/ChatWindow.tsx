@@ -8,7 +8,7 @@ import type { ChatMessage } from '../../types';
 import { EmojiPicker } from './EmojiPicker';
 import { MessageBubble } from './MessageBubble';
 
-interface ChatWindowProps {
+export interface ChatWindowProps {
   title: string;
   messages: ChatMessage[];
   isOpen: boolean;

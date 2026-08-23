@@ -22,7 +22,8 @@ import { OpenRouterService } from './services/openrouter.service.js';
    * The providers' own HTTP client. `forRootAsync` because the timeout is a config
    * value, and a model call is slow enough that the default would cut it off
    * mid-answer. `AI_HTTP_CLIENT` is the second, positional argument: the token the
-   * client binds, so it does not collide with the notifications one.
+   * client binds, which is what keeps that long timeout off an unnamed
+   * `HttpService` every other module would then resolve.
    */
   imports: [
     HttpModule.forRootAsync(

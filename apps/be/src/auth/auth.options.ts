@@ -2,6 +2,7 @@ import { bunPassword } from '@dunx/auth';
 import type { BetterAuthOptions } from 'better-auth';
 import { admin, anonymous, bearer, openAPI } from 'better-auth/plugins';
 import type { AppConfig } from '../config/env.validation.js';
+import { anonymousName } from './anon-name.js';
 
 /**
  * The route path `AuthHandler` is mounted at, before the global prefix is
@@ -89,8 +90,15 @@ export class AuthOptions {
          *
          * `emailDomainName` is what a later sign-up links against, so it has to be
          * a domain we own rather than the default `example.com`.
+         *
+         * `generateName` is not cosmetic either: without it every demo player is
+         * called `Anonymous`, and `user.name` is what the lobby list, every bet row
+         * and every chat line render. See {@link anonymousName}.
          */
-        anonymous({ emailDomainName: 'demo.firecracker.local' }),
+        anonymous({
+          emailDomainName: 'demo.firecracker.local',
+          generateName: anonymousName,
+        }),
         // `Authorization: Bearer <token>` instead of a cookie, which is what a
         // non-browser client and the e2e suite use.
         bearer(),

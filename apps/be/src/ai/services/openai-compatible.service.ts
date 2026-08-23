@@ -38,8 +38,9 @@ export abstract class OpenAICompatibleService extends BaseProviderService {
   /**
    * The **named** client, via `inject()` in a field initialiser: a named client is
    * bound to a `Token`, which has no type name for `@dunx/transform` to record, so
-   * it cannot be a constructor parameter. Needed here because `NotificationsModule`
-   * already binds an unnamed `HttpService` for the email webhook.
+   * it cannot be a constructor parameter. Named rather than plain because
+   * `AIModule` is `global: true` and exports it: an unnamed binding would make a
+   * model call's 30-second budget the default every other `HttpService` inherits.
    */
   protected readonly http = inject(httpClient(AI_HTTP_CLIENT));
 

@@ -2,7 +2,7 @@ import { GAME_CLIENT_EVENTS } from '@firecracker/contracts';
 import type { Socket } from '@/systems/network/socket';
 import { CHAT_THEME } from '@/theme/chat';
 import { useChatStore } from '../../store/chatStore';
-import { ChatWindow } from './ChatWindow';
+import { LazyChatWindow } from './LazyChatWindow';
 
 interface PlayerChatDialogueProps {
   roomId: string;
@@ -37,7 +37,7 @@ export function PlayerChatDialogue({
   };
 
   return (
-    <ChatWindow
+    <LazyChatWindow
       title={`${chatRoom.creatorName}'s Chat`}
       messages={chatRoom.messages}
       isOpen={chatRoom.isOpen}

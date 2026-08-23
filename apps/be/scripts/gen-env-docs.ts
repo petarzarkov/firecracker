@@ -71,8 +71,9 @@ const GROUPS = [
     title: 'Notifications',
     schema: notificationVarsSchema,
     blurb:
-      'With no `EMAIL_WEBHOOK_URL`, `EmailService` logs the message it would have ' +
-      'sent. That is enough to prove the queue delivered a job to a worker.',
+      'With no `RESEND_API_KEY`, `EmailService` logs that it would have sent a ' +
+      'message and sends nothing. That is enough to prove the queue delivered a ' +
+      'job to a worker.',
   },
 ] as const;
 

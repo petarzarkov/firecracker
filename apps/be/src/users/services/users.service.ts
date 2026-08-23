@@ -125,6 +125,7 @@ export class UsersService {
       await this.publisher.publish(QUEUES.NOTIFICATIONS, JOBS.USER_BANNED, {
         userId: user.id,
         email: user.email,
+        name: user.name,
         reason: 'Suspended by an administrator',
       });
     } catch (error) {

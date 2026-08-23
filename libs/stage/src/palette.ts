@@ -26,6 +26,27 @@ export const CASHOUT_TEXT = 0xffe2b0;
 export const FLASH = 0xff4444;
 
 /**
+ * The crash, in the order it is drawn: the white instant at the centre, the ring
+ * leaving it, and the residue that outlives both.
+ */
+export const BLAST_CORE = 0xfff3d0;
+export const SHOCKWAVE = 0xffd9a0;
+export const AFTERGLOW = 0xc24a12;
+
+/**
+ * The fireball's colour as it ages, `0` at the detonation and `1` when it is spent.
+ *
+ * Three steps rather than an interpolation: the sprite is a soft halo whose own
+ * falloff already blends whatever it is tinted, so a gradient between two shades of
+ * the same shape reads as one colour and costs a lerp per frame to do it.
+ */
+export const blastTintFor = (age: number): number => {
+  if (age < 0.18) return BLAST_CORE;
+  if (age < 0.45) return 0xffa03c;
+  return FLASH;
+};
+
+/**
  * The trail's colour, hotter as the round climbs - the same thresholds the canvas
  * version used, so a player who knows what red means still reads it the same way.
  */

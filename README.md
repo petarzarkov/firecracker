@@ -139,6 +139,8 @@ apps/fe     the React + Vite client
 
 **Direct messages are derived, not allocated.** A room id is a hash of the two user ids _sorted_, so both players compute the same one and "create" and "join" are the same call. Membership lives in Redis and is re-checked on every message — the id is a hash of two user ids, not a secret.
 
+**Emails are React, rendered twice.** Welcome, password reset and suspension go out through [Resend](https://resend.com) as templates from `apps/be/src/notifications/email/templates/` — the only `.tsx` in the backend. Each is rendered to HTML _and_ to plain text, because a message with no `text/plain` alternative scores worse with every spam filter that looks, and because that pass is what carries a button's link into the text version. With no `RESEND_API_KEY` the service logs and sends nothing, so a fresh clone boots and the queue still delivers. `bun run email` previews them on :3035.
+
 **Bots are cosmetic.** `GAME_BOTS_ENABLED=true` populates an empty lobby. `GameBotsService` has no repository, by design — a bot placing real bets would contribute entropy to the crash point, which is the house influencing its own outcome.
 
 **Timers are schedules.** `@Interval` and `@Cron` from `@dunx/infra/schedule` replaced the hand-rolled `setInterval` pairs, and the stuck-round sweep replaced a BullMQ job that rescheduled itself with a delayed copy of itself. The two cadences that come from config — the per-round tick and the sweep — arm through `ScheduleRegistry`, because a decorator argument is evaluated before the container exists.
@@ -153,6 +155,7 @@ apps/fe     the React + Vite client
 | `bun test`                              | 119 unit/integration + 38 e2e |
 | `bun run lint` · `format` · `typecheck` | oxlint · oxfmt · tsc          |
 | `bun run mig:gen` · `mig:run`           | drizzle migrations            |
+| `bun run email`                         | preview the email templates   |
 | `bun run build`                         | production build of both apps |
 
 ## Deploying

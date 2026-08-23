@@ -23,6 +23,7 @@
     "start": "bun run --filter 'firecracker-be' start",
     "test": "bun run --parallel --filter '*' test",
     "test:e2e": "bun run --filter 'firecracker-be' test:e2e",
+    "email": "bun run --filter 'firecracker-be' email",
     "typecheck": "bun run --parallel --filter '*' typecheck",
     "lint": "oxlint --fix apps libs",
     "lint:check": "oxlint apps libs",

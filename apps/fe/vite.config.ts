@@ -65,17 +65,23 @@ export default defineConfig(({ mode }) => {
     build: {
       emptyOutDir: true,
       chunkSizeWarningLimit: 1000,
-      rollupOptions: {
-        output: {
-          manualChunks: {
-            vendor: ['react', 'react-dom', 'react-icons'],
-            ui: ['@chakra-ui/react'],
-            state: ['zustand', 'immer'],
-            markdown: ['react-markdown'],
-            syntax: ['react-syntax-highlighter'],
-          },
-        },
-      },
+      /**
+       * **No `manualChunks`.** There was one - `vendor`, `ui`, `state`, `markdown`,
+       * `syntax` - and naming a chunk after a CommonJS package is what made the
+       * initial load 1.4 MB.
+       *
+       * `react-syntax-highlighter` is CJS, so `@rollup/plugin-commonjs` gives it an
+       * interop helper. Told to put that package in a chunk called `syntax`, rollup
+       * put the *helper* there too - and the helper is shared, so every other chunk,
+       * the entry and all seven PIXI ones, ended up statically importing `syntax`.
+       * Vite then listed it and its `markdown` dependency in `index.html` as
+       * `modulepreload`, and a crash game fetched 740 kB of markdown renderer and
+       * syntax highlighter, eagerly, to draw a rocket.
+       *
+       * Left alone, rollup splits on the dynamic imports that are actually there -
+       * `@firecracker/stage` and `LazyChatWindow` - and the entry is the app.
+       * Nothing gained a chunk boundary by being named; two things lost one.
+       */
     },
   };
 });

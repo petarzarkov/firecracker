@@ -116,3 +116,23 @@ describe('a session whose user is gone', () => {
     expect((await session(cookie)).body?.user).toBeUndefined();
   });
 });
+
+/**
+ * Wiring, not shape - `anon-name.test.ts` covers the shape. What can rot here is
+ * the option being dropped from the plugin, which is silent: sign-in still works
+ * and every demo player is called `Anonymous` again.
+ */
+describe('a demo player', () => {
+  test('is given a name of their own, not `Anonymous`', async () => {
+    const response = await server.request('api/auth/sign-in/anonymous', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+
+    const body = (await response.json()) as { user: { name: string } };
+    expect(response.status).toBe(200);
+    expect(body.user.name).not.toBe('Anonymous');
+    expect(body.user.name).toMatch(/^[A-Z][a-z]+[A-Z][a-z]+\d{3}$/);
+  });
+});

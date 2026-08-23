@@ -1,6 +1,6 @@
 import { Box, Image, SimpleGrid, Text } from '@chakra-ui/react';
 import type { TrendingAvatars } from '@firecracker/contracts';
-import { type ChangeEvent, useRef, useState } from 'react';
+import { type ChangeEvent, useEffect, useRef, useState } from 'react';
 import { apiFetch } from '@/systems/network/api';
 import { Button } from './Button';
 import { InputField } from './InputField';
@@ -40,26 +40,40 @@ export const AvatarPicker = ({
   const fileInput = useRef<HTMLInputElement>(null);
 
   /**
-   * Fetched on first open, from `GET /api/profile/avatars/trending`.
+   * Fetched whenever the panel is open and has nothing, from
+   * `GET /api/profile/avatars/trending`.
+   *
+   * **An effect, not the toggle's business.** It used to live inside the click
+   * handler, which meant it only ran on a transition into open - and `defaultOpen`
+   * skips that transition. So the one place that passes it, `AvatarDialog`, opened
+   * the picker already open, over an empty `avatars`, and rendered a grid with no
+   * avatars in it. "Change Avatar" showed a panel with nothing to choose, and the
+   * only route to a filled grid was to close the picker and open it again.
    *
    * It was `/api/auth/avatars/trending` before the migration; better-auth owns
    * `/auth` now, so the route moved. The endpoint degrades to a single fallback
    * rather than failing, so this never leaves the form unusable - and the bundled
    * set below covers the case where even that call does not return.
    */
-  const togglePicker = async () => {
-    const opening = !isOpen;
-    setIsOpen(opening);
-    if (!opening || avatars.length > 0) return;
+  useEffect(() => {
+    if (!isOpen || avatars.length > 0) return;
 
-    try {
-      const res = await apiFetch('/api/profile/avatars/trending');
-      const { avatars: trending } = (await res.json()) as TrendingAvatars;
-      setAvatars(trending.length > 0 ? [...trending] : [...AVATARS]);
-    } catch {
-      setAvatars([...AVATARS]);
-    }
-  };
+    let dismissed = false;
+    const settle = (next: readonly string[]) => {
+      if (!dismissed) setAvatars([...next]);
+    };
+
+    apiFetch('/api/profile/avatars/trending')
+      .then((res) => res.json() as Promise<TrendingAvatars>)
+      .then(({ avatars: trending }) =>
+        settle(trending.length > 0 ? trending : AVATARS),
+      )
+      .catch(() => settle(AVATARS));
+
+    return () => {
+      dismissed = true;
+    };
+  }, [isOpen, avatars.length]);
 
   const handleFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -103,7 +117,7 @@ export const AvatarPicker = ({
         </Box>
       )}
       <Button
-        onClick={togglePicker}
+        onClick={() => setIsOpen((open) => !open)}
         variant="glass"
         width="full"
         mb="3"

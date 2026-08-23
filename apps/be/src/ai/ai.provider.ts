@@ -17,8 +17,9 @@ export const AI_PROVIDERS = Object.values(AIProvider);
 /**
  * The name of the outbound client the providers share.
  *
- * Named rather than the default binding because this app calls two upstreams: the
- * email webhook in `NotificationsModule` and the model providers here. One name
- * per upstream is what keeps their timeouts and retries independent.
+ * Named rather than the default binding because a model call's budget is 30 seconds
+ * and `AIModule` is `global: true`: bound unnamed, that timeout would become the
+ * default every other `HttpService` in the app resolves. `AvatarsService` borrows
+ * this one deliberately - see its own note.
  */
 export const AI_HTTP_CLIENT = 'ai';

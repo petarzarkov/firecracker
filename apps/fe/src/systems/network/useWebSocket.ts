@@ -16,6 +16,10 @@ import { io, type Socket } from './socket';
 import { useNotify } from '@/hooks/useNotify';
 import { useAuthStore } from '@/store/authStore';
 import { useChatStore } from '@/store/chatStore';
+import {
+  RECONNECT_ATTEMPTS,
+  useConnectionStore,
+} from '@/store/connectionStore';
 
 /**
  * A line of chat is one type, `ChatLine`, for both the live `message` frame and the
@@ -55,6 +59,7 @@ export function useWebSocket() {
   const setConnectedPlayers = useChatStore(
     (state) => state.setConnectedPlayers,
   );
+  const setStatus = useConnectionStore((state) => state.setStatus);
   const { notify } = useNotify();
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: we need to update the user when the socket is connected
@@ -83,6 +88,11 @@ export function useWebSocket() {
     let dismissed = false;
     let activeSocket: Socket | null = null;
 
+    // Before the deferred open below, so a socket that never opens is still
+    // reported as trying rather than leaving the store on whatever the last one
+    // ended as.
+    setStatus('connecting');
+
     const timerId = setTimeout(() => {
       if (dismissed) return;
 
@@ -95,18 +105,33 @@ export function useWebSocket() {
         token: token ?? undefined,
         path: '/ws',
         reconnection: true,
-        reconnectionAttempts: 5,
+        reconnectionAttempts: RECONNECT_ATTEMPTS,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
       });
 
       activeSocket = newSocket;
 
+      /**
+       * The four frames that decide what `ConnectionBanner` says.
+       *
+       * All of this already happened - the shim retried, backed off and gave up -
+       * and none of it reached a pixel. What a player saw when the server went away
+       * was the last round frozen on the chart, a countdown that never ended and a
+       * bet button that swallowed clicks, with the only evidence in the console.
+       */
+      newSocket.on('connect', () => setStatus('online'));
+
       newSocket.on('disconnect', (reason: string) => {
         if (reason === 'io server disconnect') {
           clearAuth();
           window.location.href = '/';
+          return;
         }
+        // `io client disconnect` is this effect's own cleanup tearing the socket
+        // down. Reporting that as a drop would flash the banner on every remount,
+        // StrictMode's included.
+        if (reason !== 'io client disconnect') setStatus('reconnecting');
       });
 
       newSocket.on('connect_error', (error: Error) => {
@@ -118,11 +143,18 @@ export function useWebSocket() {
         ) {
           clearAuth();
           window.location.href = '/';
+          return;
         }
+        setStatus('reconnecting');
+      });
+
+      newSocket.io.on('reconnect_attempt', (attempt: number) => {
+        setStatus('reconnecting', attempt);
       });
 
       newSocket.io.on('reconnect_failed', () => {
         console.warn('[WebSocket] Reconnection failed after max attempts');
+        setStatus('offline');
       });
 
       newSocket.on(SOCKET_EVENTS.CONNECTED, (data: ConnectedPayload) => {
@@ -266,6 +298,7 @@ export function useWebSocket() {
       dismissed = true;
       clearTimeout(timerId);
       if (activeSocket) {
+        activeSocket.off('connect');
         activeSocket.off('disconnect');
         activeSocket.off('connect_error');
         activeSocket.off(SOCKET_EVENTS.CONNECTED);
@@ -277,6 +310,7 @@ export function useWebSocket() {
         activeSocket.off(SOCKET_EVENTS.USER_COUNT);
         activeSocket.off(SOCKET_EVENTS.CHAT_ACK);
         activeSocket.off(SOCKET_EVENTS.NOTIFICATION);
+        activeSocket.io.off('reconnect_attempt');
         activeSocket.io.off('reconnect_failed');
         activeSocket.disconnect();
         setSocket(null);
@@ -302,6 +336,7 @@ export function useWebSocket() {
     addGlobalChatMessage,
     setGlobalChatMessages,
     setConnectedPlayers,
+    setStatus,
     notify,
   ]);
 

@@ -1,6 +1,7 @@
 import { Logger } from '@dunx/core';
 import { JobHandler } from '@dunx/infra/queue';
 import type { Job } from 'bullmq';
+import { AppConfigService } from '../../config/app.config.service.js';
 import { EventsPublisher } from '../events/events.publisher.js';
 import {
   EVENTS,
@@ -14,7 +15,10 @@ import {
   type UserBannedJob,
   type UserRegisteredJob,
 } from '../events/events.js';
-import { EmailService } from '../services/email.service.js';
+import { EmailService } from '../email/email.service.js';
+import { AccountSuspendedEmail } from '../email/templates/account-suspended-email.js';
+import { PasswordResetEmail } from '../email/templates/password-reset-email.js';
+import { WelcomeEmail } from '../email/templates/welcome-email.js';
 
 /**
  * A job handler is a method with a decorator and nothing else - no class decorator,
@@ -26,6 +30,7 @@ export class NotificationJobs {
   constructor(
     private readonly email: EmailService,
     private readonly events: EventsPublisher,
+    private readonly config: AppConfigService,
     private readonly logger: Logger,
   ) {}
 
@@ -37,10 +42,16 @@ export class NotificationJobs {
   async registered(job: Job<UserRegisteredJob>): Promise<{ notified: string }> {
     const { userId, email, name } = job.data;
 
+    // The component is *called*, not written as JSX, so this handler stays a `.ts`
+    // file - the templates are the only `.tsx` in the app. They hold no state and
+    // no hooks, so an element built this way renders identically.
     await this.email.send({
       to: email,
-      subject: 'Welcome',
-      body: `Hello ${name}, your account is ready.`,
+      subject: `Welcome to Firecracker, ${name}!`,
+      template: WelcomeEmail({
+        name,
+        webUrl: this.config.get('app').webUrl,
+      }),
     });
 
     // Two topics: the user's own, and the admin room. Written by the worker
@@ -86,7 +97,7 @@ export class NotificationJobs {
     await this.email.send({
       to: email,
       subject: 'Reset your Firecracker password',
-      body: `Hello ${name}, use this link within the hour to choose a new password: ${url}`,
+      template: PasswordResetEmail({ name, resetUrl: url }),
     });
 
     this.logger.debug('handled user.password-reset', { userId });
@@ -99,12 +110,12 @@ export class NotificationJobs {
     name: JOBS.USER_BANNED,
   })
   async banned(job: Job<UserBannedJob>): Promise<{ notified: string }> {
-    const { userId, email, reason } = job.data;
+    const { userId, email, name, reason } = job.data;
 
     await this.email.send({
       to: email,
-      subject: 'Your account has been suspended',
-      body: reason,
+      subject: 'Your Firecracker account has been suspended',
+      template: AccountSuspendedEmail({ name, reason }),
     });
 
     publishSocket(this.events, TOPICS.ADMINS, EVENTS.NOTIFICATION, {

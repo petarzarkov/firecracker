@@ -24,6 +24,29 @@ const MAX_TILT = 0.55;
 /** How fast the lean catches up, per 60fps frame. */
 const TILT_EASE = 0.12;
 
+/**
+ * The wreck, after the fuse runs out.
+ *
+ * The rocket used to be `hide()`den on the frame the round crashed, so the thing a
+ * player had spent thirty seconds watching climb left the screen between two
+ * frames and the explosion happened over an empty patch of plot. It reads as a
+ * glitch rather than as a loss.
+ *
+ * So it is thrown instead: kicked up and sideways, spinning, and pulled back down
+ * by a gravity heavier than the blast's so it clears the frame while the fireball
+ * is still open. Long enough to follow, short enough to be gone before the next
+ * round's countdown starts.
+ */
+const TUMBLE_FRAMES = 52;
+/** The upward kick, in pixels per frame. Negative is up. */
+const TUMBLE_LIFT = -4.6;
+const TUMBLE_DRIFT = 3.6;
+const TUMBLE_GRAVITY = 0.36;
+/** Radians per frame. Fast enough to read as end-over-end, not as a blur. */
+const TUMBLE_SPIN = 0.19;
+/** What is left of it by the time it stops being drawn. */
+const TUMBLE_MIN_SCALE = 0.55;
+
 export interface Rocket {
   readonly view: Container;
   /** Point it at `(x, y)`, leaning by `slope` (dy/dx of the curve, screen space). */
@@ -34,6 +57,13 @@ export interface Rocket {
     running: boolean,
     delta: number,
   ): void;
+  /**
+   * Blow it off the curve. It keeps drawing itself from here - through
+   * {@link tumble} - rather than being placed, until the tumble runs out.
+   */
+  burst(): void;
+  /** Advance the tumble. A no-op once it has finished, or if it never started. */
+  tumble(delta: number): void;
   hide(): void;
   /** The lit end, in stage coordinates. Valid after {@link place}. */
   readonly wickX: number;
@@ -78,6 +108,11 @@ export const createRocket = async (url?: string): Promise<Rocket> => {
   let tilt = 0;
   let drawnX = 0;
   let drawnY = 0;
+
+  let tumbleLeft = 0;
+  let tumbleVx = 0;
+  let tumbleVy = 0;
+  let tumbleSpin = 0;
 
   return {
     view,
@@ -133,9 +168,46 @@ export const createRocket = async (url?: string): Promise<Rocket> => {
       wickY = y + ox * sin + oy * cos;
     },
 
+    burst(): void {
+      if (sprite === null) return;
+      tumbleLeft = TUMBLE_FRAMES;
+      // Sideways is random rather than "the way it was going": a crash is the
+      // round stopping, and throwing the wreck along the climb reads as it
+      // carrying on.
+      tumbleVx = (Math.random() - 0.5) * 2 * TUMBLE_DRIFT;
+      tumbleVy = TUMBLE_LIFT;
+      tumbleSpin = (Math.random() < 0.5 ? -1 : 1) * TUMBLE_SPIN;
+      sprite.visible = true;
+    },
+
+    tumble(delta): void {
+      if (sprite === null || tumbleLeft <= 0) return;
+
+      tumbleLeft = Math.max(0, tumbleLeft - delta);
+      tumbleVy += TUMBLE_GRAVITY * delta;
+      drawnX += tumbleVx * delta;
+      drawnY += tumbleVy * delta;
+
+      const remaining = tumbleLeft / TUMBLE_FRAMES;
+      sprite.x = drawnX;
+      sprite.y = drawnY;
+      sprite.rotation += tumbleSpin * delta;
+      // Squared, so it stays legible through the fireball and then goes quickly
+      // rather than hanging around as a ghost over the next countdown.
+      sprite.alpha = remaining ** 2;
+      const height =
+        RUNNING_HEIGHT *
+        (TUMBLE_MIN_SCALE + (1 - TUMBLE_MIN_SCALE) * remaining);
+      sprite.height = height;
+      sprite.width = height * aspect;
+
+      if (tumbleLeft === 0) sprite.visible = false;
+    },
+
     hide(): void {
       if (sprite !== null) sprite.visible = false;
       tilt = 0;
+      tumbleLeft = 0;
     },
   };
 };
