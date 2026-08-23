@@ -82,6 +82,21 @@ const main = async (): Promise<void> => {
     );
   }
 
+  /**
+   * A setting that is on and is not.
+   *
+   * zod strips what it does not recognise, so a misspelled variable is indis-
+   * tinguishable from one nobody set - and `AI_GROK_API_KEY` next to a schema that
+   * says `AI_GROQ_API_KEY` looks configured from every angle except the one that
+   * matters. Warned rather than refused: an environment is not ours to be strict
+   * about, and a deploy that will not boot over a stray variable is worse.
+   */
+  if (appConfig.unreadEnv.length > 0) {
+    logger.warn('environment variables set but not read by this app', {
+      variables: appConfig.unreadEnv,
+    });
+  }
+
   const url = await app.listen(appConfig.port);
   logger.info(`${appConfig.name} listening`, links(app, url, boot));
 

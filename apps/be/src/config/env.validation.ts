@@ -21,6 +21,48 @@ export class EnvConfig {
       : { clientId, clientSecret };
   }
 
+  /**
+   * Variables that were almost certainly meant for this app, and that it never reads.
+   *
+   * zod strips what it does not know, silently, which is right for a process
+   * environment full of `PATH` and `HOME` - and wrong for a typo. Three were sitting
+   * in one developer's `.env` doing nothing: `AI_GROK_API_KEY` where the schema says
+   * `AI_GROQ_API_KEY`, `AI_DEFAULT_TEMPERATURE` where it says `AI_TEMPERATURE`, and
+   * `AI_STREAM_TIMEOUT` where it says `AI_TIMEOUT_MS`. Each reads as a setting that
+   * is on and is not.
+   *
+   * **Two shared segments, not one.** A shared prefix alone flags every compose-only
+   * variable in the root `.env` - `REDIS_PORT`, `DB_TYPE` - which are not this app's
+   * and never will be, and a warning that cries wolf at every boot is one nobody
+   * reads. Two segments is what separates a near-miss from a neighbour.
+   *
+   * `COMPOSE_` opts out, because that prefix already means "not the app's" - it is
+   * what the root `.env` uses to keep out of this schema's namespace, and
+   * `COMPOSE_API_PORT` sharing two segments with `API_PORT` is the point of it
+   * rather than a mistake.
+   */
+  static unread(env: ConfigSource): readonly string[] {
+    const known = Object.keys(envVarsSchema.shape);
+    const parts = new Map(known.map((key) => [key, new Set(key.split('_'))]));
+
+    const nearMiss = (name: string): boolean => {
+      const mine = name.split('_');
+      for (const segments of parts.values()) {
+        let shared = 0;
+        for (const segment of mine) if (segments.has(segment)) shared += 1;
+        if (shared >= 2) return true;
+      }
+      return false;
+    };
+
+    return Object.keys(env)
+      .filter(
+        (key) =>
+          !parts.has(key) && !key.startsWith('COMPOSE_') && nearMiss(key),
+      )
+      .sort();
+  }
+
   /** The single validation function `ConfigModule.forRoot` takes. */
   static validate(env: ConfigSource) {
     const parsed = envVarsSchema.safeParse(env);
@@ -57,6 +99,8 @@ export class EnvConfig {
         prefix: vars.API_PREFIX,
         timezone: vars.TZ,
         webUrl,
+        /** See {@link EnvConfig.unread}. Logged once at boot, by `main`. */
+        unreadEnv: EnvConfig.unread(env),
       },
       log: {
         level: vars.LOG_LEVEL,

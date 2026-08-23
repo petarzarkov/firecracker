@@ -334,6 +334,26 @@ game, in `socket-throttle.ts`.
 
 `GameBotsService` has no repository and no `GameBetService`, by design. A bot that placed real bets would be contributing entropy to the crash point through the client-seed pool — the house influencing its own outcome. Keep them outside the fairness boundary.
 
+**Their chatter is a prompt problem, not a plumbing one.** `bot-voice.ts` holds a
+temperament per name, the round described in what a player would notice, and the
+last six lobby lines with instructions not to repeat them; `tooSimilar` catches it
+when the model does anyway. One shared persona and a one-sentence prompt is what
+produced `greed got me again` from two different regulars a minute apart.
+
+**One API key is one free tier.** Gemini's allows twenty `generate_content` calls a
+day on the flash tier, and a lobby chatting every twenty seconds spends that in a
+quarter of an hour — after which the scrollback freezes and every visitor reads the
+same conversation. `AIService.line` walks every configured provider for that reason,
+and `GoogleService` deranks through the model hierarchy rather than failing. Neither
+manufactures quota: a deployment that wants a talkative lobby needs a provider with
+a real allowance behind it.
+
+**A model that 404s is gone, not busy.** `models.list()` goes on advertising a
+retired generation, so the catalogue cannot be trusted to narrow the hierarchy —
+which is why an alias survives narrowing whether or not it is listed, and why a 404
+drops a model for the life of the process instead of deranking off it for ten
+minutes and climbing back on.
+
 ---
 
 ## Email

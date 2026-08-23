@@ -122,3 +122,45 @@ describe('validateConfig', () => {
     );
   });
 });
+
+/**
+ * The setting that is on and is not.
+ *
+ * zod strips an unknown key without a word, so a misspelling is indistinguishable
+ * from a variable nobody set. One developer's `.env` held three at once -
+ * `AI_GROK_API_KEY`, `AI_DEFAULT_TEMPERATURE`, `AI_STREAM_TIMEOUT` - and a root
+ * `.env` naming `COMMIT_SHA` where the app reads `SERVICE_COMMIT_SHA` is why
+ * `/api/service/config` reported a null sha on every deploy.
+ */
+describe('variables the app never reads', () => {
+  test.each([
+    ['AI_GROK_API_KEY', 'AI_GROQ_API_KEY'],
+    ['AI_DEFAULT_TEMPERATURE', 'AI_TEMPERATURE'],
+    ['AI_STREAM_TIMEOUT', 'AI_TIMEOUT_MS'],
+    ['COMMIT_SHA', 'SERVICE_COMMIT_SHA'],
+  ])('%s is reported, because the app wants %s', (typo) => {
+    expect(EnvConfig.unread({ ...base, [typo]: 'x' })).toContain(typo);
+  });
+
+  test('a variable the app does read is not reported', () => {
+    expect(EnvConfig.unread({ ...base, LOG_LEVEL: 'debug' })).toEqual([]);
+  });
+
+  /**
+   * The root `.env` is compose's, and a warning that fires on every variable in it
+   * is one nobody reads. One shared segment is a neighbour, not a near-miss.
+   */
+  test.each(['REDIS_PORT', 'REDIS_PASSWORD', 'DB_TYPE', 'COMPOSE_API_PORT'])(
+    '%s belongs to compose and is left alone',
+    (name) => {
+      expect(EnvConfig.unread({ ...base, [name]: 'x' })).toEqual([]);
+    },
+  );
+
+  test.each(['PATH', 'HOME', 'TERM'])(
+    '%s is nothing to do with this app',
+    (name) => {
+      expect(EnvConfig.unread({ ...base, [name]: 'x' })).toEqual([]);
+    },
+  );
+});
