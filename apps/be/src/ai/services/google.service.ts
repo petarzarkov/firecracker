@@ -4,21 +4,54 @@ import type { ZodType } from 'zod';
 import { AppConfigService } from '../../config/app.config.service.js';
 import { BaseProviderService } from './base-provider.service.js';
 
-/** Google's free-tier requests per minute, and why this service paces itself. */
+/**
+ * Google's free-tier requests per minute, and why this service paces itself.
+ *
+ * The two `-latest` aliases lead because they are the answer to the staleness this
+ * file already warned about: pinned generations retire, and `models.list()` is not
+ * the guard it looks like. It went on listing `gemini-2.5-flash-lite` long after
+ * `generateContent` started answering **404 - no longer available to new users**, so
+ * the narrowing in {@link GoogleService.onInit} kept a model that could not be
+ * called, and a quota derank onto it took bot chatter offline entirely. Google moves
+ * the aliases; this list stops needing to be moved with them.
+ *
+ * Rates are the published free-tier ceilings for the tier each alias points at, and
+ * they are a floor to pace against rather than a promise - overshooting spends a 429,
+ * which {@link GoogleService} handles anyway.
+ */
 const MODEL_RPM: Readonly<Record<string, number>> = Object.freeze({
+  'gemini-pro-latest': 5,
   'gemini-2.5-pro': 5,
+  'gemini-flash-latest': 10,
   'gemini-2.5-flash': 10,
+  'gemini-flash-lite-latest': 15,
   'gemini-2.5-flash-lite': 15,
   'gemini-2.0-flash': 15,
-  'gemini-2.0-flash-lite': 30,
   'gemini-1.5-flash': 15,
   'gemini-1.5-flash-8b': 15,
+  'gemini-2.0-flash-lite': 30,
 });
 
-/** Best to worst. Also the order this deranks through on a quota error. */
-const MODEL_HIERARCHY = Object.keys(MODEL_RPM);
+/**
+ * The order a quota error deranks through, so it is ordered by **rising** rate limit
+ * rather than by quality: a step that answered a quota error with a tighter quota
+ * would be no answer at all, and `gemini-2.5-pro` at 5rpm used to sit directly under
+ * the flash tiers. Nothing started above it then, so it never bit; moving the default
+ * onto an alias is what would have made it bite.
+ *
+ * Within a tier the alias leads and the pinned generation follows it, so a key that
+ * cannot see an alias still has somewhere to fall to. `onInit` drops the rest.
+ */
+export const MODEL_HIERARCHY = Object.keys(MODEL_RPM);
 
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+/**
+ * The alias, not a pinned generation. Deranking only ever walks *down* from here, so
+ * whatever this names is also the best model the service will ever use on its own.
+ */
+export const DEFAULT_MODEL = 'gemini-flash-latest';
+
+/** Exported for the test that pins the derank order. See `google.service.test.ts`. */
+export const modelRpm = (model: string): number | undefined => MODEL_RPM[model];
 
 /** How long to stay on a downgraded model before trying a better one again. */
 const UPGRADE_COOLDOWN_MS = 10 * 60 * 1000;
