@@ -38,6 +38,18 @@ export class AuthOptions {
     return `/${prefix}${AUTH_MOUNT}`;
   }
 
+  /**
+   * The callback URL a provider's OAuth app is registered with: the shape Passport
+   * composed, provider segment before the literal `callback`.
+   *
+   * Built from the same `webUrl` and prefix better-auth's own `basePath` is, so a
+   * deployment that moves either does not have to remember this exists.
+   * `LegacyOAuthCallbackController` answers whatever this returns.
+   */
+  static legacyCallback(config: AppConfig, provider: string): string {
+    return `${config.auth.baseUrl}${AuthOptions.basePath(config.app.prefix)}/${provider}/callback`;
+  }
+
   static base(config: AppConfig, hooks?: AuthHookOverrides) {
     const { auth } = config;
     const origins = [auth.baseUrl, ...auth.trustedOrigins];
@@ -87,10 +99,43 @@ export class AuthOptions {
        * One with only half its credentials is absent rather than half-configured -
        * see `EnvConfig` in `env.validation.ts`.
        */
+      /**
+       * Each provider is pinned to the callback URL its OAuth app already holds -
+       * the Passport shape the NestJS version registered,
+       * `<webUrl>/<prefix>/auth/<provider>/callback`, rather than better-auth's own
+       * `/callback/<provider>`.
+       *
+       * `redirectURI` is what goes in the authorization request **and** in the token
+       * exchange, and the provider compares both against its registration - so this
+       * is the half that stops GitHub answering "the redirect_uri is not associated
+       * with this application". `LegacyOAuthCallbackController` is the other half,
+       * and neither works without it.
+       */
       socialProviders: {
-        ...(auth.google === undefined ? {} : { google: auth.google }),
-        ...(auth.github === undefined ? {} : { github: auth.github }),
-        ...(auth.linkedin === undefined ? {} : { linkedin: auth.linkedin }),
+        ...(auth.google === undefined
+          ? {}
+          : {
+              google: {
+                ...auth.google,
+                redirectURI: AuthOptions.legacyCallback(config, 'google'),
+              },
+            }),
+        ...(auth.github === undefined
+          ? {}
+          : {
+              github: {
+                ...auth.github,
+                redirectURI: AuthOptions.legacyCallback(config, 'github'),
+              },
+            }),
+        ...(auth.linkedin === undefined
+          ? {}
+          : {
+              linkedin: {
+                ...auth.linkedin,
+                redirectURI: AuthOptions.legacyCallback(config, 'linkedin'),
+              },
+            }),
       },
       /**
        * A social sign-in joins the account that already owns the address.

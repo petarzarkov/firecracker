@@ -14,6 +14,7 @@ import { verifications } from './schema/verification.schema.js';
 import { JOBS, QUEUES } from '../notifications/events/events.js';
 import { AuthHooks } from './auth.hooks.js';
 import { AUTH_MOUNT, AuthOptions } from './auth.options.js';
+import { LegacyOAuthCallbackController } from './legacy-oauth.controller.js';
 import {
   AccountLinker,
   AccountLinkerModule,
@@ -121,6 +122,7 @@ const options = {
 @Module({
   global: true,
   imports: [AccountLinkerModule, AuthModule.forRootAsync(options, AUTH_MOUNT)],
+  controllers: [LegacyOAuthCallbackController],
   providers: [CurrentUser, AuthAdminSeeder],
   /**
    * `AuthModule` **by class**, which dunx resolves to the configuration above, so a
