@@ -2,7 +2,6 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { createTestServer, type TestServer } from '@dunx/testing';
 import { AppModule } from '../app.module.js';
 import { EnvConfig } from '../config/env.validation.js';
-import { AppHttpOptions } from '../http.options.js';
 import { AuthOptions } from './auth.options.js';
 import {
   dropTestNamespaces,
@@ -36,7 +35,6 @@ beforeAll(async () => {
   server = await createTestServer({
     modules: [AppModule.forRoot({ source, logLevel: 'fatal' })],
     prefix: 'api',
-    ...AppHttpOptions.for(EnvConfig.validate(source)),
     requestLogging: false,
   });
 });

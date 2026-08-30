@@ -1,8 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { createTestServer, type TestServer } from '@dunx/testing';
 import { AppModule } from '../app.module.js';
-import { EnvConfig } from '../config/env.validation.js';
-import { AppHttpOptions } from '../http.options.js';
 import { TestSession } from '../test-support/session.js';
 import { GameRoundStatus } from './rounds/game-round.schema.js';
 import { GameBetStatus } from './betting/game-bet.schema.js';
@@ -77,7 +75,6 @@ beforeAll(async () => {
   server = await createTestServer({
     modules: [AppModule.forRoot({ source, logLevel: 'fatal' })],
     prefix: 'api',
-    ...AppHttpOptions.for(EnvConfig.validate(source)),
     requestLogging: false,
   });
 

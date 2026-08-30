@@ -2,8 +2,6 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { JobPublisher } from '@dunx/infra/queue';
 import { createTestServer, type TestServer } from '@dunx/testing';
 import { AppModule } from '../../app.module.js';
-import { EnvConfig } from '../../config/env.validation.js';
-import { AppHttpOptions } from '../../http.options.js';
 import { TestSession } from '../../test-support/session.js';
 import { JOBS, QUEUES } from '../../notifications/events/events.js';
 
@@ -88,7 +86,6 @@ beforeAll(async () => {
     prefix: 'api',
     // The same options production passes, `SessionGuard` included - without them
     // the authorization assertions below would pass against no guards at all.
-    ...AppHttpOptions.for(EnvConfig.validate(source)),
     requestLogging: false,
   });
   publisher = server.app.get(JobPublisher);

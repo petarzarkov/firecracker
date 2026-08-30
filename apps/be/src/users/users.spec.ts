@@ -2,8 +2,6 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import type { HealthReport } from '@dunx/http';
 import { createTestServer, type TestServer } from '@dunx/testing';
 import { AppModule } from '../app.module.js';
-import { EnvConfig } from '../config/env.validation.js';
-import { AppHttpOptions } from '../http.options.js';
 import { TestSession } from '../test-support/session.js';
 import type { Page } from '@dunx/infra/pagination';
 import type { SanitizedUser } from './dto/user.dto.js';
@@ -53,10 +51,6 @@ beforeAll(async () => {
   server = await createTestServer({
     modules: [AppModule.forRoot({ source, logLevel: 'fatal' })],
     prefix: 'api',
-    // The harness inherits nothing from src/main.ts, so the production options
-    // have to be handed over explicitly or the suite tests a server with no
-    // guards and no error mapper.
-    ...AppHttpOptions.for(EnvConfig.validate(source)),
     requestLogging: false,
   });
 

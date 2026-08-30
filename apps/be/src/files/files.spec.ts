@@ -7,8 +7,6 @@ import { Images } from '@dunx/infra/images';
 import { createTestServer, type TestServer } from '@dunx/testing';
 import { UnrecoverableError, type Job } from 'bullmq';
 import { AppModule } from '../app.module.js';
-import { EnvConfig } from '../config/env.validation.js';
-import { AppHttpOptions } from '../http.options.js';
 import { TestSession } from '../test-support/session.js';
 import type { FileMetadata } from './dto/file.dto.js';
 import { MediaJobs } from './handlers/media.jobs.js';
@@ -72,7 +70,6 @@ beforeAll(async () => {
   server = await createTestServer({
     modules: [AppModule.forRoot({ source, logLevel: 'fatal' })],
     prefix: 'api',
-    ...AppHttpOptions.for(EnvConfig.validate(source)),
     requestLogging: false,
   });
 

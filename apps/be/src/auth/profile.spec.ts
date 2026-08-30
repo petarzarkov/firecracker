@@ -6,9 +6,7 @@ import { createTestServer, type TestServer } from '@dunx/testing';
 import type { AvatarUpdated, UploadedFile } from '@firecracker/contracts';
 import type { Job } from 'bullmq';
 import { AppModule } from '../app.module.js';
-import { EnvConfig } from '../config/env.validation.js';
 import { MediaJobs } from '../files/handlers/media.jobs.js';
-import { AppHttpOptions } from '../http.options.js';
 import type { FileThumbnailJob } from '../notifications/events/events.js';
 import {
   dropTestNamespaces,
@@ -94,7 +92,6 @@ beforeAll(async () => {
   server = await createTestServer({
     modules: [AppModule.forRoot({ source, logLevel: 'fatal' })],
     prefix: 'api',
-    ...AppHttpOptions.for(EnvConfig.validate(source)),
     requestLogging: false,
   });
 

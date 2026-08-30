@@ -1,29 +1,28 @@
 import { Logger } from '@dunx/core';
+import { Auth, betterAuthDocument } from '@dunx/auth';
 import { HttpFactory, type HttpApp } from '@dunx/http';
 import { OpenApiExplorer, OpenApiModule } from '@dunx/openapi';
 import { AppModule } from './app.module.js';
-import { AuthDocument } from './auth/auth.document.js';
-import { AUTH_MOUNT } from './auth/auth.options.js';
+import { AUTH_MOUNT, AuthOptions } from './auth/auth.options.js';
 import { AppConfigService } from './config/app.config.service.js';
-import { EnvConfig } from './config/env.validation.js';
-import { AppHttpOptions } from './http.options.js';
+import type { AppConfig } from './config/env.validation.js';
 import { HEALTH_ROUTES, SERVICE_ROUTES } from './constants.js';
 
 /**
  * Boot, and nothing else. Nothing here is conditional: the client is two middlewares
  * in `AppHttpOptions`, the queues are `consume: true`, and the shutdown watchdog is
  * `enableShutdownHooks`.
+ *
+ * The environment is validated **once**, by `ConfigModule`. It used to be validated
+ * here too, because `HttpOptions` was an argument to the call that builds the
+ * container; `AppHttpOptions` is a provider now and reads the same tree everything
+ * else does.
  */
 const main = async (): Promise<void> => {
-  // Validated here as well as in `ConfigModule`, because `HttpOptions` is an
-  // argument to the call that *builds* the container. Pure over the environment,
-  // so the two cannot disagree.
-  const boot = EnvConfig.validate(Bun.env);
-
   const app = await HttpFactory.create(
     OpenApiModule.forRootAsync({
       root: AppModule.forRoot(),
-      useFactory: (config: AppConfigService) => {
+      useFactory: (config: AppConfigService, auth: Auth) => {
         const { app: meta, docs } = config.values;
         return {
           title: meta.name,
@@ -32,31 +31,31 @@ const main = async (): Promise<void> => {
           path: `/${docs.path}`,
           jsonPath: `/${docs.jsonPath}`,
           // Better Auth serves every endpoint from one wildcard route, so route
-          // discovery sees none of them. Built from `boot` rather than the injected
-          // `Auth` because openapi.config.ts shares it with no container at all.
-          contribute: [AuthDocument.for(boot)],
+          // discovery sees none of them. **The running instance**, injected: this
+          // used to build a second `betterAuth()` from the raw config purely to ask
+          // it for a schema, because `contribute` ran before there was a container
+          // to take `Auth` from. `forRootAsync` means there is one.
+          //
+          // `AuthDocument.for()` still exists for `openapi.config.ts`, which
+          // generates the document from prototypes with no container at all.
+          contribute: [
+            betterAuthDocument(auth, {
+              basePath: AuthOptions.basePath(meta.prefix),
+            }),
+          ],
         };
       },
-      inject: [AppConfigService] as const,
+      inject: [AppConfigService, Auth] as const,
     }),
-    AppHttpOptions.for(boot),
   );
 
   const config = app.get(AppConfigService);
   const logger = app.get(Logger);
   const { app: appConfig, cors } = config.values;
 
-  // The route table is built exactly once, at `listen()`. Calling any of these
-  // afterwards throws rather than being quietly dropped.
-  app.setGlobalPrefix(appConfig.prefix);
-  app.set('trust proxy', cors.trustProxy);
-
-  // `credentials: true` in **every** environment, not just production. dunx resolves
-  // `origin: '*'` by reflecting the caller only when credentials are allowed, so
-  // with them off the default `CORS_ORIGIN=*` answers a literal `*`, which a browser
-  // rejects for any credentialed request. Development usually never reaches this,
-  // since the client goes through Vite's proxy and is same-origin.
-  app.enableCors({ origin: cors.origin, credentials: true });
+  // The prefix, CORS and `trust proxy` are `AppHttpOptions`', applied at
+  // construction. `enableShutdownHooks` stays here: it installs signal handlers,
+  // and a spec resolving the same provider must not get them.
 
   // Reflecting any origin *and* allowing credentials lets any site make authenticated
   // requests with a visitor's cookie. Fine behind a proxy that is the only caller;
@@ -98,7 +97,7 @@ const main = async (): Promise<void> => {
   }
 
   const url = await app.listen(appConfig.port);
-  logger.info(`${appConfig.name} listening`, links(app, url, boot));
+  logger.info(`${appConfig.name} listening`, links(app, url, config.values));
 
   await app.closed;
 };
@@ -107,7 +106,7 @@ const main = async (): Promise<void> => {
 const links = (
   app: HttpApp,
   url: string,
-  boot: ReturnType<typeof EnvConfig.validate>,
+  boot: AppConfig,
 ): Record<string, unknown> => {
   const api = `${url}${boot.app.prefix}`;
   const health = `${api}/${HEALTH_ROUTES.BASE}`;
