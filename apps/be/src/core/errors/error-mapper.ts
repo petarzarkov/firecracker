@@ -1,5 +1,4 @@
-import { SQLiteError } from 'bun:sqlite';
-import { ConfigError } from '@dunx/core';
+import { AppError, ConfigError } from '@dunx/core';
 import {
   defaultErrorMapper,
   HttpError,
@@ -7,7 +6,7 @@ import {
   ValidationError,
   type ErrorMapper as DunxErrorMapper,
 } from '@dunx/http';
-import { CursorError, PageOptionsError } from '@dunx/infra/pagination';
+import { toDatabaseError } from '@dunx/infra/db';
 
 export interface ErrorBody {
   readonly error: string;
@@ -65,19 +64,6 @@ export class ErrorMapper {
         status: error.status,
       };
     }
-    /**
-     * `@dunx/infra/pagination` raises `AppError` rather than `HttpError` on purpose,
-     * so it need not depend on the web layer - which makes placing them this
-     * function's job. The message passes through: neither names a column or a table.
-     */
-    if (error instanceof CursorError || error instanceof PageOptionsError) {
-      return {
-        error: ErrorMapper.nameOf(HttpStatusCode.BAD_REQUEST),
-        message: error.message,
-        status: HttpStatusCode.BAD_REQUEST,
-      };
-    }
-    if (error instanceof SQLiteError) return ErrorMapper.#fromSqlite(error);
     if (error instanceof ConfigError) {
       return {
         error: ErrorMapper.nameOf(HttpStatusCode.INTERNAL_SERVER_ERROR),
@@ -85,49 +71,55 @@ export class ErrorMapper {
         status: HttpStatusCode.INTERNAL_SERVER_ERROR,
       };
     }
+    /**
+     * Anything outside the web layer that named the status it means.
+     *
+     * `@dunx/infra` must not import `@dunx/http`, so it cannot raise an
+     * `HttpError` - it sets an integer on `AppError` instead, and placing that
+     * integer used to be this function's job per error class. It is one branch
+     * now: `CursorError` and `PageOptionsError` declare 400, and
+     * `ConstraintError` declares 409 for a unique or foreign key and 400 for
+     * not-null and check.
+     *
+     * `toDatabaseError` is what reaches a driver error that never crossed a
+     * transaction - a bare `insert()` in a repository. `transaction`,
+     * `transactionSync` and `runSeeds` already classify on the way out, so an
+     * error from inside one arrives classified and passes through untouched.
+     *
+     * The message is safe to forward: `ConstraintError`'s is deliberately generic
+     * and keeps the driver's own - which names the table and the column - on
+     * `cause`, where it is logged rather than sent.
+     */
+    const declared = toDatabaseError(error);
+    if (
+      declared instanceof AppError &&
+      ErrorMapper.#isStatus(declared.status)
+    ) {
+      return {
+        error: ErrorMapper.nameOf(declared.status),
+        message: declared.message,
+        status: declared.status,
+      };
+    }
     return undefined;
+  }
+
+  /**
+   * A status `Response.json` can actually carry. `AppError.status` is typed by
+   * hand in packages that never see a `Response`, so an out-of-range one would
+   * throw a `RangeError` from the error path itself. Out of range falls through
+   * to `defaultErrorMapper` and its 500.
+   */
+  static #isStatus(status: number | undefined): status is number {
+    return (
+      status !== undefined &&
+      Number.isInteger(status) &&
+      status >= 200 &&
+      status <= 599
+    );
   }
 
   static nameOf(status: number): string {
     return ErrorMapper.#STATUS_NAME.get(status) ?? 'INTERNAL_SERVER_ERROR';
-  }
-
-  /** `bun:sqlite` constraint codes, as the status a client can act on. */
-  static #fromSqlite(error: SQLiteError): ErrorBody {
-    const nameOf = ErrorMapper.nameOf;
-    switch (error.code) {
-      case 'SQLITE_CONSTRAINT_UNIQUE':
-      case 'SQLITE_CONSTRAINT_PRIMARYKEY':
-        return {
-          error: nameOf(HttpStatusCode.CONFLICT),
-          message: 'A record with the provided data already exists',
-          status: HttpStatusCode.CONFLICT,
-        };
-      case 'SQLITE_CONSTRAINT_FOREIGNKEY':
-        return {
-          error: nameOf(HttpStatusCode.BAD_REQUEST),
-          message: 'Invalid reference to related entity',
-          status: HttpStatusCode.BAD_REQUEST,
-        };
-      case 'SQLITE_CONSTRAINT_NOTNULL':
-        return {
-          error: nameOf(HttpStatusCode.BAD_REQUEST),
-          message: 'Required field cannot be empty',
-          status: HttpStatusCode.BAD_REQUEST,
-        };
-      default:
-        if (error.code?.startsWith('SQLITE_CONSTRAINT') === true) {
-          return {
-            error: nameOf(HttpStatusCode.BAD_REQUEST),
-            message: 'Data does not meet validation requirements',
-            status: HttpStatusCode.BAD_REQUEST,
-          };
-        }
-        return {
-          error: nameOf(HttpStatusCode.INTERNAL_SERVER_ERROR),
-          message: 'Database operation failed',
-          status: HttpStatusCode.INTERNAL_SERVER_ERROR,
-        };
-    }
   }
 }

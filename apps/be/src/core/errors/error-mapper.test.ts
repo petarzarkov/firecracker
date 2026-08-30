@@ -1,6 +1,22 @@
 import { describe, expect, test } from 'bun:test';
 import { HttpError, ValidationError } from '@dunx/http';
+import { PageOptionsError } from '@dunx/infra/pagination';
 import { ErrorMapper } from './error-mapper.js';
+
+/**
+ * What bun:sqlite raises, as the two fields `toDatabaseError` classifies on. A
+ * real violation needs a migrated database; this needs neither, and asserts the
+ * same seam - `name` and `code` are all the classifier reads.
+ */
+class FakeSQLiteError extends Error {
+  override readonly name = 'SQLiteError';
+  constructor(
+    readonly code: string,
+    message: string,
+  ) {
+    super(message);
+  }
+}
 
 const req = new Request('http://localhost/api/users');
 
@@ -63,6 +79,53 @@ describe('ErrorMapper', () => {
     const body = (await response.json()) as Record<string, unknown>;
     expect(JSON.stringify(body)).not.toContain('hunter2');
     expect(body['status']).toBe(500);
+  });
+
+  /**
+   * The branch that replaced a hand-written table of `SQLITE_CONSTRAINT_*` codes.
+   * A repository's bare `insert()` never crosses a transaction, so the driver's
+   * own error is what arrives and this mapper is the only thing that classifies it.
+   */
+  test('a unique violation outside a transaction becomes a 409', async () => {
+    const response = ErrorMapper.toResponseBody(
+      new FakeSQLiteError(
+        'SQLITE_CONSTRAINT_UNIQUE',
+        'UNIQUE constraint failed: user.email',
+      ),
+      req,
+    );
+    expect(response.status).toBe(409);
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body['error']).toBe('CONFLICT');
+    // The driver names the table and the column. Neither may reach the caller.
+    expect(JSON.stringify(body)).not.toContain('user.email');
+  });
+
+  /**
+   * `@dunx/infra` sets an integer on `AppError` rather than importing the web
+   * layer. Placing it was a branch per error class; it is one branch now, and this
+   * is the half of it that never touches a database.
+   */
+  test('an AppError that named its own status keeps it', async () => {
+    const response = ErrorMapper.toResponseBody(
+      new PageOptionsError('take must be a positive integer'),
+      req,
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: 'BAD_REQUEST',
+      message: 'take must be a positive integer',
+      status: 400,
+    });
+  });
+
+  test('a driver error that is not a constraint leaks nothing', async () => {
+    const response = ErrorMapper.toResponseBody(
+      new FakeSQLiteError('SQLITE_IOERR', 'disk I/O error on /srv/secret.db'),
+      req,
+    );
+    expect(response.status).toBe(500);
+    expect(JSON.stringify(await response.json())).not.toContain('secret.db');
   });
 
   test('toErrorBody returns undefined for what it does not own', () => {
