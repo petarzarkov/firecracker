@@ -54,7 +54,7 @@ Since 2.3.1 the four files come off **one wildcard route** under `/api/docs`, gu
 **opt-in middleware the app positions itself** — an app that never registers it has
 no branch in the request path.
 
-It goes **first in `AppHttpOptions.#middleware()`**, not in the `app.use(Compression)`
+It goes **first in `AppHttpOptions.middleware`**, not in the `app.use(Compression)`
 the docs show: `use()` appends, so from there it would sit _inside_ `StaticFiles`,
 which answers and returns — and the client bundle, the largest thing this app serves,
 would never be encoded. It still runs inside dunx's request logger, so the logged
@@ -63,6 +63,43 @@ status is the real one.
 `zstd` first, then `gzip`, over a 1024-byte threshold — all defaults.
 `compression.spec.ts` asserts the wire through `node:http` rather than `fetch`,
 because `fetch` decodes transparently and can never show the encoded size.
+
+### The server's settings are a provider, not an argument
+
+`AppHttpOptions extends HttpOptionsProvider`, bound by `HttpConfigModule` and
+resolved from the container - middleware order, the error mapper, CORS, the prefix,
+`trust proxy`, the relay and both logging shapes.
+
+It was a static returning an `HttpOptions`, because `HttpFactory.create(root,
+options)` takes its options _before_ the container exists. That cost two things:
+`main.ts` validated the environment a second time beside `ConfigModule`'s, and every
+spec had to spread the production options in or silently test a server with no
+guards and the default error mapper. dunx 3.1.0 resolves the provider after the
+container and before the route table, so both are gone - **a suite passes no HTTP
+options at all** and gets the real ones.
+
+An argument to `create()` still wins field by field, which is how `createTestServer`
+turns request logging off without restating anything else.
+
+**`enableShutdownHooks()` stays in `main.ts`.** It installs `SIGTERM`/`SIGINT`
+handlers, and a spec resolving the same provider must not get them. `port` stays an
+argument to `listen()` for the same reason - a suite needs port 0.
+
+Override a field with a field and a getter with a getter, or TypeScript rejects it
+with `TS2611`/`TS2610`. `middleware`, `trustProxy` and `relayChannel` derive from
+config, so they are assigned in the constructor rather than given an initialiser.
+
+`HttpConfigModule` is imported by `AppModule` and **never by `Foundation.for()`**: a
+sandboxed job child has no server, and `WsRelayModule` there would open a Redis
+subscriber per fork.
+
+**One known wart.** `createTestServer` decides whether to warn about unattached
+global middleware from its `middleware` _argument_, which is now empty by design, so
+each suite prints one "no global guard runs" line on a run where they demonstrably
+do. It is a false positive in `@dunx/testing` 3.1.1, written up in the dunx repo at
+`internal/notes/roadmap/testing-globals-warning.md`. Do not "fix" it by passing
+`middleware: []` - the argument wins, so that would replace the provider's chain
+with nothing and make the warning true.
 
 ---
 
@@ -109,7 +146,7 @@ src/
 ├── main.ts                    main(): HttpFactory, prefix, CORS, shutdown hooks
 ├── jobs.processor.ts          the file bullmq forks for a `background` queue
 ├── app.module.ts              AppModule + JobsModule, both over one Foundation
-├── http.options.ts            global middleware order, error mapper, request logging
+├── http.options.ts            AppHttpOptions: the HttpOptionsProvider, + HttpConfigModule
 ├── config/                    zod env validation → one typed tree
 ├── core/                      error mapper, pagination schema, throttle decorator
 ├── auth/                      Better Auth options, profile controller, CurrentUser
@@ -251,13 +288,49 @@ The Postgres version wrapped bets in `pg_try_advisory_xact_lock`. Three things r
 
 Never "simplify" the debit into a JavaScript balance check followed by an update.
 
-Point 3 only _answers_ correctly if the catch recognises the violation. bun:sqlite
-names the **columns**, never the index: `UNIQUE constraint failed: game_bet.round_id,
-game_bet.user_id, game_bet.is_demo`. `GameBetService` matched on the index name for
-months, so the predicate was always false and a double bet surfaced as a raw 500
-rather than "you already have an active bet in this round". Money was never at risk -
-the transaction rolled back - but match on the column list, and let
-`bet-actions.test.ts` keep proving it.
+Point 3 only _answers_ correctly if the catch recognises the violation, and that
+predicate has now been wrong twice for the same reason: it read a string somebody
+else owns.
+
+First it matched the **index name**, which bun:sqlite never emits - it names the
+columns: `UNIQUE constraint failed: game_bet.round_id, game_bet.user_id,
+game_bet.is_demo`. The predicate was always false, so a double bet surfaced as a
+raw 500 rather than "you already have an active bet in this round".
+
+Then dunx 3.1.0 made `transactionSync` classify on the way out. What leaves the
+callback is a `ConstraintError` whose own message is the generic `A record with
+these values already exists`; the bun:sqlite text moved to `cause`. A predicate
+still searching that message is false again - the same silent failure, one layer up.
+
+So match on **the classified error, not on prose**: `error instanceof
+ConstraintError && error.kind === ConstraintKind.Unique && error.constraint ===`
+the column list, which is what dunx parsed out of the driver message for you.
+Money was never at risk either time - the transaction rolled back - and
+`bet-actions.test.ts` caught both. Let it keep proving it.
+
+### An error outside the web layer carries the status it means
+
+`@dunx/infra` must not import `@dunx/http`, so it cannot raise an `HttpError` - it
+sets an integer on `AppError` instead. Placing that integer used to be
+`ErrorMapper`'s job per error class: a branch for `CursorError` and
+`PageOptionsError`, and a hand-written table of `SQLITE_CONSTRAINT_*` codes. Both
+are gone. `CursorError` and `PageOptionsError` declare 400 themselves, and
+`toDatabaseError` turns a driver error into a `ConstraintError` declaring 409 for a
+unique or foreign key and 400 for not-null and check.
+
+So **do not place a status for an infra error** - read the one it carries.
+`ErrorMapper` is one branch over any `AppError` that named a status, range-checked
+because that integer is typed by hand in packages that never see a `Response`.
+
+`toDatabaseError` is only needed where a driver error never crossed a transaction -
+a bare `insert()` in a repository. `transaction`, `transactionSync` and `runSeeds`
+classify on the way out already.
+
+**A `ConstraintError`'s message is generic on purpose.** The driver's own names the
+table and the column, and the mapper forwards a 4xx message to the caller; the
+original stays on `cause`, where it is logged rather than sent. That is also why a
+predicate must read `kind` and `constraint` rather than the message - see the double
+bet above.
 
 ### Watching is public, and the gateway has to say so
 
