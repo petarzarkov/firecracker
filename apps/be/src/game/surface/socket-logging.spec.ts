@@ -15,8 +15,6 @@ import {
   type TestServer,
 } from '@dunx/testing';
 import { AppModule } from '../../app.module.js';
-import { EnvConfig } from '../../config/env.validation.js';
-import { AppHttpOptions } from '../../http.options.js';
 import {
   dropTestNamespaces,
   testNamespace,
@@ -115,7 +113,6 @@ beforeAll(async () => {
   server = await createTestServer({
     modules: [AppModule.forRoot({ source })],
     prefix: 'api',
-    ...AppHttpOptions.for(EnvConfig.validate(source)),
     requestLogging: false,
     overrides: [
       provide(Logger, { useValue: logger }),

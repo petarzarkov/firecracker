@@ -5,7 +5,6 @@ import { testRoot } from '@dunx/testing';
 import { AppModule } from './app.module.js';
 import { AuthDocument } from './auth/auth.document.js';
 import { EnvConfig } from './config/env.validation.js';
-import { AppHttpOptions } from './http.options.js';
 import { dropTestNamespaces, testNamespace } from './test-support/namespace.js';
 
 interface OpenApiDoc {
@@ -42,7 +41,7 @@ beforeAll(async () => {
       root: testRoot([AppModule.forRoot({ source, logLevel: 'fatal' })]),
       contribute: [AuthDocument.for(config)],
     }),
-    { ...AppHttpOptions.for(config), requestLogging: false },
+    { requestLogging: false },
   );
   app.setGlobalPrefix('api');
   url = await app.listen(0);

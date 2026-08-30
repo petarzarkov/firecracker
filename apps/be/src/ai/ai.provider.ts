@@ -1,3 +1,5 @@
+import { HttpService } from '@dunx/http/client';
+
 /**
  * The providers this app can talk to.
  *
@@ -15,11 +17,18 @@ export type AIProvider = (typeof AIProvider)[keyof typeof AIProvider];
 export const AI_PROVIDERS = Object.values(AIProvider);
 
 /**
- * The name of the outbound client the providers share.
+ * The outbound client the providers share.
  *
- * Named rather than the default binding because a model call's budget is 30 seconds
- * and `AIModule` is `global: true`: bound unnamed, that timeout would become the
- * default every other `HttpService` in the app resolves. `AvatarsService` borrows
- * this one deliberately - see its own note.
+ * A subclass rather than the default binding because a model call's budget is 30
+ * seconds and `AIModule` is `global: true`: bound unnamed, that timeout would
+ * become the default every other `HttpService` in the app resolves.
+ * `AvatarsService` borrows this one deliberately - see its own note.
+ *
+ * **A class, not the `httpClient('ai')` token it was.** A `Token` is not a
+ * constructor type, so every consumer had to reach it with `inject()` in a field
+ * initialiser; a subclass is both the binding and a parameter type, so it is an
+ * ordinary constructor parameter. `HttpModule.forRootAsync(config, AiHttpClient)`
+ * constructs *this* class, so the body stays empty - a constructor of its own
+ * would not match the `(options, logger, context)` the factory calls.
  */
-export const AI_HTTP_CLIENT = 'ai';
+export class AiHttpClient extends HttpService {}

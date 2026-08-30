@@ -19,6 +19,7 @@ import { StorageModule } from './infra/files/storage.module.js';
 import { ImagesConfigModule } from './infra/images/images.module.js';
 import { AppConfigService } from './config/app.config.service.js';
 import { GameModule } from './game/game.module.js';
+import { HttpConfigModule } from './http.options.js';
 import { DatabaseModule } from './infra/db/database.module.js';
 import { ServiceModule } from './infra/health/health.module.js';
 import { QueuesModule } from './infra/queue/queue.module.js';
@@ -129,9 +130,12 @@ export class AppModule {
           ? [ClientModule.forRoot(clientDist)]
           : []),
         AppModule.#throttle(),
-        // Binds `Compression` without installing it; `http.options.ts` decides
+        // Binds `Compression` without installing it; `HttpConfigModule` decides
         // where in the chain it runs. HTTP-only, so not in `Foundation.for()`.
         CompressionModule.forRoot(),
+        // The server's own settings, as a provider that reads validated config.
+        // HTTP-only for the same reason: a job child has no server.
+        HttpConfigModule,
       ],
     };
   }

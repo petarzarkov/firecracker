@@ -4,8 +4,6 @@ import { OpenApiModule } from '@dunx/openapi';
 import { testRoot } from '@dunx/testing';
 import { request } from 'node:http';
 import { AppModule } from './app.module.js';
-import { EnvConfig } from './config/env.validation.js';
-import { AppHttpOptions } from './http.options.js';
 import { dropTestNamespaces, testNamespace } from './test-support/namespace.js';
 
 /**
@@ -75,14 +73,13 @@ const wire = (path: string, acceptEncoding: string): Promise<Wire> =>
 const BUNDLE = '/api/docs/swagger-ui-bundle.js';
 
 beforeAll(async () => {
-  const config = EnvConfig.validate(source);
   app = await HttpFactory.create(
     OpenApiModule.forRoot({
       title: 'firecracker-be',
       version: '0.1.0',
       root: testRoot([AppModule.forRoot({ source, logLevel: 'fatal' })]),
     }),
-    { ...AppHttpOptions.for(config), requestLogging: false },
+    { requestLogging: false },
   );
   app.setGlobalPrefix('api');
   port = Number(new URL(await app.listen(0)).port);

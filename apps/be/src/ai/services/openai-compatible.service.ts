@@ -1,7 +1,6 @@
-import { inject, Logger } from '@dunx/core';
-import { httpClient } from '@dunx/http/client';
+import { Logger } from '@dunx/core';
 import type { ZodType } from 'zod';
-import { AI_HTTP_CLIENT } from '../ai.provider.js';
+import { AiHttpClient } from '../ai.provider.js';
 import { BaseProviderService } from './base-provider.service.js';
 
 interface ChatMessage {
@@ -35,17 +34,16 @@ export interface OpenAICompatibleOptions {
  * is Zod-parsed: the validation is the guarantee, the mode is a hint.
  */
 export abstract class OpenAICompatibleService extends BaseProviderService {
-  /**
-   * The **named** client, via `inject()` in a field initialiser: a named client is
-   * bound to a `Token`, which has no type name for `@dunx/transform` to record, so
-   * it cannot be a constructor parameter. Named rather than plain because
-   * `AIModule` is `global: true` and exports it: an unnamed binding would make a
-   * model call's 30-second budget the default every other `HttpService` inherits.
-   */
-  protected readonly http = inject(httpClient(AI_HTTP_CLIENT));
-
   protected constructor(
     protected readonly logger: Logger,
+    /**
+     * The shared client, as a parameter rather than an `inject()` field: since
+     * dunx 3.1.0 a named client can be a subclass, and a subclass is a type
+     * `@dunx/transform` can record. Bound separately because `AIModule` is
+     * `global: true` and exports it - an unnamed binding would make a model
+     * call's 30-second budget the default every other `HttpService` inherits.
+     */
+    protected readonly http: AiHttpClient,
     protected readonly options: OpenAICompatibleOptions,
   ) {
     super();

@@ -29,12 +29,12 @@
   },
   "dependencies": {
     "@arkv/rng": "^0.8.2",
-    "@dunx/auth": "^3.0.1",
-    "@dunx/core": "^3.0.1",
-    "@dunx/http": "^3.0.1",
-    "@dunx/infra": "^3.0.1",
-    "@dunx/openapi": "^3.0.1",
-    "@dunx/transform": "^3.0.1",
+    "@dunx/auth": "^3.1.1",
+    "@dunx/core": "^3.1.1",
+    "@dunx/http": "^3.1.1",
+    "@dunx/infra": "^3.1.1",
+    "@dunx/openapi": "^3.1.1",
+    "@dunx/transform": "^3.1.1",
     "@firecracker/contracts": "workspace:*",
     "@google/genai": "^2.17.1",
     "@react-email/components": "1.0.12",
@@ -49,7 +49,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@dunx/testing": "^3.0.1",
+    "@dunx/testing": "^3.1.1",
     "@react-email/ui": "6.9.2",
     "@types/bun": "^1.4.0",
     "@types/react": "19.2.7",
