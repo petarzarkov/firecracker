@@ -1,7 +1,7 @@
 import { Module } from '@dunx/core';
 import { HttpModule } from '@dunx/http/client';
 import { AppConfigService } from '../config/app.config.service.js';
-import { AI_HTTP_CLIENT } from './ai.provider.js';
+import { AiHttpClient } from './ai.provider.js';
 import { AIProviderService } from './services/ai-provider.service.js';
 import { AIService } from './services/ai.service.js';
 import { GoogleService } from './services/google.service.js';
@@ -21,7 +21,7 @@ import { OpenRouterService } from './services/openrouter.service.js';
   /**
    * The providers' own HTTP client. `forRootAsync` because the timeout is a config
    * value, and a model call is slow enough that the default would cut it off
-   * mid-answer. `AI_HTTP_CLIENT` is the second, positional argument: the token the
+   * mid-answer. `AiHttpClient` is the second, positional argument: the class the
    * client binds, which is what keeps that long timeout off an unnamed
    * `HttpService` every other module would then resolve.
    */
@@ -34,7 +34,7 @@ import { OpenRouterService } from './services/openrouter.service.js';
         }),
         inject: [AppConfigService] as const,
       },
-      AI_HTTP_CLIENT,
+      AiHttpClient,
     ),
   ],
   providers: [

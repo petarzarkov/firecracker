@@ -1,6 +1,5 @@
-import { inject, Logger } from '@dunx/core';
-import { httpClient } from '@dunx/http/client';
-import { AI_HTTP_CLIENT } from '../../ai/ai.provider.js';
+import { Logger } from '@dunx/core';
+import { AiHttpClient } from '../../ai/ai.provider.js';
 import { AppConfigService } from '../../config/app.config.service.js';
 
 /** Slack wants `:name:`, and the type stops a bare word being passed by mistake. */
@@ -19,13 +18,13 @@ type Emoji = `:${string}:`;
  * arrive; it is not a reason to fail the thing being notified about.
  */
 export class SlackService {
-  readonly #http = inject(httpClient(AI_HTTP_CLIENT));
   readonly #token: string;
   readonly #channel: string;
 
   constructor(
     private readonly config: AppConfigService,
     private readonly logger: Logger,
+    private readonly http: AiHttpClient,
   ) {
     const slack = config.get('slack');
     this.#token = slack.botToken ?? '';
@@ -43,7 +42,7 @@ export class SlackService {
     const { commitSha, commitMessage } = this.config.get('service');
 
     try {
-      await this.#http.post(
+      await this.http.post(
         'https://slack.com/api/chat.postMessage',
         {
           channel: this.#channel,

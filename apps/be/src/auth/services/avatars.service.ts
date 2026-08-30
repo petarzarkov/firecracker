@@ -1,7 +1,5 @@
 import { Logger } from '@dunx/core';
-import { inject } from '@dunx/core';
-import { httpClient } from '@dunx/http/client';
-import { AI_HTTP_CLIENT } from '../../ai/ai.provider.js';
+import { AiHttpClient } from '../../ai/ai.provider.js';
 
 interface BttvEmote {
   readonly emote?: { id?: string };
@@ -26,13 +24,14 @@ const FALLBACK = [
  * is worse: a third `HttpModule` binding for one endpoint.
  */
 export class AvatarsService {
-  readonly #http = inject(httpClient(AI_HTTP_CLIENT));
-
-  constructor(private readonly logger: Logger) {}
+  constructor(
+    private readonly logger: Logger,
+    private readonly http: AiHttpClient,
+  ) {}
 
   async trending(limit = 20): Promise<readonly string[]> {
     try {
-      const emotes = await this.#http.get<BttvEmote[]>(
+      const emotes = await this.http.get<BttvEmote[]>(
         `${TRENDING_URL}?limit=${limit}`,
       );
       if (!Array.isArray(emotes)) return FALLBACK;

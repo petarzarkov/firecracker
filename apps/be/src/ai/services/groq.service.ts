@@ -1,5 +1,6 @@
 import { Logger } from '@dunx/core';
 import { AppConfigService } from '../../config/app.config.service.js';
+import { AiHttpClient } from '../ai.provider.js';
 import { OpenAICompatibleService } from './openai-compatible.service.js';
 
 /**
@@ -9,9 +10,9 @@ import { OpenAICompatibleService } from './openai-compatible.service.js';
  * which is what makes it the sensible fallback when Google is rate-limited.
  */
 export class GroqService extends OpenAICompatibleService {
-  constructor(config: AppConfigService, logger: Logger) {
+  constructor(config: AppConfigService, logger: Logger, http: AiHttpClient) {
     const ai = config.get('ai');
-    super(logger, {
+    super(logger, http, {
       baseUrl: 'https://api.groq.com/openai/v1',
       apiKey: ai.providers.groq ?? '',
       temperature: ai.temperature,
