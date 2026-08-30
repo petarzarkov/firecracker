@@ -1,6 +1,10 @@
-import { SQLiteError } from 'bun:sqlite';
 import { Logger } from '@dunx/core';
-import { SyncDatabase, transactionSync } from '@dunx/infra/db';
+import {
+  ConstraintError,
+  ConstraintKind,
+  SyncDatabase,
+  transactionSync,
+} from '@dunx/infra/db';
 import { HttpError, HttpStatusCode } from '@dunx/http';
 import type { Page, PageOptions } from '@dunx/infra/pagination';
 import { WalletTransactionType } from '@firecracker/contracts';
@@ -51,15 +55,25 @@ export class GameBetService {
     'game_bet.round_id, game_bet.user_id, game_bet.is_demo';
 
   /**
-   * The constraint is identified, not just the code: a `SQLITE_CONSTRAINT_UNIQUE`
-   * from anywhere else in this transaction is a bug, and must not be reported to a
+   * The constraint is identified, not just the kind: a unique violation from
+   * anywhere else in this transaction is a bug, and must not be reported to a
    * player as "you already bet".
+   *
+   * **Read off `ConstraintError`, never the driver's message.** As of dunx 3.1.0
+   * `transactionSync` classifies on the way out, so what leaves the callback is a
+   * `ConstraintError` whose own message is the generic
+   * `A record with these values already exists` - the bun:sqlite text moved to
+   * `cause`. A predicate still searching that message is always false, which is
+   * the *same* silent failure the index-name match caused: the double bet reaches
+   * the player as a 409 about "these values" instead of the sentence below.
+   * `constraint` is the column list dunx parsed out of it, so this compares whole
+   * rather than searching.
    */
   static #isDuplicateBet(error: unknown): boolean {
     return (
-      error instanceof SQLiteError &&
-      error.code === 'SQLITE_CONSTRAINT_UNIQUE' &&
-      error.message.includes(GameBetService.#DUPLICATE_BET_COLUMNS)
+      error instanceof ConstraintError &&
+      error.kind === ConstraintKind.Unique &&
+      error.constraint === GameBetService.#DUPLICATE_BET_COLUMNS
     );
   }
 
