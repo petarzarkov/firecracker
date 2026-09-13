@@ -12,15 +12,13 @@ import { ErrorMapper } from './error-mapper.js';
  * What `onError` is on the HTTP side, for the socket.
  *
  * A socket middleware and **not** `SocketOptions.onError`, which sees the error and
- * the socket and nothing else: the gateway, the path and the event below are
+ * the socket and nothing else: the gateway, the path and the event below come off
  * `SocketContext`, which only the chain is given.
  *
- * It rethrows, always - answering the frame would leave the caller waiting on an ack
- * the handler never sent. That is {@link SocketObserver}'s doing: a handler may
- * return a value or a promise, and the base class reports both channels and leaves
- * the outcome exactly as it found it. This used to import dunx's `observe` from
- * `@dunx/http/internal`, which 3.3.0 narrowed to what the framework's own packages
- * import; 3.8.2 made the base class public instead.
+ * It rethrows, always - answering the frame would leave the caller waiting on an
+ * ack the handler never sent. {@link SocketObserver} is what holds that: a handler
+ * may return a value or a promise, and the base reports both channels and leaves
+ * the outcome as it found it.
  */
 export class SocketErrorReporter extends SocketObserver {
   /**

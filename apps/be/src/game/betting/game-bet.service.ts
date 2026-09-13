@@ -31,12 +31,6 @@ export class BetRejected extends HttpError {
   }
 }
 
-/**
- * Placing and settling bets - the one place two players' money and one shared
- * round meet. No lock is taken and none is needed; CLAUDE.md, "There is no
- * advisory lock", is the argument, and the three legs are `transactionSync`, the
- * SQL-guarded debit and the unique index below.
- */
 /** What `cancelBet` hands back, so the caller can tell the lobby and the wallet. */
 export interface CancelledBet {
   readonly isDemo: boolean;
@@ -44,6 +38,12 @@ export interface CancelledBet {
   readonly balanceCents: number;
 }
 
+/**
+ * Placing and settling bets - the one place two players' money and one shared
+ * round meet. No lock is taken and none is needed; CLAUDE.md, "There is no
+ * advisory lock", is the argument, and the three legs are `transactionSync`, the
+ * SQL-guarded debit and the unique index below.
+ */
 export class GameBetService {
   /**
    * `game_bet_round_user_demo_index`, **as the columns, not the index name**:
@@ -59,7 +59,7 @@ export class GameBetService {
    * anywhere else in this transaction is a bug, and must not be reported to a
    * player as "you already bet".
    *
-   * **Read off `ConstraintError`, never the driver's message.** As of dunx 3.1.0
+   * **Read off `ConstraintError`, never the driver's message.**
    * `transactionSync` classifies on the way out, so what leaves the callback is a
    * `ConstraintError` whose own message is the generic
    * `A record with these values already exists` - the bun:sqlite text moved to

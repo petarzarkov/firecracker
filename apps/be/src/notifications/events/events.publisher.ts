@@ -80,11 +80,8 @@ class CacheConnectionRelay extends WsRelay {
  * The worker binding: straight onto the relay channel, so a process with no server
  * can hand a frame to every process that has one.
  *
- * The encoding is `@dunx/http`'s, through its `RelayPublisher` - this used to
- * import `encode` and `encodeRelay` from `@dunx/http/internal`, which 3.3.0
- * narrowed to what the framework's own packages import, and a local copy of a wire
- * format the framework owns is a fan-out that breaks silently on a bump. dunx 3.8.2
- * ships the publisher as a class for exactly this case.
+ * The encoding is `@dunx/http`'s, through its `RelayPublisher`: a local copy of a
+ * wire format the framework owns is a fan-out that breaks silently on a bump.
  */
 export class WorkerPublisher extends EventsPublisher {
   readonly #frames: RelayPublisher;

@@ -20,7 +20,8 @@ import { StorageModule } from './infra/files/storage.module.js';
 import { ImagesConfigModule } from './infra/images/images.module.js';
 import { AppConfigService } from './config/app.config.service.js';
 import { GameModule } from './game/game.module.js';
-import { HttpConfigModule } from './http.options.js';
+import { HttpConfigModule } from './http/http.options.js';
+import { BootModule } from './infra/boot/boot.service.js';
 import { DatabaseModule } from './infra/db/database.module.js';
 import { ServiceModule } from './infra/health/health.module.js';
 import { QueuesModule } from './infra/queue/queue.module.js';
@@ -67,9 +68,7 @@ class Foundation {
       // The one thing the two graphs configure differently: `socket` publishes
       // through this server's `PubSub`, `relay` puts the frame on the Redis channel.
       EventsPublisherModule.forRoot({ publisher }),
-      // In-process fan-out, and nothing to do with the socket one above: this is
-      // how a provider tells another something happened without naming it.
-      // `global: true` and a decorated class, so both graphs get exactly one bus.
+      // In-process fan-out, and a different thing from the socket one above.
       EventBusModule,
     ];
   }
@@ -103,12 +102,12 @@ class Foundation {
 
 /**
  * The application. **One process**: HTTP, the clock, the sockets and its own queue
- * consumer. There is no entrypoint for the consumer because an entrypoint cannot
- * express the ordering - workers must stop before the connections their handlers
- * use. Isolation is per handler; see `src/jobs.processor.ts`.
+ * consumer. There is no separate consumer entrypoint because one cannot express
+ * the ordering - workers must stop before the connections their handlers use.
  *
- * Undecorated with a static factory, because every option varies: `source` and
- * `logLevel` per suite, and `CLIENT_DIST` decides whether `ClientModule` exists.
+ * A static factory rather than a decorated class, because every option varies:
+ * `source` and `logLevel` per suite, and `CLIENT_DIST` decides whether
+ * `ClientModule` is in the graph at all.
  */
 export class AppModule {
   static forRoot(options: AppModuleOptions = {}): DynamicModule {
@@ -141,21 +140,20 @@ export class AppModule {
         // The server's own settings, as a provider that reads validated config.
         // HTTP-only for the same reason: a job child has no server.
         HttpConfigModule,
+        // The boot warnings, which `main.ts` used to make between `create()` and
+        // `listen()`, so a spec that builds this graph makes them too.
+        BootModule,
       ],
     };
   }
 
   /**
-   * Not in `Foundation.for()`: `ClientAddress` is an HTTP binding and a job child
-   * has no server.
-   *
    * `store` is explicit because the default `MemoryThrottleStore` **counts** when
    * Redis is unreachable rather than standing aside. `RedisThrottleStore` fails
-   * instead, which the guard reads as "allow" - the app's posture everywhere.
+   * instead, which the guard reads as "allow" - this app's posture everywhere.
    *
-   * `subject` is an option rather than an injected caller so `@dunx/http` need not
-   * depend on `@dunx/auth`, and is why `ThrottleGuard` follows `SessionGuard`:
-   * ahead of it, every caller is an address.
+   * `ThrottleGuard` follows `SessionGuard` because ahead of it every caller is an
+   * address rather than a user.
    */
   static #throttle(): DynamicModule {
     return ThrottleModule.forRootAsync({

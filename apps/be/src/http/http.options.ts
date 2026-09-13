@@ -17,32 +17,21 @@ import {
 } from '@dunx/http';
 import { LogLevel, Module, provide, type Ctor } from '@dunx/core';
 import { GAME_EVENTS } from '@firecracker/contracts';
-import { HEALTH_ROUTES } from './constants.js';
-import { SpaFallback } from './client/client.module.js';
-import { AppConfigService } from './config/app.config.service.js';
-import { ErrorMapper } from './core/errors/error-mapper.js';
-import { SocketErrorReporter } from './core/errors/socket-error.reporter.js';
-import { SocketThrottle } from './game/surface/socket-throttle.js';
+import { HEALTH_ROUTES } from '../constants.js';
+import { SpaFallback } from '../client/client.module.js';
+import { AppConfigService } from '../config/app.config.service.js';
+import { ErrorMapper } from '../core/errors/error-mapper.js';
+import { SocketErrorReporter } from '../core/errors/socket-error.reporter.js';
+import { SocketThrottle } from '../game/surface/socket-throttle.js';
 
 /**
- * How this app configures its HTTP server, **resolved from the container**.
- *
- * It used to be a static returning an `HttpOptions`, called once by `main.ts` and
- * again by every spec - because `HttpFactory.create(root, options)` takes its
- * options *before* the container exists, so nothing here could inject. `main.ts`
- * paid for that with a second `EnvConfig.validate(Bun.env)` beside the one
- * `ConfigModule` already does, and each suite paid by restating the production
- * options or silently testing a server with no guards.
- *
- * dunx 3.1.0 resolves this provider *after* the container and before the route
- * table, so it reads the same validated config every other provider does. An
- * argument to `create()` still wins field by field, which is how a suite turns
- * request logging off without restating anything else.
+ * How this app configures its HTTP server, resolved from the container so it reads
+ * the same validated config as everything else. An argument to `create()` still
+ * wins field by field, which is how a suite turns request logging off without
+ * restating the rest.
  *
  * **Override a field with a field and a getter with a getter** - TypeScript rejects
- * the other pairing with `TS2611` and `TS2610`. The four fields below derive from
- * config, so they are assigned in the constructor rather than declared with an
- * initialiser.
+ * the other pairing with `TS2611` and `TS2610`.
  */
 export class AppHttpOptions extends HttpOptionsProvider {
   override readonly middleware: readonly Ctor<Middleware>[];
@@ -50,12 +39,9 @@ export class AppHttpOptions extends HttpOptionsProvider {
   override readonly relayChannel: string;
 
   /**
-   * Inside the logging middleware, which dunx puts outermost - which is why there
-   * is no `websocket.onError` beside it. See `SocketErrorReporter`.
-   *
-   * `SocketThrottle` is inside the reporter, so a refused frame is not an error and
-   * never reaches it: a rate limit that logged a line per frame would move the flood
-   * into the log rather than stopping it.
+   * `SocketThrottle` inside the reporter, so a refused frame is not an error and
+   * never reaches it: a rate limit logging a line per frame moves the flood into
+   * the log rather than stopping it.
    */
   override readonly socketMiddleware: readonly Ctor<SocketMiddleware>[] = [
     SocketErrorReporter,
@@ -64,12 +50,8 @@ export class AppHttpOptions extends HttpOptionsProvider {
 
   constructor(
     private readonly config: AppConfigService,
-    /**
-     * Bound by `WsRelayModule` rather than constructed here. A relay built in this
-     * getter would be a new one per call and closed by nobody; the container closes
-     * this one at shutdown, which `PubSub.close()` does not do for an app that
-     * never opened a socket.
-     */
+    // Bound by `WsRelayModule`, not constructed here: one built in the getter
+    // would be a new relay per call and closed by nobody.
     private readonly bus: RedisRelay,
   ) {
     super();
@@ -77,23 +59,17 @@ export class AppHttpOptions extends HttpOptionsProvider {
     const { client, cors, ws } = config.values;
 
     /**
-     * Outermost first, after the built-in request logger.
+     * Outermost first, and the order is the whole point. `app.use()` appends, so
+     * from there `Compression` would sit *inside* `StaticFiles`, which answers and
+     * returns - and the client bundle, the largest thing this app serves, would
+     * never be encoded. Behind the chain, serving a hashed asset cost a
+     * `getSession` and a Redis `INCR`, and a cold page load spent its throttle
+     * budget on its own JavaScript. `SpaFallback` outside `StaticFiles`, or the
+     * static mount answers the deep link first. `SessionGuard` before
+     * `ThrottleGuard`, so the throttler counts per user.
      *
-     * The client pair belongs here rather than in `app.use()`, which appends:
-     * behind the chain, serving a hashed asset off disk cost a `getSession` and a
-     * Redis `INCR`, and a cold page load spent its throttle budget on its own
-     * JavaScript. `SpaFallback` outside `StaticFiles`, or the static mount answers
-     * the deep link first. `SessionGuard` next, so the throttler can count per user.
-     *
-     * `Compression` ahead of all of it, which is the whole reason it is in this
-     * array rather than in the `app.use(Compression)` the docs show: `use()`
-     * appends, and from there it would sit *inside* `StaticFiles`, which answers
-     * and returns - so the client bundle, the largest thing this app serves, would
-     * never be encoded. It still runs inside dunx's request logger, so the logged
-     * status is the real one.
-     *
-     * Only when this process serves the built client. Unset in development, where
-     * Vite serves it and nothing static should be able to shadow an API route.
+     * The client pair only when this process serves the built client; in
+     * development Vite does, and nothing static should shadow an API route.
      */
     this.middleware = [
       Compression,
@@ -138,10 +114,9 @@ export class AppHttpOptions extends HttpOptionsProvider {
   override get requestLogging(): RequestLoggingOptions {
     const log = this.config.get('log');
     return {
-      // Both default to `false` and should stay there outside a debugging session:
-      // as of dunx 2.4.0 `requestBody` genuinely includes the body, and
-      // `LOG_MASK_FIELDS` masks by field *name* - it cannot save a sign-in body
-      // whose secret is not one of the names it knows.
+      // Both stay `false` outside a debugging session: `requestBody` genuinely
+      // includes the body, and `LOG_MASK_FIELDS` masks by field *name* - it
+      // cannot save a sign-in body whose secret is not a name it knows.
       requestBody: log.requestBody,
       responseBody: log.responseBody,
       ignore: this.#probePaths(),
