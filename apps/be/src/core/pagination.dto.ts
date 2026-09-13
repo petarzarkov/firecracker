@@ -27,30 +27,3 @@ export const pageOptionsSchema = z.object({
   cursor: z.string().max(PAGINATION.MAX_CURSOR).optional(),
   search: z.string().min(1).max(PAGINATION.MAX_SEARCH).optional(),
 });
-
-/**
- * Assignable to `@dunx/infra/pagination`'s `PageOptions`, which is what lets the
- * validated query go straight into `paginate` with no adapter. `order` is lowercase
- * (`asc`/`desc`), because that is what the framework's frozen object spells - a
- * client sending `?order=DESC` gets a 400.
- */
-export type PageOptionsQuery = z.infer<typeof pageOptionsSchema>;
-
-const pageMetaSchema = z.object({
-  take: z.number().int(),
-  hasNextPage: z.boolean(),
-  hasPreviousPage: z.boolean(),
-  nextCursor: z.string().nullable(),
-  previousCursor: z.string().nullable(),
-});
-
-/**
- * The response schema for a page of `item`, named for the OpenAPI components.
- * Deliberately **not** `pageOf`, which is `@dunx/infra/pagination`'s runtime
- * envelope builder - one name for two things is how the wrong import happens.
- */
-export class Paginated {
-  static of<T extends z.ZodType>(item: T, id: string) {
-    return z.object({ data: z.array(item), meta: pageMetaSchema }).meta({ id });
-  }
-}

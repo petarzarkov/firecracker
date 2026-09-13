@@ -2,6 +2,7 @@ import { Logger } from '@dunx/core';
 import { Auth, betterAuthDocument } from '@dunx/auth';
 import { HttpFactory, type HttpApp } from '@dunx/http';
 import { OpenApiExplorer, OpenApiModule } from '@dunx/openapi';
+import { SwaggerRenderer } from '@dunx/openapi/swagger';
 import { AppModule } from './app.module.js';
 import { AUTH_MOUNT, AuthOptions } from './auth/auth.options.js';
 import { AppConfigService } from './config/app.config.service.js';
@@ -22,6 +23,18 @@ const main = async (): Promise<void> => {
   const app = await HttpFactory.create(
     OpenApiModule.forRootAsync({
       root: AppModule.forRoot(),
+      /**
+       * Which documentation UI, and the only thing here that is not read from
+       * config. dunx 3.7.0 made the page a renderer the app picks and
+       * `swagger-ui-dist` an optional peer of `@dunx/openapi` rather than a
+       * dependency, so this app declares the peer itself - and it is a
+       * `dependencies` entry, because the image installs `--production`. Passing
+       * no renderer serves `openapi.json` and no page at all.
+       *
+       * Beside `root` rather than in the factory: the controller declares its
+       * routes before there is a container to run one.
+       */
+      renderer: new SwaggerRenderer(),
       useFactory: (config: AppConfigService, auth: Auth) => {
         const { app: meta, docs } = config.values;
         return {

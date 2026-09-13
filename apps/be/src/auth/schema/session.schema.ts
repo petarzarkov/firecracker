@@ -30,5 +30,3 @@ export const sessions = sqliteTable(
     index('session_user_id_index').on(table.userId),
   ],
 );
-
-export type SessionRow = typeof sessions.$inferSelect;

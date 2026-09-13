@@ -29,12 +29,12 @@
   },
   "dependencies": {
     "@arkv/rng": "^0.8.2",
-    "@dunx/auth": "^3.1.1",
-    "@dunx/core": "^3.1.1",
-    "@dunx/http": "^3.1.1",
-    "@dunx/infra": "^3.1.1",
-    "@dunx/openapi": "^3.1.1",
-    "@dunx/transform": "^3.1.1",
+    "@dunx/auth": "^3.8.2",
+    "@dunx/core": "^3.8.2",
+    "@dunx/http": "^3.8.2",
+    "@dunx/infra": "^3.8.2",
+    "@dunx/openapi": "^3.8.2",
+    "@dunx/transform": "^3.8.2",
     "@firecracker/contracts": "workspace:*",
     "@google/genai": "^2.17.1",
     "@react-email/components": "1.0.12",
@@ -46,12 +46,13 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "resend": "6.22.0",
+    "swagger-ui-dist": "^5.32.14",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@dunx/testing": "^3.1.1",
+    "@dunx/testing": "^3.8.2",
     "@react-email/ui": "6.9.2",
-    "@types/bun": "^1.4.0",
+    "@types/bun": "^1.4.2",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
     "drizzle-kit": "^0.31.10",
@@ -59,6 +60,6 @@
     "typescript": "^7.0.2"
   },
   "engines": {
-    "bun": ">=1.4.0"
+    "bun": ">=1.4.1"
   }
 }

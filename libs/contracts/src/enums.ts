@@ -46,8 +46,6 @@ export const UserRole = Object.freeze({
 } as const);
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 
-export const USER_ROLES = [UserRole.ADMIN, UserRole.USER] as const;
-
 export const WalletTransactionType = Object.freeze({
   DEPOSIT: 'deposit',
   WITHDRAWAL: 'withdrawal',

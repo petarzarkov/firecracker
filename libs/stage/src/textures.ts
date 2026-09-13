@@ -143,16 +143,3 @@ export const underCurveTexture = (): Texture => {
   underCurve = Texture.from(canvas);
   return underCurve;
 };
-
-/**
- * Drops all three, so a stage torn down in a test or a hot reload does not hand the
- * next one textures belonging to a destroyed renderer.
- */
-export const releaseTextures = (): void => {
-  softDot?.destroy(true);
-  halo?.destroy(true);
-  underCurve?.destroy(true);
-  softDot = null;
-  halo = null;
-  underCurve = null;
-};

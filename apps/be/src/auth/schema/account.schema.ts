@@ -33,5 +33,3 @@ export const accounts = sqliteTable(
     index('account_provider_id_index').on(table.providerId),
   ],
 );
-
-export type AccountRow = typeof accounts.$inferSelect;

@@ -44,9 +44,11 @@ preload = ["@dunx/transform/preload"]
 
 ### The docs page serves Swagger UI
 
-As of dunx 2.3.0 `@dunx/openapi` no longer ships an explorer of its own; as of **2.4.0 `swagger-ui-dist` is its own dependency rather than an optional peer**, so this app does not declare it and there is no `--production` install to lose it to. It is still resolved lazily on the first request for `/api/docs`, so a service that serves only the JSON never reads it — it just pays 12 MB on disk for the option.
+**dunx 3.7.0 made the page a renderer the app picks.** `OpenApiModule` serves `openapi.json` and no page at all unless it is given one, so `main.ts` passes `new SwaggerRenderer()` from `@dunx/openapi/swagger` — beside `root`, not in the factory, because the controller declares its routes before there is a container to run one. Scalar is the other one dunx ships, behind `@dunx/openapi/scalar`.
 
-Since 2.3.1 the four files come off **one wildcard route** under `/api/docs`, guarded by an allow-list in `@dunx/openapi` — the package directory also holds four other builds and about 4 MB of sourcemaps, so that list is the only thing keeping the wildcard off them. `openapi.spec.ts` fetches all four over a real server and asserts that a name outside the list 404s, so neither half can rot unnoticed.
+`swagger-ui-dist` went back to being an **optional peer** of `@dunx/openapi` in the same release, so **this app declares it**, and it is a `dependencies` entry rather than a dev one: `apps/be/Dockerfile` installs `--production`. It is still resolved lazily on the first request for `/api/docs`, so a service that serves only the JSON never reads it — it just pays 12 MB on disk for the option.
+
+The four files come off **one wildcard route** under `/api/docs`, guarded by an allow-list that is the renderer's since 3.7.0 — the package directory also holds four other builds and about 4 MB of sourcemaps, so that list is the only thing keeping the wildcard off them. `openapi.spec.ts` fetches all four over a real server and asserts that a name outside the list 404s, so neither half can rot unnoticed.
 
 ### Compression is the app's to place
 
@@ -513,6 +515,8 @@ Migrations also run at boot, in `DatabaseBootstrap`.
 - Handlers **send** their acks (`betAck`, `cashOutAck`, `seedAck`) rather than returning them. dunx replies to `@OnMessage('x')` under the name `x`, and a request and its acknowledgement are not the same event.
 - The wire is `{ event, data }`. The client's `apps/fe/src/systems/network/socket.ts` is a socket.io-shaped shim over it, which is why the React components never changed.
 - Broadcasting goes through `EventsPublisher`, never `socket.publish` — the latter does not cross processes.
+- The worker binding is `WorkerPublisher`, over **dunx's** `RelayPublisher`. A sandboxed job child has no server for a `PubSub` to exist in, so the frame goes onto the relay channel directly — in `@dunx/http`'s own encoding, never a local copy of it. This imported `encode`/`encodeRelay` from `@dunx/http/internal` until dunx 3.3.0 narrowed that subpath to what the framework itself imports; 3.8.2 ships the publisher as a class for exactly this case.
+- `SocketErrorReporter` extends **`SocketObserver`** rather than implementing `SocketMiddleware`. A gateway handler may return a value or a promise, so a middleware that wants the outcome has to catch a throw, hook a rejection and rethrow both. `settled` takes a `SocketOutcome` union, not an `error` that is `undefined` on success — a handler can `throw undefined`.
 
 ### The client has three layouts, and only one is mounted
 
@@ -554,6 +558,8 @@ They used to. The server declared the payloads in `game.events.ts` and the clien
 - **Not in the lib:** queue names, job names, job payloads, topic helpers. That is the server talking to itself, and a name a browser can read is a name somebody will send.
 - **No zod in there.** Sharing schemas would put zod in the browser bundle, and validating a frame is a separate decision from agreeing on its shape. The payloads are `interface`s and erase at build time.
 - Publish through `publishGame`, not `EventsPublisher.publish` — the latter takes `unknown`, which is the hole all four bugs came through.
+
+**In-process is `EventBus`, and it is a different thing.** `EventsPublisher` puts bytes on a socket; `@dunx/core`'s `EventBus` tells another provider something happened. `CrashEngineService` publishes `AutoCashOutReached` on it rather than calling a callback the gateway registered, which keeps the clock's only game dependency `GameRoundRepository` — sweeping pays a wallet. `@OnEvent` is wired in `onBeforeInit`, so the subscription is in place **before** boot recovery resumes a mid-flight round; the registered callback was armed from the gateway's `onInit`, which is after it, so the first ticks of a recovered round swept nothing.
 
 ---
 

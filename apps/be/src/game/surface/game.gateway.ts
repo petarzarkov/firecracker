@@ -1,4 +1,4 @@
-import { Logger } from '@dunx/core';
+import { Logger, OnEvent } from '@dunx/core';
 import {
   Gateway,
   OnClose,
@@ -25,6 +25,8 @@ import {
 } from '../../notifications/events/events.js';
 import { UserRole } from '../../users/schema/user.schema.js';
 import { CrashEngineService } from '../engine/crash-engine.service.js';
+import { AutoCashOutReached } from '../engine/engine.events.js';
+import { WS_PATH } from '../../constants.js';
 import { ClientSeedService } from '../fairness/client-seed.service.js';
 import {
   GAME_CLIENT_EVENTS,
@@ -61,7 +63,7 @@ import {
  * the client hid it behind a login form, so nobody found out.
  */
 @Public()
-@Gateway('/ws')
+@Gateway(WS_PATH)
 export class GameGateway {
   constructor(
     private readonly sessions: SocketAuthService,
@@ -78,26 +80,23 @@ export class GameGateway {
   ) {}
 
   /**
-   * Wires the engine's per-tick auto-cashout callback. The engine must not do this
-   * itself: injecting `AutoCashOutService` would give the clock a path to the
-   * wallet, where today its only game dependency is `GameRoundRepository`.
+   * Sweeps the auto-cashouts a tick reached. Subscribed rather than registered
+   * from `onInit`: `@OnEvent` is wired in `onBeforeInit`, so this is in place
+   * before boot recovery resumes a mid-flight round rather than a moment after it.
    *
-   * Armed a moment after boot recovery resumes a mid-flight round, since providers
-   * construct in dependency order. Survivable, not overlooked: `sweep` claims each
-   * entry with `hdel` before paying, so the cost is ticks of precision, never a
-   * double payout.
+   * The engine must not do this itself - sweeping pays a wallet, and the clock's
+   * only game dependency is `GameRoundRepository`.
    */
-  onInit(): void {
-    this.engine.registerAutoCashOutHandler((roundId, multiplierX100) => {
-      void this.autoCashOut
-        .sweep(roundId, multiplierX100)
-        .catch((error: unknown) =>
-          this.logger.error('auto-cashout sweep failed', {
-            roundId,
-            reason: (error as Error).message,
-          }),
-        );
-    });
+  @OnEvent(AutoCashOutReached)
+  async swept({ roundId, multiplierX100 }: AutoCashOutReached): Promise<void> {
+    try {
+      await this.autoCashOut.sweep(roundId, multiplierX100);
+    } catch (error) {
+      this.logger.error('auto-cashout sweep failed', {
+        roundId,
+        reason: (error as Error).message,
+      });
+    }
   }
 
   /**

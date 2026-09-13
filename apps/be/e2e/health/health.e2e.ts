@@ -31,29 +31,50 @@ describe('the health probes against a live server', () => {
     expect(byName.get('disk')?.critical).toBe(false);
   });
 
-  test('a logged response carries a request id', async () => {
+  /**
+   * W3C Trace Context, since dunx 3.2.0. `x-request-id` and its `randomUUID` are
+   * gone: the response header is `traceresponse`, the request one is
+   * `traceparent`, and the log lines carry `traceId`/`spanId`/`traceFlags` where
+   * they used to carry `requestId`.
+   */
+  test('a logged response carries a trace', async () => {
     const { api } = getTestContext();
     const { headers } = await api.json('service/config');
-    expect(headers.get('x-request-id')).toMatch(/^[0-9a-f-]{36}$/);
-  });
-
-  test('an inbound request id is echoed back', async () => {
-    const { api } = getTestContext();
-    const mine = crypto.randomUUID();
-    const response = await api.raw('service/config', {
-      headers: { 'x-request-id': mine },
-    });
-    expect(response.headers.get('x-request-id')).toBe(mine);
+    expect(headers.get('traceresponse')).toMatch(
+      /^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/,
+    );
   });
 
   /**
-   * `x-request-id` comes from `RequestLoggingMiddleware`, so a path in
-   * `requestLogging.ignore` loses correlation as well as its log line - and so does
-   * everything the handler logs. Both probes are ignored, per `#probePaths`.
+   * The **trace** is adopted, not the span: this server mints its own span and
+   * names the caller's as its parent, so a caller that got its own id back would
+   * be looking at a hop that logged nothing.
    */
-  test('KNOWN GAP: an ignored path gets no request id', async () => {
+  test('an inbound traceparent is continued, not echoed', async () => {
+    const { api } = getTestContext();
+    const traceId = 'a'.repeat(32);
+    const spanId = 'b'.repeat(16);
+    const response = await api.raw('service/config', {
+      headers: { traceparent: `00-${traceId}-${spanId}-01` },
+    });
+
+    const traced = response.headers.get('traceresponse');
+    expect(traced).toStartWith(`00-${traceId}-`);
+    expect(traced).not.toContain(spanId);
+    // The sampling decision is the caller's and is forwarded unchanged, so a
+    // trace an upstream sampler declined is not re-sampled at this hop.
+    expect(traced).toEndWith('-01');
+  });
+
+  /**
+   * A path in `requestLogging.ignore` skips the trace along with its log line, so
+   * everything the handler logs is uncorrelated. `correlateIgnored: true` buys the
+   * correlation back for ~2.2 us a request. Both probes are ignored, per
+   * `#probePaths`.
+   */
+  test('KNOWN GAP: an ignored path gets no trace', async () => {
     const { api } = getTestContext();
     const { headers } = await api.json('health/live');
-    expect(headers.get('x-request-id')).toBeNull();
+    expect(headers.get('traceresponse')).toBeNull();
   });
 });

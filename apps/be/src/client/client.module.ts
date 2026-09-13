@@ -11,6 +11,7 @@ import {
 import type { BunRequest } from 'bun';
 import { join } from 'node:path';
 import { AppConfigService } from '../config/app.config.service.js';
+import { WS_PATH } from '../constants.js';
 
 /**
  * Answers a deep link with `index.html`. `StaticModule` serves the files but
@@ -55,7 +56,7 @@ export class SpaFallback implements Middleware {
       if (req.method !== 'GET') throw error;
 
       const { pathname } = new URL(req.url);
-      if (pathname.startsWith(this.#prefix) || pathname.startsWith('/ws')) {
+      if (pathname.startsWith(this.#prefix) || pathname.startsWith(WS_PATH)) {
         throw error;
       }
       if (!(req.headers.get('accept') ?? '').includes('text/html')) throw error;

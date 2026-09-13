@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { HttpFactory, type HttpApp } from '@dunx/http';
 import { OpenApiModule } from '@dunx/openapi';
+import { SwaggerRenderer } from '@dunx/openapi/swagger';
 import { testRoot } from '@dunx/testing';
 import { request } from 'node:http';
 import { AppModule } from './app.module.js';
@@ -78,6 +79,7 @@ beforeAll(async () => {
       title: 'firecracker-be',
       version: '0.1.0',
       root: testRoot([AppModule.forRoot({ source, logLevel: 'fatal' })]),
+      renderer: new SwaggerRenderer(),
     }),
     { requestLogging: false },
   );

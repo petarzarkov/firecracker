@@ -1,3 +1,4 @@
+import { EventBusModule } from '@dunx/core';
 import type { ConfigSource, DynamicModule, ModuleRef } from '@dunx/core';
 import {
   ClientAddress,
@@ -66,6 +67,10 @@ class Foundation {
       // The one thing the two graphs configure differently: `socket` publishes
       // through this server's `PubSub`, `relay` puts the frame on the Redis channel.
       EventsPublisherModule.forRoot({ publisher }),
+      // In-process fan-out, and nothing to do with the socket one above: this is
+      // how a provider tells another something happened without naming it.
+      // `global: true` and a decorated class, so both graphs get exactly one bus.
+      EventBusModule,
     ];
   }
 

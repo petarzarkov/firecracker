@@ -14,7 +14,7 @@
 # `main-worker.js` and the preload never matches a `.ts` file.
 
 # ── The client, built once and served by the API ─────────────────────────────
-FROM oven/bun:1.4.0-slim AS client
+FROM oven/bun:1.4.2-slim AS client
 WORKDIR /app
 COPY package.json bun.lock bunfig.toml ./
 # Every workspace tsconfig extends this one, and vite reads the chain to configure
@@ -42,7 +42,7 @@ COPY apps/fe ./apps/fe
 RUN bun run --filter 'firecracker-fe' build:dist
 
 # ── Server dependencies ──────────────────────────────────────────────────────
-FROM oven/bun:1.4.0-slim AS deps
+FROM oven/bun:1.4.2-slim AS deps
 WORKDIR /app
 COPY package.json bun.lock bunfig.toml ./
 COPY apps/be/package.json ./apps/be/
@@ -52,7 +52,7 @@ COPY libs/contracts/package.json ./libs/contracts/
 RUN bun install --frozen-lockfile --production --filter 'firecracker-be'
 
 # ── Runtime ──────────────────────────────────────────────────────────────────
-FROM oven/bun:1.4.0-slim AS runtime
+FROM oven/bun:1.4.2-slim AS runtime
 WORKDIR /app
 
 RUN apt-get update \

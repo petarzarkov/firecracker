@@ -4,8 +4,8 @@ import { RedisConnection } from '@dunx/infra/redis';
 import { AppConfigService } from '../../config/app.config.service.js';
 import {
   EventsPublisher,
-  RelayPublisher,
   SocketPublisher,
+  WorkerPublisher,
 } from './events.publisher.js';
 
 export interface EventsPublisherOptions {
@@ -37,7 +37,7 @@ export class EventsPublisherModule {
           })
         : provide(EventsPublisher, {
             useFactory: (redis: RedisConnection, config: AppConfigService) =>
-              new RelayPublisher(redis, config),
+              new WorkerPublisher(redis, config),
             inject: [RedisConnection, AppConfigService] as const,
           });
 
