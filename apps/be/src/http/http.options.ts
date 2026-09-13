@@ -17,12 +17,12 @@ import {
 } from '@dunx/http';
 import { LogLevel, Module, provide, type Ctor } from '@dunx/core';
 import { GAME_EVENTS } from '@firecracker/contracts';
-import { HEALTH_ROUTES } from './constants.js';
-import { SpaFallback } from './client/client.module.js';
-import { AppConfigService } from './config/app.config.service.js';
-import { ErrorMapper } from './core/errors/error-mapper.js';
-import { SocketErrorReporter } from './core/errors/socket-error.reporter.js';
-import { SocketThrottle } from './game/surface/socket-throttle.js';
+import { HEALTH_ROUTES } from '../constants.js';
+import { SpaFallback } from '../client/client.module.js';
+import { AppConfigService } from '../config/app.config.service.js';
+import { ErrorMapper } from '../core/errors/error-mapper.js';
+import { SocketErrorReporter } from '../core/errors/socket-error.reporter.js';
+import { SocketThrottle } from '../game/surface/socket-throttle.js';
 
 /**
  * How this app configures its HTTP server, **resolved from the container**.

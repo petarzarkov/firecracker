@@ -20,7 +20,8 @@ import { StorageModule } from './infra/files/storage.module.js';
 import { ImagesConfigModule } from './infra/images/images.module.js';
 import { AppConfigService } from './config/app.config.service.js';
 import { GameModule } from './game/game.module.js';
-import { HttpConfigModule } from './http.options.js';
+import { HttpConfigModule } from './http/http.options.js';
+import { BootModule } from './infra/boot/boot.service.js';
 import { DatabaseModule } from './infra/db/database.module.js';
 import { ServiceModule } from './infra/health/health.module.js';
 import { QueuesModule } from './infra/queue/queue.module.js';
@@ -141,6 +142,9 @@ export class AppModule {
         // The server's own settings, as a provider that reads validated config.
         // HTTP-only for the same reason: a job child has no server.
         HttpConfigModule,
+        // The boot warnings, which `main.ts` used to make between `create()` and
+        // `listen()`, so a spec that builds this graph makes them too.
+        BootModule,
       ],
     };
   }
