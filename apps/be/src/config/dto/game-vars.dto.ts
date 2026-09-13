@@ -26,6 +26,23 @@ export const gameVarsSchema = z.object({
     .default(100_000),
   /** How often the stuck-round cleanup job runs. */
   GAME_CLEANUP_INTERVAL_MS: z.coerce.number().int().positive().default(20_000),
+  /**
+   * How many finished rounds to keep. The rest are deleted, and their bets go
+   * with them through the schema's `onDelete: 'cascade'`.
+   *
+   * This is a demo, so the history is worth what fits on the crash strip and the
+   * pages behind it. A real deployment would keep every round: the seed and its
+   * hash are what a player checks a past result against, and a deleted round
+   * cannot be verified by anyone.
+   */
+  GAME_ROUND_RETENTION: z.coerce.number().int().positive().default(1_000),
+  /** How often the retention pass runs. Hourly: it deletes what one hour of play
+   * added, which at a round every 15 seconds is a few hundred rows. */
+  GAME_ROUND_RETENTION_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(3_600_000),
   /** A round with no progression for this long is failed and its bets refunded. */
   GAME_STUCK_ROUND_THRESHOLD_MS: z.coerce
     .number()
