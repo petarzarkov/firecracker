@@ -15,7 +15,7 @@ import {
   type UserBannedJob,
   type UserRegisteredJob,
 } from '../events/events.js';
-import { EmailService } from '../email/email.service.js';
+import { EmailService } from '@dunx/infra/email';
 import { AccountSuspendedEmail } from '../email/templates/account-suspended-email.js';
 import { PasswordResetEmail } from '../email/templates/password-reset-email.js';
 import { WelcomeEmail } from '../email/templates/welcome-email.js';
@@ -45,7 +45,7 @@ export class NotificationJobs {
     // The component is *called*, not written as JSX, so this handler stays a `.ts`
     // file - the templates are the only `.tsx` in the app. They hold no state and
     // no hooks, so an element built this way renders identically.
-    await this.email.send({
+    await this.email.sendTemplate({
       to: email,
       subject: `Welcome to Firecracker, ${name}!`,
       template: WelcomeEmail({
@@ -94,7 +94,7 @@ export class NotificationJobs {
   async passwordReset(job: Job<PasswordResetJob>): Promise<{ sent: string }> {
     const { userId, email, name, url } = job.data;
 
-    await this.email.send({
+    await this.email.sendTemplate({
       to: email,
       subject: 'Reset your Firecracker password',
       template: PasswordResetEmail({ name, resetUrl: url }),
@@ -112,7 +112,7 @@ export class NotificationJobs {
   async banned(job: Job<UserBannedJob>): Promise<{ notified: string }> {
     const { userId, email, name, reason } = job.data;
 
-    await this.email.send({
+    await this.email.sendTemplate({
       to: email,
       subject: 'Your Firecracker account has been suspended',
       template: AccountSuspendedEmail({ name, reason }),

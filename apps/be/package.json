@@ -18,7 +18,7 @@
     "test:int": "bun test .spec.ts",
     "test:cov": "bun test --coverage",
     "test:e2e": "bun test --preload ./e2e/setup/preload.ts $(find ./e2e -name '*.e2e.ts')",
-    "email": "email dev --dir ./src/notifications/email/templates --port 3035",
+    "email": "bunx dunx-email preview ./src/notifications/email/templates",
     "mig:gen": "bun --env-file=.env drizzle-kit generate",
     "mig:run": "bun --env-file=.env ./scripts/migrate.ts",
     "db:studio": "bun --env-file=.env drizzle-kit studio",
@@ -29,12 +29,12 @@
   },
   "dependencies": {
     "@arkv/rng": "^0.8.2",
-    "@dunx/auth": "^3.8.3",
-    "@dunx/core": "^3.8.3",
-    "@dunx/http": "^3.8.3",
-    "@dunx/infra": "^3.8.3",
-    "@dunx/openapi": "^3.8.3",
-    "@dunx/transform": "^3.8.3",
+    "@dunx/auth": "^3.9.0",
+    "@dunx/core": "^3.9.0",
+    "@dunx/http": "^3.9.0",
+    "@dunx/infra": "^3.9.0",
+    "@dunx/openapi": "^3.9.0",
+    "@dunx/transform": "^3.9.0",
     "@firecracker/contracts": "workspace:*",
     "@google/genai": "^2.17.1",
     "@react-email/components": "1.0.12",
@@ -50,13 +50,11 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@dunx/testing": "^3.8.3",
-    "@react-email/ui": "6.9.2",
+    "@dunx/testing": "^3.9.0",
     "@types/bun": "^1.4.2",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
     "drizzle-kit": "^0.31.10",
-    "react-email": "6.9.2",
     "typescript": "^7.0.2"
   },
   "engines": {
