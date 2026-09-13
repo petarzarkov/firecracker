@@ -38,7 +38,6 @@ export const QUEUES = Object.freeze({
   /** Anything that touches bytes. Its own queue so it can get its own worker. */
   MEDIA: 'media',
 } as const);
-export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
 
 export const JOBS = Object.freeze({
   USER_REGISTERED: 'user.registered',
@@ -46,7 +45,6 @@ export const JOBS = Object.freeze({
   PASSWORD_RESET: 'user.password-reset',
   FILE_THUMBNAIL: 'file.thumbnail',
 } as const);
-export type JobName = (typeof JOBS)[keyof typeof JOBS];
 
 /** Bun's own pub/sub topics, fanned out across processes when a relay is set. */
 export const TOPICS = Object.freeze({

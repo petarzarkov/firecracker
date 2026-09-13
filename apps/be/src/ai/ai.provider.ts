@@ -14,8 +14,6 @@ export const AIProvider = Object.freeze({
 } as const);
 export type AIProvider = (typeof AIProvider)[keyof typeof AIProvider];
 
-export const AI_PROVIDERS = Object.values(AIProvider);
-
 /**
  * The outbound client the providers share.
  *

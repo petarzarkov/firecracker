@@ -78,6 +78,5 @@ export const walletTransactions = sqliteTable(
 );
 
 export type WalletRow = typeof wallets.$inferSelect;
-export type NewWalletRow = typeof wallets.$inferInsert;
 export type WalletTransactionRow = typeof walletTransactions.$inferSelect;
 export type NewWalletTransactionRow = typeof walletTransactions.$inferInsert;

@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { EventBus } from '@dunx/core';
 import { createTestServer, type TestServer } from '@dunx/testing';
 import { AppModule } from '../app.module.js';
 import { TestSession } from '../test-support/session.js';
@@ -16,6 +17,7 @@ import { GameBetRepository } from './betting/game-bet.repository.js';
 import type { RoundJob } from './game.events.js';
 import type { Job } from 'bullmq';
 import { CrashEngineService } from './engine/crash-engine.service.js';
+import { AutoCashOutReached } from './engine/engine.events.js';
 import { GameBotsModule } from './bots/bots.module.js';
 import { GameSurfaceModule } from './surface/surface.module.js';
 import {
@@ -286,6 +288,51 @@ describe('settlement', () => {
  * the curve had passed the target. The crash point is drawn at launch and stored, so
  * the round is knowable after the fact and this is a reconciliation, not a guess.
  */
+/**
+ * The other half: what a tick does while the round is still running.
+ *
+ * The engine publishes `AutoCashOutReached` and `GameGateway` sweeps on it. It
+ * used to register a callback on the engine from the gateway's `onInit`, which
+ * runs *after* boot recovery has resumed a mid-flight round - so the first ticks
+ * of that round swept nothing. `@OnEvent` is wired in `onBeforeInit`, before any
+ * `onInit`, and this asserts the subscription is reached at all: nothing else in
+ * this suite runs a tick, because a clock in a test is a source of flake.
+ */
+describe('sweeping auto-cashouts on a tick', () => {
+  test('a target the tick reached is paid, through the event bus', async () => {
+    const roundId = await openRound();
+    // Read first: a demo wallet is opened on demand, and `placeBet` refuses
+    // rather than opening one.
+    wallets.getWallet(userId, true);
+    const placed = bets.placeBet(userId, roundId, 200, true);
+    await autoCashOut.store(roundId, userId, 'player', 2, true);
+    launch(roundId, 383);
+    const afterBet = wallets.getWallet(userId, true).balanceCents;
+
+    // What a tick at 2.50x publishes. `emit` settles every handler's own
+    // promise, so the sweep has run by the time this resolves.
+    await server.app.get(EventBus).emit(new AutoCashOutReached(roundId, 250));
+
+    const bet = betRepo.findById(placed.id);
+    expect(bet?.status).toBe(GameBetStatus.CASHED_OUT);
+    // At the target, not at the 2.50x the tick was reporting.
+    expect(bet?.cashedOutAtX100).toBe(200);
+    expect(wallets.getWallet(userId, true).balanceCents).toBe(afterBet + 400);
+  });
+
+  test('a target the tick has not reached is left alone', async () => {
+    const roundId = await openRound();
+    wallets.getWallet(userId, true);
+    const placed = bets.placeBet(userId, roundId, 200, true);
+    await autoCashOut.store(roundId, userId, 'player', 5, true);
+    launch(roundId, 900);
+
+    await server.app.get(EventBus).emit(new AutoCashOutReached(roundId, 250));
+
+    expect(betRepo.findById(placed.id)?.status).toBe(GameBetStatus.ACTIVE);
+  });
+});
+
 describe('reconciling auto-cashouts at the crash', () => {
   const crashRound = (roundId: string): Promise<{ settled: boolean }> =>
     roundJobs.crash({ data: { roundId } } as Job<RoundJob>);

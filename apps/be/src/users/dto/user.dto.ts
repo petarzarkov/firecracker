@@ -1,6 +1,6 @@
 import type { RouteSchemas } from '@dunx/http';
 import { z } from 'zod';
-import { Paginated, pageOptionsSchema } from '../../core/pagination.dto.js';
+import { pageOptionsSchema } from '../../core/pagination.dto.js';
 import { UserRole } from '../schema/user.schema.js';
 
 /**
@@ -24,8 +24,6 @@ export const SanitizedUser = z
   });
 
 export type SanitizedUser = z.infer<typeof SanitizedUser>;
-
-export const PaginatedUsers = Paginated.of(SanitizedUser, 'PaginatedUsers');
 
 export const UserIdParams = z.object({ userId: z.uuid() });
 

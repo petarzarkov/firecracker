@@ -102,5 +102,3 @@ export const envVarsSchema = z
       });
     }
   });
-
-export type EnvVars = z.infer<typeof envVarsSchema>;

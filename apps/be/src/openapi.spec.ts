@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { HttpFactory, type HttpApp } from '@dunx/http';
 import { OpenApiExplorer, OpenApiModule } from '@dunx/openapi';
+import { SwaggerRenderer } from '@dunx/openapi/swagger';
 import { testRoot } from '@dunx/testing';
 import { AppModule } from './app.module.js';
 import { AuthDocument } from './auth/auth.document.js';
@@ -40,6 +41,7 @@ beforeAll(async () => {
       version: '0.1.0',
       root: testRoot([AppModule.forRoot({ source, logLevel: 'fatal' })]),
       contribute: [AuthDocument.for(config)],
+      renderer: new SwaggerRenderer(),
     }),
     { requestLogging: false },
   );
@@ -283,11 +285,12 @@ describe('the generated OpenAPI document', () => {
   });
 
   /**
-   * dunx 2.3.0 replaced its own inlined explorer with Swagger UI, which is an
-   * **optional peer**: `@dunx/openapi` resolves `swagger-ui-dist` lazily, on the
-   * first request for this page, so a missing install is a broken route rather than
-   * a failed boot. `swagger-ui-dist` is therefore a `dependencies` entry here and
-   * has to survive the Dockerfile's `--production` install.
+   * dunx 3.7.0 made the page a `renderer` the app names, and `swagger-ui-dist` an
+   * **optional peer** of `@dunx/openapi` rather than its dependency. It is
+   * resolved lazily, on the first request for this page, so a missing install is a
+   * broken route rather than a failed boot - which is why `swagger-ui-dist` is a
+   * `dependencies` entry here and has to survive the Dockerfile's `--production`
+   * install. A module given no renderer serves the JSON and nothing else.
    */
   test('the explorer page renders and points at its own origin', async () => {
     const page = await app.get(OpenApiExplorer).page('api');
@@ -320,9 +323,9 @@ describe('the generated OpenAPI document', () => {
   });
 
   /**
-   * 2.3.1 serves these from **one wildcard** under `/api/docs`, and the allow-list
-   * in `@dunx/openapi` is the only thing between that route and the rest of
-   * `swagger-ui-dist` - which also ships four other builds and ~4 MB of sourcemaps.
+   * These come off **one wildcard** under `/api/docs`, and the allow-list - the
+   * renderer's since 3.7.0 - is the only thing between that route and the rest of
+   * `swagger-ui-dist`, which also ships four other builds and ~4 MB of sourcemaps.
    */
   test.each([
     'swagger-ui-bundle.js.map',

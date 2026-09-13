@@ -38,7 +38,7 @@
     "mod:cost": "bunx @arkv/module-cost --less"
   },
   "devDependencies": {
-    "@types/bun": "1.4.0",
+    "@types/bun": "1.4.2",
     "husky": "^9.1.7",
     "lint-staged": "^17.3.0",
     "oxfmt": "^0.63.0",
@@ -53,6 +53,6 @@
     ]
   },
   "engines": {
-    "bun": ">=1.4.0"
+    "bun": ">=1.4.1"
   }
 }

@@ -49,7 +49,6 @@ export const GAME_JOBS = Object.freeze({
   /** Settle every open bet and reveal the seed. */
   CRASH: 'game.round.crash',
 } as const);
-export type GameJobName = (typeof GAME_JOBS)[keyof typeof GAME_JOBS];
 
 export interface RoundJob {
   readonly roundId: string;

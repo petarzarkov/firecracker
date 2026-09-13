@@ -32,7 +32,6 @@ export const GAME_EVENTS = Object.freeze({
   SEED_ACK: 'seedAck',
   WALLET_UPDATED: 'walletUpdated',
 } as const);
-export type GameEvent = (typeof GAME_EVENTS)[keyof typeof GAME_EVENTS];
 
 /** What a client sends. */
 export const GAME_CLIENT_EVENTS = Object.freeze({

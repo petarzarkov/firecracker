@@ -1,9 +1,5 @@
 import { Logger } from '@dunx/core';
-import { PubSub } from '@dunx/http';
-// The relay codec, `/internal` since dunx 3.0.0. `RelayPublisher` writes the wire
-// format a `RedisRelay` on another node reads, so it has to be dunx's own encoder -
-// a local reimplementation would be a fan-out that breaks on a framework bump.
-import { encode, encodeRelay } from '@dunx/http/internal';
+import { PubSub, RelayPublisher, WsRelay } from '@dunx/http';
 import { RedisConnection } from '@dunx/infra/redis';
 import { AppConfigService } from '../../config/app.config.service.js';
 
@@ -32,7 +28,7 @@ export class SocketPublisher extends EventsPublisher {
   }
 
   /**
-   * **Never throws**, the same rule `RelayPublisher` keeps. A frame is best-effort;
+   * **Never throws**, the same rule `WorkerPublisher` keeps. A frame is best-effort;
    * a database transition is not. `publishEvent` throws once the server has stopped,
    * so a handler publishing after its commit would fail work it had already done -
    * bullmq retries, the commit happens twice, and for `game.round.schedule` that is
@@ -52,27 +48,60 @@ export class SocketPublisher extends EventsPublisher {
 }
 
 /**
- * The worker binding: straight onto the relay channel, in `@dunx/http`'s own wire
- * format, so a process with no server can hand a frame to every process that has
- * one. The origin is this process's id, which stops a node that also runs a worker
- * from fanning out its own frame twice.
+ * The cache module's `RedisConnection`, as the relay contract dunx's publisher
+ * takes. `RedisConnection` already publishes and subscribes; what it does not have
+ * is `close`, and that is deliberate here - the connection belongs to
+ * `RedisCacheModule`, which closes it at shutdown, and a second owner closing it
+ * would take the cache down with the fan-out.
+ *
+ * The alternative was importing `WsRelayModule` into the worker graph, which opens
+ * a second Redis client per forked job child for one publish.
  */
-export class RelayPublisher extends EventsPublisher {
-  readonly #origin = `worker:${Bun.randomUUIDv7()}`;
-  readonly #channel: string;
-
-  constructor(
-    private readonly redis: RedisConnection,
-    config: AppConfigService,
-  ) {
+class CacheConnectionRelay extends WsRelay {
+  constructor(private readonly redis: RedisConnection) {
     super();
-    this.#channel = config.get('ws').relayChannel;
   }
 
+  override publish(channel: string, message: string): Promise<number> {
+    return this.redis.publish(channel, message);
+  }
+
+  override subscribe(
+    channel: string,
+    listener: (message: string) => void,
+  ): Promise<void> {
+    return this.redis.subscribe(channel, listener);
+  }
+
+  override close(): void {}
+}
+
+/**
+ * The worker binding: straight onto the relay channel, so a process with no server
+ * can hand a frame to every process that has one.
+ *
+ * The encoding is `@dunx/http`'s, through its `RelayPublisher` - this used to
+ * import `encode` and `encodeRelay` from `@dunx/http/internal`, which 3.3.0
+ * narrowed to what the framework's own packages import, and a local copy of a wire
+ * format the framework owns is a fan-out that breaks silently on a bump. dunx 3.8.2
+ * ships the publisher as a class for exactly this case.
+ */
+export class WorkerPublisher extends EventsPublisher {
+  readonly #frames: RelayPublisher;
+
+  constructor(redis: RedisConnection, config: AppConfigService) {
+    super();
+    this.#frames = new RelayPublisher(new CacheConnectionRelay(redis), {
+      channel: config.get('ws').relayChannel,
+    });
+  }
+
+  /**
+   * **Never throws**, the same rule `SocketPublisher` keeps, and `RelayPublisher`
+   * is what holds it: a worker must not fail a job because no web node is
+   * listening, and with no Redis at all there is nothing to fan out to anyway.
+   */
   override publish(topic: string, event: string, data: unknown): void {
-    const frame = encodeRelay(this.#origin, topic, encode(event, data));
-    // Fire and forget: a worker must not fail a job because no web node is
-    // listening, and with no Redis at all there is nothing to fan out to anyway.
-    void this.redis.publish(this.#channel, frame).catch(() => undefined);
+    this.#frames.publishEvent(topic, event, data);
   }
 }

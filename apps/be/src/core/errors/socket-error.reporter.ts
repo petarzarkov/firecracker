@@ -1,49 +1,50 @@
 import { Logger } from '@dunx/core';
 import {
   HttpStatusCode,
+  SocketObserver,
   type SocketContext,
   type SocketFrame,
-  type SocketMiddleware,
-  type SocketNext,
+  type SocketOutcome,
 } from '@dunx/http';
-// dunx 3.0.0 moved the middleware fold to `/internal` and 3.0.1 dropped the
-// deprecated re-export, so this is the only place it lives. The subpath carries no
-// stability promise: `observe` is the sync-throw *and* async-reject dance written
-// once, and reimplementing it here would be a second copy that silently drifts.
-import { observe } from '@dunx/http/internal';
 import { ErrorMapper } from './error-mapper.js';
 
 /**
  * What `onError` is on the HTTP side, for the socket.
  *
- * A `SocketMiddleware` and **not** `SocketOptions.onError`, which is the seam that
- * looks right and is not: `onError` is a plain function in the options object
- * `HttpFactory.create` is called with, so it exists before the container and can
- * never reach the app's `Logger`. A middleware is resolved from the container.
+ * A socket middleware and **not** `SocketOptions.onError`, which sees the error and
+ * the socket and nothing else: the gateway, the path and the event below are
+ * `SocketContext`, which only the chain is given.
  *
  * It rethrows, always - answering the frame would leave the caller waiting on an ack
- * the handler never sent.
+ * the handler never sent. That is {@link SocketObserver}'s doing: a handler may
+ * return a value or a promise, and the base class reports both channels and leaves
+ * the outcome exactly as it found it. This used to import dunx's `observe` from
+ * `@dunx/http/internal`, which 3.3.0 narrowed to what the framework's own packages
+ * import; 3.8.2 made the base class public instead.
  */
-export class SocketErrorReporter implements SocketMiddleware {
+export class SocketErrorReporter extends SocketObserver {
   /**
    * dunx silences its `console.error` fallback as soon as any socket middleware
    * exists, whether or not one reports. This is the class that actually does.
    */
-  readonly reportsErrors = true;
+  override readonly reportsErrors = true;
 
-  constructor(private readonly logger: Logger) {}
-
-  handle(frame: SocketFrame, ctx: SocketContext, next: SocketNext): unknown {
-    return observe(next, (error) => {
-      if (error !== undefined) this.#report(error, frame, ctx);
-    });
+  constructor(private readonly logger: Logger) {
+    super();
   }
 
   /**
    * No payload, deliberately: this fires on the frames most likely to be malformed,
    * and a chat body or a bet is the last thing to copy into a log line.
    */
-  #report(error: unknown, frame: SocketFrame, ctx: SocketContext): void {
+  protected override settled(
+    outcome: SocketOutcome,
+    frame: SocketFrame,
+    ctx: SocketContext,
+  ): void {
+    if (outcome.ok) return;
+    const { error } = outcome;
+
     const status =
       ErrorMapper.toErrorBody(error)?.status ??
       HttpStatusCode.INTERNAL_SERVER_ERROR;

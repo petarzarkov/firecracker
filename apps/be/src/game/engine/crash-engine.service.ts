@@ -1,4 +1,4 @@
-import { Logger, type OnInit, type OnShutdown } from '@dunx/core';
+import { EventBus, Logger, type OnInit, type OnShutdown } from '@dunx/core';
 import { JobPublisher } from '@dunx/infra/queue';
 import { RedisConnection } from '@dunx/infra/redis';
 import { ScheduleKind, ScheduleRegistry } from '@dunx/infra/schedule';
@@ -15,6 +15,7 @@ import { GameMath } from '../game.math.js';
 import { GameRoundStatus } from '../rounds/game-round.schema.js';
 import { GameRoundRepository } from '../rounds/game-round.repository.js';
 import { GAME_ENGINE_CHANNEL, type EngineCommand } from './engine.commands.js';
+import { AutoCashOutReached } from './engine.events.js';
 
 /**
  * The clock: the current round in memory, the multiplier ticking, and the moment
@@ -39,10 +40,6 @@ export class CrashEngineService implements OnInit, OnShutdown {
   /** Whether {@link CrashEngineService.TICK} is currently armed. */
   #ticking = false;
 
-  /** Set from outside, by whoever owns the Redis hash the auto-cashouts live in. */
-  #autoCashOut: ((roundId: string, multiplierX100: number) => void) | null =
-    null;
-
   /** Fixed rather than per-round, so re-arming cannot leak an entry per round. */
   static readonly TICK = 'game.round.tick';
 
@@ -54,6 +51,7 @@ export class CrashEngineService implements OnInit, OnShutdown {
     private readonly schedules: ScheduleRegistry,
     private readonly config: AppConfigService,
     private readonly logger: Logger,
+    private readonly bus: EventBus,
   ) {}
 
   async onInit(): Promise<void> {
@@ -117,12 +115,6 @@ export class CrashEngineService implements OnInit, OnShutdown {
     return this.#phase === GameRoundStatus.CRASHED
       ? this.#crashPointX100
       : null;
-  }
-
-  registerAutoCashOutHandler(
-    fn: (roundId: string, multiplierX100: number) => void,
-  ): void {
-    this.#autoCashOut = fn;
   }
 
   setWaiting(roundId: string): void {
@@ -293,8 +285,12 @@ export class CrashEngineService implements OnInit, OnShutdown {
       return;
     }
 
-    if (this.#roundId !== null)
-      this.#autoCashOut?.(this.#roundId, multiplierX100);
+    // Published, not called: whoever sweeps pays a wallet, and the clock's only
+    // game dependency is `GameRoundRepository`. Not awaited - a tick is on a
+    // 100 ms clock and the sweep is `hdel`-then-pay, which settles on its own.
+    if (this.#roundId !== null) {
+      void this.bus.emit(new AutoCashOutReached(this.#roundId, multiplierX100));
+    }
 
     publishGame(this.events, GAME_TOPIC, GAME_EVENTS.TICK, {
       multiplier: GameMath.toMultiplier(multiplierX100),

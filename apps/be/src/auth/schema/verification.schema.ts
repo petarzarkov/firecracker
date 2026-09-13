@@ -17,5 +17,3 @@ export const verifications = sqliteTable(
   },
   (table) => [index('verification_identifier_index').on(table.identifier)],
 );
-
-export type VerificationRow = typeof verifications.$inferSelect;
