@@ -38,7 +38,7 @@ export abstract class OpenAICompatibleService extends BaseProviderService {
     protected readonly logger: Logger,
     /**
      * The shared client, as a parameter rather than an `inject()` field: since
-     * dunx 3.1.0 a named client can be a subclass, and a subclass is a type
+     * a named client can be a subclass, and a subclass is a type
      * `@dunx/transform` can record. Bound separately because `AIModule` is
      * `global: true` and exports it - an unnamed binding would make a model
      * call's 30-second budget the default every other `HttpService` inherits.

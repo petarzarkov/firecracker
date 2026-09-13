@@ -3,20 +3,12 @@ import { admin, anonymous, bearer, openAPI } from 'better-auth/plugins';
 import type { AppConfig } from '../config/env.validation.js';
 import { anonymousName } from './anon-name.js';
 
-/**
- * The route path `AuthHandler` is mounted at, before the global prefix is
- * applied. `AuthOptions.basePath` is the same URL *after* it, which is why the
- * two are different strings for the same thing - see {@link authBasePath}.
- */
+/** Mounted here, *before* the global prefix. {@link AuthOptions.basePath} is after it. */
 export const AUTH_MOUNT = '/auth';
 
 /** The three this app registers OAuth apps with, and the order the client shows. */
 const SOCIAL_PROVIDERS = ['google', 'github', 'linkedin'] as const;
 
-/**
- * The parts of the options that need the container, handed in rather than reached
- * for.
- */
 interface AuthHookOverrides {
   /** Runs before `anonymous()` deletes the demo user. See `AccountLinker`. */
   readonly onLinkAccount?: (context: {
@@ -26,18 +18,15 @@ interface AuthHookOverrides {
 }
 
 export class AuthOptions {
-  /** The mount *after* the global prefix - see {@link AUTH_MOUNT}. */
+  /** The mount *after* the global prefix. */
   static basePath(prefix: string): string {
     return `/${prefix}${AUTH_MOUNT}`;
   }
 
   /**
-   * The callback URL a provider's OAuth app is registered with: the shape Passport
-   * composed, provider segment before the literal `callback`.
-   *
-   * Built from the same `webUrl` and prefix better-auth's own `basePath` is, so a
-   * deployment that moves either does not have to remember this exists.
-   * `LegacyOAuthCallbackController` answers whatever this returns.
+   * The callback URL a provider's OAuth app is already registered with: the shape
+   * Passport composed, provider before the literal `callback`, not better-auth's
+   * `/callback/<provider>`. `LegacyOAuthCallbackController` answers it.
    */
   static legacyCallback(config: AppConfig, provider: string): string {
     return `${config.auth.baseUrl}${AuthOptions.basePath(config.app.prefix)}/${provider}/callback`;
@@ -85,19 +74,10 @@ export class AuthOptions {
         cookieCache: { enabled: false },
       },
       /**
-       * Each provider is pinned to the callback URL its OAuth app already holds -
-       * the Passport shape the NestJS version registered,
-       * `<webUrl>/<prefix>/auth/<provider>/callback`, rather than better-auth's own
-       * `/callback/<provider>`.
-       *
        * `redirectURI` goes in the authorization request **and** the token exchange,
        * and the provider compares both against its registration - so this is the
        * half that stops GitHub answering "the redirect_uri is not associated with
-       * this application". `LegacyOAuthCallbackController` is the other half, and
-       * neither works without it.
-       *
-       * A provider with only half its credentials is absent rather than
-       * half-configured; see `EnvConfig`.
+       * this application". `LegacyOAuthCallbackController` is the other half.
        */
       socialProviders: Object.fromEntries(
         SOCIAL_PROVIDERS.flatMap((name) => {
@@ -118,23 +98,16 @@ export class AuthOptions {
       /**
        * A social sign-in joins the account that already owns the address.
        *
-       * Every provider here maps `name`, `email` and `image` off the profile by
-       * better-auth's own default, so a first social sign-in arrives with an avatar
-       * and a display name already filled in. What it could not do was arrive at an
-       * *existing* row: implicit linking treats the IdP's `email_verified` claim as
-       * proof of ownership only when the local row is verified too, and this app
-       * sends no verification mail, so every email-and-password row is
-       * `emailVerified: false`. Signing up with a password and later choosing Google
-       * on the same address was refused as an unlinked account.
+       * Implicit linking trusts the IdP's `email_verified` only when the local row
+       * is verified too, and this app sends no verification mail - so every
+       * password row is `emailVerified: false`, and signing up with a password then
+       * choosing Google on the same address was refused as unlinked.
        *
-       * **The trade is explicit.** Trusting a provider means believing its assertion
-       * about an address instead of our own, so a provider that ever hands out an
-       * address it has not verified would hand over the account with it. These three
-       * verify, and the alternative on offer was worse: no linking at all, or a
-       * second row that the `UQ_user_email` index refuses outright.
-       *
-       * `email-password` is deliberately **not** here - that direction is the one
-       * where the unverified row is the claimant.
+       * **The trade is explicit:** trusting a provider means believing its
+       * assertion about an address instead of ours, so one that ever hands out an
+       * unverified address hands over the account with it. `email-password` is
+       * deliberately absent - that is the direction where the unverified row is the
+       * claimant.
        */
       account: {
         accountLinking: { trustedProviders: ['google', 'github', 'linkedin'] },

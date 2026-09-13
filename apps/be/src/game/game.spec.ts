@@ -279,16 +279,6 @@ describe('settlement', () => {
 });
 
 /**
- * A promise made during the round is kept even if no tick was there to keep it.
- *
- * `AutoCashOutService.sweep` only runs on a tick, and the crashing tick deliberately
- * does not sweep - so a target between the last tick and the crash point was never
- * paid. A restart is the same gap made large: a process that was down while the
- * round ran produced no ticks at all, so every promise settled as a loss even though
- * the curve had passed the target. The crash point is drawn at launch and stored, so
- * the round is knowable after the fact and this is a reconciliation, not a guess.
- */
-/**
  * The other half: what a tick does while the round is still running.
  *
  * The engine publishes `AutoCashOutReached` and `GameGateway` sweeps on it. It
@@ -333,6 +323,16 @@ describe('sweeping auto-cashouts on a tick', () => {
   });
 });
 
+/**
+ * A promise made during the round is kept even if no tick was there to keep it.
+ *
+ * `AutoCashOutService.sweep` only runs on a tick, and the crashing tick deliberately
+ * does not sweep - so a target between the last tick and the crash point was never
+ * paid. A restart is the same gap made large: a process that was down while the
+ * round ran produced no ticks at all, so every promise settled as a loss even though
+ * the curve had passed the target. The crash point is drawn at launch and stored, so
+ * the round is knowable after the fact and this is a reconciliation, not a guess.
+ */
 describe('reconciling auto-cashouts at the crash', () => {
   const crashRound = (roundId: string): Promise<{ settled: boolean }> =>
     roundJobs.crash({ data: { roundId } } as Job<RoundJob>);
