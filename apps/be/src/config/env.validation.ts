@@ -190,6 +190,8 @@ export class EnvConfig {
         demoInitialBalanceCents: vars.GAME_DEMO_INITIAL_BALANCE_CENTS,
         cleanupIntervalMs: vars.GAME_CLEANUP_INTERVAL_MS,
         stuckRoundThresholdMs: vars.GAME_STUCK_ROUND_THRESHOLD_MS,
+        roundRetention: vars.GAME_ROUND_RETENTION,
+        roundRetentionIntervalMs: vars.GAME_ROUND_RETENTION_INTERVAL_MS,
         cashoutGraceMs: vars.GAME_CASHOUT_GRACE_MS,
         bots: {
           enabled: vars.GAME_BOTS_ENABLED,

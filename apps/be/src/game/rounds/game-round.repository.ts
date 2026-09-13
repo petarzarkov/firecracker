@@ -102,4 +102,51 @@ export class GameRoundRepository extends CrudRepository<
   list(options: PageOptions): Page<GameRoundRow> {
     return this.page(options);
   }
+
+  /**
+   * Deletes finished rounds beyond the newest `keep`, and answers how many went.
+   *
+   * **Bets go with them**, through `game_bet.round_id`'s `onDelete: 'cascade'`.
+   * That cascade only runs because `sqlite.ts` sets `foreign_keys = ON`; SQLite
+   * defaults it off, and with it off this would leave bets pointing at rounds
+   * that no longer exist.
+   *
+   * Terminal statuses only, so a `WAITING` or `RUNNING` round is never deleted
+   * out from under the engine. The live round is the newest and inside `keep`
+   * anyway; this is the guard for the case where it is not.
+   *
+   * The cutoff is the `keep`-th newest row's timestamp rather than an offset in
+   * the delete, which SQLite cannot express. Rounds sharing that timestamp are
+   * all kept, so the error is always in the direction of keeping more.
+   *
+   * **Counted by `returning()` rather than by `changes`.** `bun:sqlite` reports
+   * cascaded rows in `changes`, so a delete of one round carrying one bet answers
+   * 2 - measured. This has to be rounds, because it is what the log line says.
+   */
+  pruneToNewest(keep: number): number {
+    const cutoff = this.db
+      .select({ createdAt: gameRounds.createdAt })
+      .from(gameRounds)
+      .orderBy(desc(gameRounds.createdAt))
+      .limit(1)
+      .offset(keep - 1)
+      .get();
+
+    // Fewer rounds than the window: nothing is outside it.
+    if (cutoff === undefined) return 0;
+
+    return this.db
+      .delete(gameRounds)
+      .where(
+        and(
+          lt(gameRounds.createdAt, cutoff.createdAt),
+          inArray(gameRounds.status, [
+            GameRoundStatus.CRASHED,
+            GameRoundStatus.FAILED,
+          ]),
+        ),
+      )
+      .returning({ id: gameRounds.id })
+      .all().length;
+  }
 }
